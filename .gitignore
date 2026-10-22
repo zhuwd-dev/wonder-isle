@@ -1,0 +1,10 @@
+# Godot editor and import caches
+/.godot/
+
+# Generated Android export and Gradle build output
+/android/build/
+/android/.build_version
+
+# Local build outputs and test artifacts
+/build/
+/tests/artifacts/

@@ -1,0 +1,105 @@
+extends SceneTree
+
+var failures := 0
+var save_path := ""
+var main
+
+
+func _init() -> void:
+	var args := OS.get_cmdline_user_args()
+	for index in range(max(args.size() - 1, 0)):
+		if str(args[index]) == "--test-save-path":
+			save_path = str(args[index + 1])
+			break
+	call_deferred("_run")
+
+
+func _run() -> void:
+	if save_path.is_empty():
+		_fail("Q010 runtime test requires --test-save-path")
+		_finish()
+		return
+
+	var scene := load("res://scenes/boot/Main.tscn")
+	main = scene.instantiate()
+	root.add_child(main)
+	await process_frame
+	_expect(main.get("save_path") == save_path, "Q010 runtime must use the isolated save path")
+
+	main._restart_game()
+	main.player_position = main.Q010_SEED_POSITIONS[0]
+	_press_interact()
+	_expect(main.game_state.q010_seed_count() == 0, "Q010 seeds must be locked before Q005")
+
+	_complete_q005_runtime()
+	_expect(main.game_state.can_start_q010(), "Q005 completion must unlock Q010 at runtime")
+	_expect(main._q010_prompt_text() == "种子收藏：已收集 0/3 个指定种子。", "Q010 must show its progress prompt")
+
+	for seed_id in range(3):
+		main.player_position = main.Q010_SEED_POSITIONS[seed_id]
+		_press_interact()
+		_expect(main.game_state.q010_seeds_collected[seed_id], "runtime interaction must collect Q010 seed %d" % seed_id)
+		_expect(main.game_state.q010_seed_count() == seed_id + 1, "Q010 runtime progress must count collected seeds")
+
+	_expect(main.game_state.is_q010_complete(), "collecting three Q010 seeds must complete the task")
+	_expect(main.message == "种子收藏完成！植物外观已解锁。", "Q010 completion must show direct feedback")
+	_expect(main._q010_prompt_text() == "种子收藏完成！植物外观已解锁。", "Q010 completion prompt must be visible")
+	_expect(_read_save().get("q010_seeds_collected") == [true, true, true], "Q010 completion must save immediately")
+
+	main.player_position = main.Q010_SEED_POSITIONS[0]
+	_press_interact()
+	_expect(main.game_state.q010_seed_count() == 3, "repeated Q010 interaction must not change progress")
+	_expect(main.game_state.is_q010_complete(), "repeated Q010 interaction must not undo completion")
+
+	main._restart_game()
+	_expect(not main.game_state.q010_seeds_collected.has(true), "restart must clear Q010 seeds")
+	_expect(not main.game_state.is_q010_complete(), "restart must lock Q010 completion")
+	main.queue_free()
+	await process_frame
+	_finish()
+
+
+func _complete_q005_runtime() -> void:
+	for board_id in range(3):
+		main.game_state.collect_board(board_id)
+		main.game_state.place_board(board_id, board_id)
+	main.game_state.collect_seed()
+	main.game_state.plant_seed()
+	for stone_id in range(3):
+		main.game_state.place_pond_stone(stone_id)
+	main.game_state.water_q005()
+	for plant_id in range(3):
+		main.game_state.collect_q005_plant(plant_id)
+		main.game_state.place_q005_plant(plant_id, plant_id)
+	main._save_game()
+
+
+func _press_interact() -> void:
+	main.interact_button.emit_signal("pressed")
+
+
+func _read_save():
+	if not FileAccess.file_exists(save_path):
+		return null
+	var file := FileAccess.open(save_path, FileAccess.READ)
+	if file == null:
+		return null
+	return JSON.parse_string(file.get_as_text())
+
+
+func _expect(condition: bool, message: String) -> void:
+	if not condition:
+		_fail(message)
+
+
+func _fail(message: String) -> void:
+	failures += 1
+	push_error("[Q010RuntimeTest] " + message)
+
+
+func _finish() -> void:
+	if failures == 0:
+		print("[Q010RuntimeTest] PASS")
+	else:
+		push_error("[Q010RuntimeTest] FAIL: %d assertions" % failures)
+	quit(failures)

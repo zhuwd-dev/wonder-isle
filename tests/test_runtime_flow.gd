@@ -1,0 +1,180 @@
+extends SceneTree
+
+var failures := 0
+var save_path := ""
+var main
+
+
+func _init() -> void:
+	var args := OS.get_cmdline_user_args()
+	for index in range(max(args.size() - 1, 0)):
+		if str(args[index]) == "--test-save-path":
+			save_path = str(args[index + 1])
+			break
+	call_deferred("_run")
+
+
+func _run() -> void:
+	if save_path.is_empty():
+		_fail("runtime flow test requires --test-save-path")
+		_finish()
+		return
+
+	var scene := load("res://scenes/boot/Main.tscn")
+	main = scene.instantiate()
+	root.add_child(main)
+	await process_frame
+	_expect(main.get("save_path") == save_path, "runtime flow must use the isolated save path")
+
+	main._restart_game()
+	_expect(not main.game_state.is_complete(), "a new runtime flow must start before bridge completion")
+	_expect(not main.game_state.seed_collected, "a new runtime flow must not have the seed")
+	_expect(not main.game_state.can_start_pond_task(), "pond task must be locked at the start")
+
+	# Q001: collect all boards through the proximity interaction path.
+	main.player_position = main.SEED_POSITION
+	main._try_collect_nearby()
+	_expect(not main.game_state.seed_collected, "seed interaction must be locked before bridge repair")
+	main._pointer_down(main.POND_STONE_POSITIONS[0])
+	_expect(main.dragging_pond_stone == -1, "pond stones must be locked before Q002")
+
+	for board_id in range(3):
+		main.player_position = main.BOARD_POSITIONS[board_id]
+		main._try_collect_nearby()
+		_expect(main.game_state.collected[board_id], "runtime proximity interaction must collect each board")
+
+	_expect(main.game_state.board_count() == 3, "runtime flow must collect all three boards")
+
+	# Q001: exercise actual mouse button, motion, and release events.
+	var first_inventory := _center(main._inventory_rect(0))
+	var first_slot := _center(main.BRIDGE_SLOTS[0])
+	_mouse_button(first_inventory, true)
+	_mouse_motion(Vector2(600, 400))
+	_mouse_button(Vector2(600, 400), false)
+	_expect(not main.game_state.placed[0], "an invalid board release must not consume the board")
+	_mouse_button(first_inventory, true)
+	_mouse_motion(first_slot)
+	_mouse_button(first_slot, false)
+	_expect(main.game_state.placed[0], "a valid mouse board drop must place the first board")
+
+	for board_id in range(1, 3):
+		_mouse_button(_center(main._inventory_rect(board_id)), true)
+		_mouse_motion(_center(main.BRIDGE_SLOTS[board_id]))
+		_mouse_button(_center(main.BRIDGE_SLOTS[board_id]), false)
+		_expect(main.game_state.placed[board_id], "a valid mouse board drop must place each remaining board")
+
+	_expect(main.game_state.is_complete(), "the bridge must repair after three runtime board drops")
+	_expect(main._is_walkable(Vector2(800, 375)), "the repaired bridge must be walkable")
+	_expect(main.game_state.area_unlocked, "bridge completion must unlock the right area")
+
+	# Q002: use the actual proximity interaction path for seed and flowerbed.
+	main.player_position = main.SEED_POSITION
+	main._try_collect_nearby()
+	_expect(main.game_state.seed_collected, "runtime interaction must collect the seed after bridge repair")
+	_expect(not main.game_state.seed_planted, "collecting the seed must not plant it immediately")
+	main._try_collect_nearby()
+	_expect(main.game_state.seed_collected, "repeated seed interaction must be idempotent")
+	main.player_position = main.FLOWERBED_POSITION
+	main._try_collect_nearby()
+	_expect(main.game_state.seed_planted, "runtime interaction at the flowerbed must plant the seed")
+	_expect(main.game_state.can_start_pond_task(), "planting must unlock Q003")
+
+	# Q003: mouse drag, invalid release, recovery, completion, and duplicate protection.
+	var stone_0: Vector2 = main.POND_STONE_POSITIONS[0]
+	var stone_1: Vector2 = main.POND_STONE_POSITIONS[1]
+	var stone_2: Vector2 = main.POND_STONE_POSITIONS[2]
+	var pond_slot_0: Vector2 = _center(main.POND_SLOTS[0])
+	var pond_slot_1: Vector2 = _center(main.POND_SLOTS[1])
+	var pond_slot_2: Vector2 = _center(main.POND_SLOTS[2])
+
+	_mouse_button(stone_0, true)
+	_expect(main.dragging_pond_stone == 0, "the first pond stone must enter mouse drag state")
+	_mouse_motion(pond_slot_0)
+	_mouse_button(pond_slot_0, false)
+	_expect(main.game_state.pond_stones_placed == [true, false, false], "the first pond stone must be placed in its matching slot")
+
+	_mouse_button(stone_1, true)
+	_expect(main.dragging_pond_stone == 1, "the second pond stone must enter mouse drag state")
+	_mouse_motion(Vector2(600, 400))
+	_mouse_button(Vector2(600, 400), false)
+	_expect(main.game_state.pond_stones_placed == [true, false, false], "an invalid pond release must not advance progress")
+	_mouse_button(stone_1, true)
+	_mouse_motion(pond_slot_1)
+	_mouse_button(pond_slot_1, false)
+	_expect(main.game_state.pond_stones_placed == [true, true, false], "the second pond stone must recover after an invalid release")
+
+	_mouse_button(stone_2, true)
+	_mouse_motion(pond_slot_2)
+	_mouse_button(pond_slot_2, false)
+	_expect(main.game_state.is_pond_complete(), "the third pond stone must open the pond")
+	_expect(main.game_state.pond_opened, "pond completion must set the opened state")
+	_expect(main.game_state.pond_stones_placed == [true, true, true], "pond completion must record all three stones")
+	_expect(main._task_prompt_text() == "任务：照料乌龟的花园。先浇水并收集 3 株植物。", "pond completion must unlock the Q005 task prompt")
+	_expect(main._task_action_hint_text() == "靠近浇水点按互动；也可以先收集花园里的植物。", "pond completion must show the Q005 action hint")
+	_expect(main._hud_title_text() == "奇趣小岛 · 乌龟花园任务", "pond completion must update the HUD title for Q005")
+
+	_mouse_button(stone_0, true)
+	_expect(main.dragging_pond_stone == -1, "a placed pond stone must not be draggable again")
+
+	var saved: Variant = _read_save()
+	_expect(saved is Dictionary, "runtime interactions must create a JSON save")
+	_expect(saved.get("pond_stones_placed") == [true, true, true], "runtime completion must be saved immediately")
+	_expect(saved.get("pond_opened") == true, "runtime pond completion must be saved immediately")
+
+	# Reset through the normal game entry point and verify all three task layers.
+	main._restart_game()
+	_expect(main.game_state.collected == [false, false, false], "restart must reset Q001 collection")
+	_expect(main.game_state.placed == [false, false, false], "restart must reset Q001 placement")
+	_expect(not main.game_state.is_complete(), "restart must reset bridge completion")
+	_expect(not main.game_state.seed_collected and not main.game_state.seed_planted, "restart must reset Q002")
+	_expect(main.game_state.pond_stones_placed == [false, false, false], "restart must reset Q003 stones")
+	_expect(not main.game_state.pond_opened, "restart must close the pond")
+
+	main.queue_free()
+	await process_frame
+	_finish()
+
+
+func _center(rect: Rect2) -> Vector2:
+	return rect.position + rect.size / 2.0
+
+
+func _mouse_button(position: Vector2, pressed: bool) -> void:
+	var event := InputEventMouseButton.new()
+	event.button_index = MOUSE_BUTTON_LEFT
+	event.position = position
+	event.pressed = pressed
+	main._input(event)
+
+
+func _mouse_motion(position: Vector2) -> void:
+	var event := InputEventMouseMotion.new()
+	event.position = position
+	main._input(event)
+
+
+func _read_save():
+	if not FileAccess.file_exists(save_path):
+		return null
+	var file := FileAccess.open(save_path, FileAccess.READ)
+	if file == null:
+		return null
+	return JSON.parse_string(file.get_as_text())
+
+
+func _expect(condition: bool, message: String) -> void:
+	if not condition:
+		_fail(message)
+
+
+func _fail(message: String) -> void:
+	failures += 1
+	push_error("[RuntimeFlowTest] " + message)
+
+
+func _finish() -> void:
+	if failures == 0:
+		print("[RuntimeFlowTest] PASS")
+	else:
+		push_error("[RuntimeFlowTest] FAIL: %d assertions" % failures)
+	quit(failures)
