@@ -1,6 +1,7 @@
 extends Control
 
 const GameState = preload("res://scripts/game/game_state.gd")
+const UI_FONT = preload("res://assets/fonts/NotoSansCJKsc-GameSubset.otf")
 const SAVE_PATH := "user://qxisland_stage2_save.json"
 const WORLD_SIZE := Vector2(1280, 720)
 const PLAYER_SPEED := 260.0
@@ -139,6 +140,9 @@ var q011_button: Button
 
 
 func _ready() -> void:
+	var ui_theme := Theme.new()
+	ui_theme.default_font = UI_FONT
+	theme = ui_theme
 	game_state = GameState.new()
 	_configure_runtime_inputs()
 	_configure_save_path()
@@ -1092,7 +1096,7 @@ func _loaded_progress_message() -> String:
 
 
 func _draw() -> void:
-	var font := ThemeDB.fallback_font
+	var font := UI_FONT
 	_draw_background()
 	_draw_world(font)
 	_draw_hud(font)
