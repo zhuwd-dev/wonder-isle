@@ -460,23 +460,23 @@ func _can_use_q006_build_mode() -> bool:
 
 
 func _can_use_q007_side_task() -> bool:
-	return _is_main_story_complete() and (game_state.can_start_q007() or game_state.is_q007_complete())
+	return _is_main_story_complete() and game_state.is_q006_complete() and (game_state.can_start_q007() or game_state.is_q007_complete())
 
 
 func _can_use_q008_side_task() -> bool:
-	return _is_main_story_complete() and (game_state.can_start_q008() or game_state.is_q008_complete())
+	return _is_main_story_complete() and game_state.is_q010_complete() and (game_state.can_start_q008() or game_state.is_q008_complete())
 
 
 func _can_use_q009_side_task() -> bool:
-	return _is_main_story_complete() and (game_state.can_start_q009() or game_state.is_q009_complete())
+	return _is_main_story_complete() and game_state.is_q007_complete() and (game_state.can_start_q009() or game_state.is_q009_complete())
 
 
 func _can_use_q010_side_task() -> bool:
-	return _is_main_story_complete() and (game_state.can_start_q010() or game_state.is_q010_complete())
+	return _is_main_story_complete() and game_state.is_q009_complete() and (game_state.can_start_q010() or game_state.is_q010_complete())
 
 
 func _can_use_q011_mode() -> bool:
-	return _is_main_story_complete() and (game_state.can_start_q011() or game_state.is_q011_complete())
+	return _is_main_story_complete() and game_state.is_q008_complete() and (game_state.can_start_q011() or game_state.is_q011_complete())
 
 
 func _pointer_down(position: Vector2) -> void:
@@ -984,6 +984,14 @@ func _q005_plant_drag_target_at(position: Vector2) -> int:
 	return dragging_q005_plant if Q005_PLANT_SLOTS[dragging_q005_plant].grow(18).has_point(position) else -1
 
 
+func _q005_plant_slot_is_drop_target(slot_id: int) -> bool:
+	return dragging_q005_plant == slot_id and game_state.can_place_q005_plant(dragging_q005_plant, slot_id)
+
+
+func _q005_plant_slot_is_hovered(slot_id: int) -> bool:
+	return _q005_plant_slot_is_drop_target(slot_id) and Q005_PLANT_SLOTS[slot_id].grow(18).has_point(q005_plant_drag_position)
+
+
 func _q006_decor_inventory_rect(decor_id: int) -> Rect2:
 	return Rect2(Q006_DECOR_INVENTORY_ORIGIN + Vector2(Q006_DECOR_INVENTORY_STEP * decor_id, 0), Vector2(78, 42))
 
@@ -1314,11 +1322,13 @@ func _draw_pond_area(font: Font) -> void:
 		return
 	var pond_fill := Color("78cbd5") if not game_state.is_pond_complete() else Color("5bbbd0")
 	_draw_panel(POND_RECT, pond_fill, VISUAL_PALETTE["river_edge"], 24)
-	for y in [POND_RECT.position.y + 34.0, POND_RECT.position.y + 66.0, POND_RECT.position.y + 98.0]:
+	var pond_line_offsets := [34.0, 62.0, 90.0] if game_state.is_pond_complete() else [34.0, 66.0, 98.0]
+	for y_offset in pond_line_offsets:
+		var y: float = POND_RECT.position.y + y_offset
 		draw_line(Vector2(POND_RECT.position.x + 18, y), Vector2(POND_RECT.end.x - 18, y), Color("a9e3e6"), 3.0)
 	draw_string(font, POND_RECT.position + Vector2(54, -12), "池塘", HORIZONTAL_ALIGNMENT_LEFT, -1, 22, VISUAL_PALETTE["ink"])
 	if game_state.is_pond_complete():
-		draw_string(font, POND_RECT.position + Vector2(34, 154), "池塘已开放", HORIZONTAL_ALIGNMENT_LEFT, -1, 20, Color("fff1a8"))
+		draw_string(font, POND_RECT.position + Vector2(34, 118), "池塘已开放", HORIZONTAL_ALIGNMENT_LEFT, -1, 18, Color("fff1a8"))
 		return
 
 	for slot_id in range(GameState.POND_STONE_TOTAL):
@@ -1381,10 +1391,17 @@ func _draw_q005_area(font: Font) -> void:
 	draw_string(font, Q005_GARDEN_RECT.position + Vector2(18, -12), "乌龟的花园", HORIZONTAL_ALIGNMENT_LEFT, -1, 20, VISUAL_PALETTE["ink"])
 	for slot_id in range(GameState.Q005_PLANT_TOTAL):
 		var slot: Rect2 = Q005_PLANT_SLOTS[slot_id]
-		var slot_color: Color = VISUAL_PALETTE["target_valid"] if game_state.q005_plant_slots[slot_id] else VISUAL_PALETTE["target_idle"]
-		var slot_fill: Color = VISUAL_PALETTE["target_valid_fill"] if game_state.q005_plant_slots[slot_id] else VISUAL_PALETTE["target_idle_fill"]
+		var is_drag_target := _q005_plant_slot_is_drop_target(slot_id)
+		var is_pointer_over_target := _q005_plant_slot_is_hovered(slot_id)
+		var is_highlighted: bool = game_state.q005_plant_slots[slot_id] or is_drag_target
+		var slot_color: Color = VISUAL_PALETTE["target_valid"] if is_highlighted else VISUAL_PALETTE["target_idle"]
+		var slot_fill: Color = VISUAL_PALETTE["target_valid_fill"] if is_highlighted else VISUAL_PALETTE["target_idle_fill"]
 		draw_rect(slot, slot_fill, true)
-		draw_rect(slot, slot_color, false, 3.0)
+		if is_pointer_over_target:
+			draw_rect(slot.grow(8), Color(0.20, 0.90, 0.40, 0.36), true)
+			draw_rect(slot.grow(8), Color("16883f"), false, 5.0)
+			draw_rect(slot, Color(0.58, 1.0, 0.56, 0.48), true)
+		draw_rect(slot, Color("16883f") if is_drag_target else slot_color, false, 5.0 if is_drag_target else 3.0)
 		if game_state.q005_plant_slots[slot_id]:
 			_draw_q005_plant_at(slot.position + slot.size / 2.0, true, game_state.is_q010_complete())
 		else:
@@ -1407,7 +1424,7 @@ func _draw_q005_area(font: Font) -> void:
 	else:
 		draw_string(font, Q005_TURTLE_POSITION + Vector2(-24, 55), "乌龟", HORIZONTAL_ALIGNMENT_LEFT, -1, 17, VISUAL_PALETTE["ink"])
 	if dragging_q005_plant >= 0:
-		var drag_hint := "绿色槽位可以松开" if _q005_plant_drag_target_at(q005_plant_drag_position) >= 0 else "把植物移到对应空槽再松开"
+		var drag_hint := "绿色槽位可以松开" if _q005_plant_drag_target_at(q005_plant_drag_position) >= 0 else "把幼苗移到绿色槽位再松开"
 		draw_string(font, Vector2(930, 540), drag_hint, HORIZONTAL_ALIGNMENT_LEFT, -1, 16, VISUAL_PALETTE["ink"])
 
 

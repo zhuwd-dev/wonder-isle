@@ -33,6 +33,17 @@ func _run() -> void:
 
 	_complete_q005_runtime()
 	_expect(main.game_state.can_start_q010(), "Q005 completion must unlock Q010 at runtime")
+	_expect(not main._can_use_q010_side_task(), "Q010 must stay hidden until Q007 and Q009 are complete")
+	_expect(not main.game_state.q010_seeds_collected.has(true), "locked Q010 interaction must not collect seeds")
+	for decor_id in range(3):
+		_expect(main.game_state.place_q006_decoration(decor_id, decor_id), "Q006 must complete before the side-quest chain")
+	_expect(main.game_state.collect_q007_shell(), "Q007 must complete before Q009")
+	for material_id in range(3):
+		_expect(main.game_state.collect_q009_material(material_id), "Q009 materials must complete before Q010")
+	main._save_game()
+	_expect(main._can_use_q010_side_task(), "Q009 completion must unlock Q010")
+	_expect(not main._can_use_q008_side_task(), "Q008 must stay hidden until Q010 is complete")
+	_expect(not main._can_use_q011_mode(), "Q011 must stay hidden until Q008 is complete")
 	_expect(main._q010_prompt_text() == "种子收藏：已收集 0/3 个指定种子。", "Q010 must show its progress prompt")
 
 	for seed_id in range(3):

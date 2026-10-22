@@ -29,7 +29,9 @@ func _run() -> void:
 	_expect(main.game_state.can_start_q007(), "opening the pond must unlock Q007 at runtime")
 	_expect(main.game_state.is_q004_complete(), "the main story must complete the fox house before side tasks appear")
 	_expect(main.game_state.is_q005_complete(), "the main story must complete the pond garden before side tasks appear")
-	_expect(not main.game_state.is_q006_complete(), "Q007 runtime must not require Q006")
+	_expect(not main.game_state.is_q006_complete(), "Q007 must wait for the garden decorations")
+	_expect(not main._can_use_q007_side_task(), "Q007 must stay hidden until Q006 is complete")
+	_expect(not main._can_use_q009_side_task(), "Q009 must stay hidden until Q007 is complete")
 	_expect(main._task_prompt_text() == "主线任务完成！点击“建造”布置花园装饰。", "the main story prompt must lead into optional content")
 
 	main.player_position = Vector2(700, 500)
@@ -37,6 +39,15 @@ func _run() -> void:
 	_expect(not main.game_state.q007_shell_collected, "the shell must not collect outside the interaction radius")
 
 	main.player_position = main.Q007_SHELL_POSITION
+	main._try_collect_nearby()
+	_expect(not main.game_state.q007_shell_collected, "the shell must remain unavailable before Q006 is complete")
+
+	for decor_id in range(3):
+		_expect(main.game_state.place_q006_decoration(decor_id, decor_id), "completing Q006 must enable each decoration")
+	main._save_game()
+	_expect(main._can_use_q007_side_task(), "Q006 completion must unlock the shell task")
+	_expect(main._task_prompt_text() == "花园装饰完成！下一步：到池塘边寻找隐藏贝壳。", "Q006 completion must guide the player to Q007")
+
 	main._try_collect_nearby()
 	_expect(main.game_state.q007_shell_collected, "runtime interaction must collect the shell")
 	_expect(main.game_state.is_q007_complete(), "runtime shell interaction must complete Q007")

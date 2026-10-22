@@ -35,9 +35,19 @@ func _run() -> void:
 	_expect(main.game_state.can_start_q009(), "Q004 completion must unlock Q009 at runtime")
 	_expect(main.game_state.is_pond_complete(), "side tasks must wait until the pond is complete")
 	_expect(main.game_state.is_q005_complete(), "side tasks must wait until the garden is complete")
-	_expect(not main.game_state.is_q006_complete(), "Q009 runtime must not require Q006")
-	_expect(not main.game_state.is_q007_complete(), "Q009 runtime must not require Q007")
+	_expect(not main.game_state.is_q006_complete(), "Q009 must wait for the garden decorations")
+	_expect(not main._can_use_q009_side_task(), "Q009 must stay hidden until Q007 is complete")
 	_expect(not main.game_state.is_q008_complete(), "Q009 runtime must not require Q008")
+	_press_interact()
+	_expect(not main.game_state.q009_materials_collected[0], "Q009 materials must stay unavailable before the shell task")
+
+	for decor_id in range(3):
+		_expect(main.game_state.place_q006_decoration(decor_id, decor_id), "Q006 must be completed before Q007")
+	main.player_position = main.Q007_SHELL_POSITION
+	main._try_collect_nearby()
+	_expect(main.game_state.is_q007_complete(), "the shell task must complete before Q009 is revealed")
+	_expect(main._can_use_q009_side_task(), "Q007 completion must unlock Q009")
+	_expect(not main._can_use_q010_side_task(), "Q010 must stay hidden until Q009 is complete")
 	_expect(main._q009_prompt_text() == "鸟屋计划：已收集 0/3 份材料。", "Q009 must show its material progress")
 
 	for material_id in range(3):

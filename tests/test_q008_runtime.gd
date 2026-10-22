@@ -45,6 +45,11 @@ func _run() -> void:
 
 	_complete_main_story_runtime()
 	_expect(main._is_main_story_complete(), "Q008 must become available only after the main story is complete")
+	_expect(not main._can_use_q008_side_task(), "Q008 must stay hidden until Q010 is complete")
+	_expect(not main._can_use_q009_side_task(), "Q009 must stay hidden until the shell task is complete")
+	_expect(not main._can_use_q010_side_task(), "Q010 must stay hidden until the birdhouse task is complete")
+	_expect(not main._can_use_q011_mode(), "Q011 must stay hidden until Q008 is complete")
+	_complete_prior_optional_tasks()
 	_expect(main._can_use_q008_side_task(), "completed main story must reveal the optional path task")
 
 	var source_0 := _center(main._q008_path_material_rect(0))
@@ -83,6 +88,7 @@ func _run() -> void:
 	# Q008 must not steal pointer input while the existing Q006 build mode is active.
 	main._restart_game()
 	_complete_main_story_runtime()
+	_complete_prior_optional_tasks()
 	main.build_mode = true
 	main._pointer_down(_center(main._q008_path_material_rect(0)))
 	_expect(main.dragging_q008_path == -1, "Q006 build mode must retain input priority over Q008")
@@ -114,6 +120,17 @@ func _complete_main_story_runtime() -> void:
 	for plant_id in range(3):
 		main.game_state.collect_q005_plant(plant_id)
 		main.game_state.place_q005_plant(plant_id, plant_id)
+	main._save_game()
+
+
+func _complete_prior_optional_tasks() -> void:
+	for decor_id in range(3):
+		main.game_state.place_q006_decoration(decor_id, decor_id)
+	main.game_state.collect_q007_shell()
+	for material_id in range(3):
+		main.game_state.collect_q009_material(material_id)
+	for seed_id in range(3):
+		main.game_state.collect_q010_seed(seed_id)
 	main._save_game()
 
 
