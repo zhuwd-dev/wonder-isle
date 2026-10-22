@@ -132,6 +132,7 @@ func _run() -> void:
 	_expect(main._hud_title_text() == "奇趣小岛 · 全部任务完成", "the final screen must clearly mark all tasks as finished")
 	_expect(main._task_prompt_text() == "额外地块整理完成！可以自由探索，或点击“建造”调整花园。", "the completion prompt must explain that there is no required next task")
 	_expect(main._task_action_hint_text() == "没有必做任务：自由探索，或点“建造”调整花园。", "the completion action hint must offer clear optional next actions")
+	_expect(not main._should_show_hud_message(), "the final status must not repeat the identical transient completion message")
 	main._toggle_q011_mode()
 	_expect(not main.q011_mode, "completed Q011 must not re-enter an empty placement mode")
 	_expect(_read_save().get("q011_slot_occupants") == [1, 2, 0], "Q011 completion must save all three placements")

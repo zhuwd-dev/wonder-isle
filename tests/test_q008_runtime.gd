@@ -61,6 +61,10 @@ func _run() -> void:
 	var slot_2 := _center(main.Q008_PATH_SLOT_RECTS[2])
 
 	_mouse_button(source_0, true)
+	_mouse_motion(slot_0)
+	_expect(main._q008_path_slot_is_drop_target(0), "an empty Q008 slot must be marked as a valid target while dragging")
+	_expect(main._q008_path_slot_is_hovered(0), "the Q008 slot under the pointer must receive its hover highlight")
+	_expect(not main._q008_path_slot_is_hovered(1), "a non-hovered Q008 slot must not receive the hover highlight")
 	_mouse_motion(Vector2(610, 450))
 	_mouse_button(Vector2(610, 450), false)
 	_expect(main.game_state.q008_path_slot_occupants == [-1, -1, -1], "an invalid Q008 release must not advance progress")

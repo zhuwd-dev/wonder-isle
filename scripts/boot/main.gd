@@ -516,6 +516,14 @@ func _can_use_q010_side_task() -> bool:
 	return _are_core_tasks_complete() and game_state.is_q012_complete() and game_state.is_q009_complete() and (game_state.can_start_q010() or game_state.is_q010_complete())
 
 
+func _should_show_q009_task_card() -> bool:
+	return _can_use_q009_side_task() and not game_state.is_q010_complete()
+
+
+func _should_show_q010_task_card() -> bool:
+	return _can_use_q010_side_task() and not game_state.is_q010_complete()
+
+
 func _can_use_q011_mode() -> bool:
 	return _can_show_q011_area() and game_state.can_start_q011()
 
@@ -1096,6 +1104,14 @@ func _q008_path_slot_at(position: Vector2) -> int:
 	return -1
 
 
+func _q008_path_slot_is_drop_target(slot_id: int) -> bool:
+	return _can_use_q008_side_task() and dragging_q008_path >= 0 and game_state.can_place_q008_path(dragging_q008_path, slot_id)
+
+
+func _q008_path_slot_is_hovered(slot_id: int) -> bool:
+	return _q008_path_slot_is_drop_target(slot_id) and Q008_PATH_SLOT_RECTS[slot_id].grow(12).has_point(q008_path_drag_position)
+
+
 func _q011_item_inventory_rect(item_id: int) -> Rect2:
 	return Rect2(Q011_INVENTORY_ORIGIN + Vector2(Q011_INVENTORY_STEP * item_id, 0), Vector2(78, 44))
 
@@ -1559,8 +1575,16 @@ func _draw_q008_area(font: Font) -> void:
 		if material_id >= 0:
 			_draw_q008_path_paver_at(slot.position + slot.size / 2.0, material_id, false)
 		else:
-			draw_rect(slot, VISUAL_PALETTE["target_idle_fill"], true)
-			draw_rect(slot, VISUAL_PALETTE["target_idle"], false, 3.0)
+			var is_drop_target := _q008_path_slot_is_drop_target(slot_id)
+			var is_hovered := _q008_path_slot_is_hovered(slot_id)
+			var slot_fill: Color = VISUAL_PALETTE["target_valid_fill"] if is_drop_target else VISUAL_PALETTE["target_idle_fill"]
+			var slot_border: Color = VISUAL_PALETTE["target_valid"] if is_drop_target else VISUAL_PALETTE["target_idle"]
+			draw_rect(slot, slot_fill, true)
+			if is_hovered:
+				draw_rect(slot.grow(8), Color(0.20, 0.90, 0.40, 0.36), true)
+				draw_rect(slot.grow(8), Color("16883f"), false, 5.0)
+				draw_rect(slot, Color(0.58, 1.0, 0.56, 0.48), true)
+			draw_rect(slot, slot_border, false, 4.0 if is_drop_target else 3.0)
 			draw_string(font, slot.position + Vector2(9, 18), "空槽", HORIZONTAL_ALIGNMENT_LEFT, -1, 12, VISUAL_PALETTE["ink"])
 
 	if path_complete:
@@ -1589,7 +1613,7 @@ func _draw_q007_area(font: Font) -> void:
 
 
 func _draw_q009_area(font: Font) -> void:
-	if not _can_use_q009_side_task():
+	if not _should_show_q009_task_card():
 		return
 	var complete: bool = game_state.is_q009_complete()
 	var panel_color: Color = Color(0.91, 0.93, 0.86, 0.82) if complete else Color(0.82, 0.96, 0.80, 0.86)
@@ -1624,7 +1648,7 @@ func _q009_action_hint_text() -> String:
 
 
 func _draw_q010_area(font: Font) -> void:
-	if not _can_use_q010_side_task():
+	if not _should_show_q010_task_card():
 		return
 	var complete: bool = game_state.is_q010_complete()
 	var panel_color: Color = Color(0.91, 0.93, 0.86, 0.82) if complete else Color(0.82, 0.96, 0.80, 0.86)
@@ -2003,7 +2027,7 @@ func _draw_hud(font: Font) -> void:
 	_draw_panel(Rect2(46, 72, 88, 26), Color("426b51"), Color("8fc47d"), 9)
 	draw_string(font, Vector2(56, 91), _task_stage_label(), HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color("fff7cf"))
 	draw_string(font, Vector2(148, 90), _task_prompt_text(), HORIZONTAL_ALIGNMENT_LEFT, 620, 18, Color("fff7cf"))
-	if not message.is_empty():
+	if _should_show_hud_message():
 		draw_string(font, Vector2(48, 112), message, HORIZONTAL_ALIGNMENT_LEFT, 720, 16, message_color)
 	var show_inventory: bool = q011_mode or build_mode or _can_start_q005_stage() or game_state.can_start_q004() or not game_state.is_complete() or (_can_use_q008_side_task() and not game_state.is_q008_complete())
 	if not show_inventory:
@@ -2154,6 +2178,10 @@ func _task_prompt_text() -> String:
 	if not game_state.is_q011_complete():
 		return "可选整理：额外地块已放置 %d/3 件物品。" % game_state.q011_placed_count()
 	return "小岛主线和支线都完成了！继续自由探索吧。"
+
+
+func _should_show_hud_message() -> bool:
+	return not message.is_empty() and message != _task_prompt_text()
 
 
 func _task_stage_label() -> String:

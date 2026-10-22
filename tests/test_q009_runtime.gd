@@ -62,6 +62,7 @@ func _run() -> void:
 
 	_expect(main.game_state.is_q009_complete(), "collecting three Q009 materials must complete the task")
 	_expect(main.game_state.q009_bird_interaction_unlocked(), "Q009 completion must unlock bird interaction")
+	_expect(main._should_show_q009_task_card(), "the completed birdhouse card must keep its optional greeting available during Q010")
 	_expect(main.message == "鸟屋计划完成！小鸟互动已开放。", "Q009 completion must show direct feedback")
 	_expect(main._q009_prompt_text() == "鸟屋计划完成！小鸟互动已开放。", "Q009 completion prompt must be visible")
 	_expect(main._q009_action_hint_text() == "可选：靠近小鸟按互动键打招呼。", "Q009 completion must label the bird greeting as optional")

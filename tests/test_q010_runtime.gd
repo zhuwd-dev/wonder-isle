@@ -44,6 +44,8 @@ func _run() -> void:
 	main._save_game()
 	_expect(main._can_use_q010_side_task(), "Q009 completion must unlock Q010")
 	_expect(main._task_stage_label() == "可选 3/5", "the seed collection task must be marked as optional task three of five")
+	_expect(main._should_show_q009_task_card(), "the optional bird greeting may stay visible while seed collection is active")
+	_expect(main._should_show_q010_task_card(), "the active seed collection card must be visible")
 	_expect(not main._can_use_q008_side_task(), "Q008 must stay hidden until Q010 is complete")
 	_expect(not main._can_use_q011_mode(), "Q011 must stay hidden until Q008 is complete")
 	_expect(main._q010_prompt_text() == "种子收藏：已收集 0/3 个指定种子。", "Q010 must show its progress prompt")
@@ -55,6 +57,8 @@ func _run() -> void:
 		_expect(main.game_state.q010_seed_count() == seed_id + 1, "Q010 runtime progress must count collected seeds")
 
 	_expect(main.game_state.is_q010_complete(), "collecting three Q010 seeds must complete the task")
+	_expect(not main._should_show_q010_task_card(), "the completed seed card must leave the screen when the path task becomes active")
+	_expect(not main._should_show_q009_task_card(), "the old birdhouse card must leave the screen when the path task becomes active")
 	_expect(main.message == "种子收藏完成！植物外观已解锁。", "Q010 completion must show direct feedback")
 	_expect(main._q010_prompt_text() == "种子收藏完成！植物外观已解锁。", "Q010 completion prompt must be visible")
 	_expect(main._q010_action_hint_text() == "可选：回乌龟花园看看新花。", "Q010 must label the garden visit as optional")
