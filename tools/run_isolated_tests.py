@@ -106,19 +106,32 @@ def main() -> int:
     failures: list[tuple[str, int, str]] = []
     base_command = [str(godot), "--headless", "--path", str(ROOT)]
     cases = regression_cases(save_path)
+    timeout_seconds = int(os.environ.get("GODOT_TEST_TIMEOUT_SECONDS", "120"))
     for index, (label, script, args) in enumerate(cases, start=1):
         command = [*base_command, "--script", f"res://tests/{script}", *args]
-        completed = subprocess.run(
-            command,
-            cwd=ROOT,
-            env=env,
-            text=True,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-        )
+        try:
+            completed = subprocess.run(
+                command,
+                cwd=ROOT,
+                env=env,
+                text=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                timeout=timeout_seconds,
+            )
+        except subprocess.TimeoutExpired as error:
+            output = error.stdout or ""
+            if isinstance(output, bytes):
+                output = output.decode(errors="replace")
+            output += f"\nTimed out after {timeout_seconds} seconds.\n"
+            (test_root / f"{label}.log").write_text(output)
+            failures.append((label, 124, output))
+            print(f"{index:02}/{len(cases)} {label}: TIMEOUT", flush=True)
+            continue
+
         (test_root / f"{label}.log").write_text(completed.stdout)
         failed = completed.returncode != 0 or ERROR_MARKER.search(completed.stdout) is not None
-        print(f"{index:02}/{len(cases)} {label}: {'FAIL' if failed else 'PASS'}")
+        print(f"{index:02}/{len(cases)} {label}: {'FAIL' if failed else 'PASS'}", flush=True)
         if failed:
             failures.append((label, completed.returncode, completed.stdout))
 
