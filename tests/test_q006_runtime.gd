@@ -38,8 +38,10 @@ func _run() -> void:
 	_complete_main_story_runtime()
 	_expect(main._can_use_q006_build_mode(), "the main story must unlock Q006 runtime controls")
 	_expect(not main._can_use_q007_side_task(), "the shell task must remain hidden until Q006 is complete")
+	_expect(not main._should_show_q006_slots(), "empty garden slots must stay hidden outside build mode")
 	main._toggle_build_mode()
 	_expect(main.build_mode, "the build button must enter Q006 build mode")
+	_expect(main._should_show_q006_slots(), "garden placement slots must appear in build mode")
 	_expect(main._task_prompt_text() == "任务：布置花园装饰。已完成 0/3。", "Q006 build prompt must be visible")
 
 	var first_inventory := _center(main._q006_decor_inventory_rect(0))
@@ -53,6 +55,9 @@ func _run() -> void:
 
 	_mouse_button(first_inventory, true)
 	_mouse_motion(first_slot)
+	_expect(main._q006_decor_slot_is_drop_target(0), "the matching empty decoration slot must be a green drop target")
+	_expect(not main._q006_decor_slot_is_drop_target(1), "other decoration slots must not show a valid target")
+	_expect(main._q006_decor_slot_is_hovered(0), "the matching decoration slot must brighten under the dragged item")
 	_mouse_button(first_slot, false)
 	_expect(main.game_state.q006_decor_placed[0], "valid decoration release must fill its slot")
 	_expect(_read_save().get("q006_decor_placed")[0] == true, "valid decoration placement must save immediately")

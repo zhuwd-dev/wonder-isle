@@ -32,7 +32,7 @@ func _run() -> void:
 	_expect(not main.game_state.is_q006_complete(), "Q007 must wait for the garden decorations")
 	_expect(not main._can_use_q007_side_task(), "Q007 must stay hidden until Q006 is complete")
 	_expect(not main._can_use_q009_side_task(), "Q009 must stay hidden until Q007 is complete")
-	_expect(main._task_prompt_text() == "主线任务完成！点击“建造”布置花园装饰。", "the main story prompt must lead into optional content")
+	_expect(main._task_prompt_text() == "下一步：布置花园装饰（0/3）。", "the main story prompt must lead into optional content")
 
 	main.player_position = Vector2(700, 500)
 	main._try_collect_nearby()

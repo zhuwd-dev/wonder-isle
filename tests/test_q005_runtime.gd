@@ -83,10 +83,16 @@ func _run() -> void:
 		_expect(main.game_state.q005_plant_slots[plant_id], "a valid plant drag must fill each remaining slot")
 
 	_expect(main.game_state.is_q005_complete(), "three placed plants and watering must complete Q005")
-	_expect(main._task_prompt_text() == "主线任务完成！点击“建造”布置花园装饰。", "Q005 completion must clearly lead to the optional garden task")
-	_expect(main._task_action_hint_text() == "点击右上方“建造”，再把三件装饰拖到花园槽位。", "Q005 completion must explain the next action")
+	_expect(main._task_prompt_text() == "下一步：布置花园装饰（0/3）。", "Q005 completion must clearly lead to the optional garden task")
+	_expect(main._task_action_hint_text() == "点击绿色“开始布置”，把剩余 3 件装饰拖到空槽。", "Q005 completion must explain the next action")
 	_expect(main._hud_title_text() == "奇趣小岛 · 花园装饰任务", "Q005 completion must update the HUD title")
 	_expect(main.build_button.visible, "the optional garden build button must unlock after the main story")
+	_expect(main.build_button.text == "开始布置", "the current next action must be named directly on the build button")
+	var build_style: StyleBox = main.build_button.get_theme_stylebox("normal")
+	_expect(build_style is StyleBoxFlat and build_style.bg_color == Color("68bd72"), "the current next action button must use its green primary style")
+	_expect(not main._should_show_q006_slots(), "empty garden slots must stay hidden outside build mode")
+	_expect(not main._should_show_rabbit_dialog(), "the rabbit's bridge dialogue must end after the bridge is repaired")
+	_expect(not main._should_show_region_access_card(), "the bridge access card must disappear after the area opens")
 	_expect(not main._can_use_q007_side_task(), "Q007 must stay hidden while Q006 is the current task")
 	_expect(not main._can_use_q009_side_task(), "Q009 must stay hidden while Q006 is the current task")
 	_expect(not main._can_use_q010_side_task(), "Q010 must stay hidden while Q006 is the current task")
@@ -95,6 +101,9 @@ func _run() -> void:
 	_mouse_button(_center(main._q005_plant_inventory_rect(0)), true)
 	_expect(main.dragging_q005_plant == -1, "a placed Q005 plant must not be draggable again")
 	_expect(_read_save().get("q005_completed") == true, "Q005 completion must be saved immediately")
+	main.message = "临时反馈"
+	main._tick_transient_message(4.1)
+	_expect(main.message.is_empty(), "completion feedback must clear after its short display lifetime")
 
 	main._restart_game()
 	_expect(not main.game_state.is_q005_complete(), "restart must reset Q005 completion")

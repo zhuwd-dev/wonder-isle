@@ -130,7 +130,11 @@ var q011_drag_position := Vector2.ZERO
 var build_mode := false
 var q011_mode := false
 var remove_decor_mode := false
-var message := "兔子需要帮助：收集 3 块木板，修好小桥。"
+var message_remaining_seconds := 0.0
+var message: String = "兔子需要帮助：收集 3 块木板，修好小桥。":
+	set(value):
+		message = value
+		message_remaining_seconds = 4.0 if not message.is_empty() else 0.0
 var message_color := Color("fff7cf")
 var restart_button: Button
 var interact_button: Button
@@ -148,12 +152,15 @@ func _ready() -> void:
 	_configure_save_path()
 	_load_game()
 	_create_controls()
+	if message_remaining_seconds <= 0.0 and not message.is_empty():
+		message_remaining_seconds = 4.0
 	queue_redraw()
 	print("奇趣小岛阶段 2 灰盒场景加载成功")
 	print("存档路径: ", save_path)
 
 
 func _physics_process(delta: float) -> void:
+	_tick_transient_message(delta)
 	if Input.is_action_just_pressed("interact"):
 		_try_collect_nearby()
 
@@ -168,6 +175,14 @@ func _physics_process(delta: float) -> void:
 		if _is_walkable(candidate):
 			player_position = candidate
 	queue_redraw()
+
+
+func _tick_transient_message(delta: float) -> void:
+	if message_remaining_seconds <= 0.0:
+		return
+	message_remaining_seconds = maxf(message_remaining_seconds - delta, 0.0)
+	if message_remaining_seconds == 0.0:
+		message = ""
 
 
 func _input(event: InputEvent) -> void:
@@ -432,11 +447,34 @@ func _refresh_build_controls() -> void:
 		return
 	var available := _can_use_q006_build_mode()
 	build_button.visible = available
-	build_button.text = "退出建造" if build_mode else "建造"
+	var next_step: bool = available and not game_state.is_q006_complete() and not build_mode
+	build_button.text = "开始布置" if next_step else ("退出建造" if build_mode else "建造")
+	_apply_build_button_style(next_step)
 	remove_decor_button.visible = available and build_mode
 	remove_decor_button.text = "取消移除" if remove_decor_mode else "移除装饰"
 	q011_button.visible = _can_use_q011_mode() and not build_mode
 	q011_button.text = "退出整理" if q011_mode else "整理"
+
+
+func _apply_build_button_style(highlighted: bool) -> void:
+	var normal := StyleBoxFlat.new()
+	normal.bg_color = Color("68bd72") if highlighted else Color("e6eee2")
+	normal.border_color = Color("3d8d58") if highlighted else Color("9ab5a0")
+	normal.set_border_width_all(3 if highlighted else 2)
+	normal.set_corner_radius_all(12)
+	normal.content_margin_left = 8.0
+	normal.content_margin_right = 8.0
+	var hover := normal.duplicate() as StyleBoxFlat
+	hover.bg_color = Color("82d789") if highlighted else Color("f2f7ef")
+	var pressed := normal.duplicate() as StyleBoxFlat
+	pressed.bg_color = Color("54a966") if highlighted else Color("d7e4d4")
+	build_button.add_theme_stylebox_override("normal", normal)
+	build_button.add_theme_stylebox_override("hover", hover)
+	build_button.add_theme_stylebox_override("pressed", pressed)
+	build_button.add_theme_color_override("font_color", Color("173d2d"))
+	build_button.add_theme_color_override("font_hover_color", Color("123927"))
+	build_button.add_theme_color_override("font_pressed_color", Color("102f23"))
+	build_button.add_theme_font_size_override("font_size", 20 if highlighted else 22)
 
 
 func _is_main_story_complete() -> bool:
@@ -1011,6 +1049,18 @@ func _q006_decor_slot_at(position: Vector2) -> int:
 	return -1
 
 
+func _q006_decor_slot_is_drop_target(slot_id: int) -> bool:
+	if dragging_q006_decor < 0 or slot_id < 0 or slot_id >= GameState.Q006_SLOT_TOTAL:
+		return false
+	if q006_decor_drag_from_slot >= 0:
+		return game_state.can_move_q006_decoration(dragging_q006_decor, q006_decor_drag_from_slot, slot_id)
+	return game_state.can_place_q006_decoration(dragging_q006_decor, slot_id)
+
+
+func _q006_decor_slot_is_hovered(slot_id: int) -> bool:
+	return _q006_decor_slot_is_drop_target(slot_id) and _q006_decor_slot_rect(slot_id).grow(18).has_point(q006_decor_drag_position)
+
+
 func _q008_path_material_rect(material_id: int) -> Rect2:
 	return Rect2(Q008_PATH_MATERIAL_POSITIONS[material_id] - Vector2(28, 14), Vector2(56, 28))
 
@@ -1271,26 +1321,30 @@ func _draw_bridge(font: Font) -> void:
 
 
 func _draw_rabbit_area(font: Font) -> void:
-	var complete: bool = game_state.is_complete()
-	var bubble_fill: Color = Color("e5fae9") if complete else Color("fff7dc")
-	var bubble_border: Color = Color("72b982") if complete else Color("d7a85b")
-	_draw_panel(Rect2(468, 122, 324, 48), bubble_fill, bubble_border, 16)
-	draw_colored_polygon(PackedVector2Array([Vector2(582, 170), Vector2(600, 170), Vector2(592, 188)]), bubble_fill)
-	draw_circle(Vector2(490, 146), 12.0, Color("72b982") if complete else Color("e8bd62"))
-	draw_string(font, Vector2(512, 152), _rabbit_feedback_text(), HORIZONTAL_ALIGNMENT_LEFT, -1, 20, VISUAL_PALETTE["ink"])
+	if _should_show_rabbit_dialog():
+		var bubble_fill := Color("fff7dc")
+		_draw_panel(Rect2(468, 122, 324, 48), bubble_fill, Color("d7a85b"), 16)
+		draw_colored_polygon(PackedVector2Array([Vector2(582, 170), Vector2(600, 170), Vector2(592, 188)]), bubble_fill)
+		draw_circle(Vector2(490, 146), 12.0, Color("e8bd62"))
+		draw_string(font, Vector2(512, 152), _rabbit_feedback_text(), HORIZONTAL_ALIGNMENT_LEFT, -1, 20, VISUAL_PALETTE["ink"])
 	_draw_rabbit(Vector2(592, 226))
 
 
+func _should_show_rabbit_dialog() -> bool:
+	return not game_state.is_complete()
+
+
 func _draw_region_area(font: Font) -> void:
-	var region_fill: Color = Color(0.82, 0.96, 0.80, 0.82) if game_state.area_unlocked else Color(0.86, 0.91, 0.86, 0.82)
-	var region_border: Color = VISUAL_PALETTE["island_highlight"] if game_state.area_unlocked else Color("c6d5c7")
-	_draw_panel(Rect2(928, 164, 270, 94), region_fill, region_border, 18)
+	if not _should_show_region_access_card():
+		return
+	_draw_panel(Rect2(928, 164, 270, 94), Color(0.86, 0.91, 0.86, 0.82), Color("c6d5c7"), 18)
 	draw_string(font, Vector2(952, 194), "桥后区域", HORIZONTAL_ALIGNMENT_LEFT, -1, 24, VISUAL_PALETTE["ink"])
-	draw_string(font, Vector2(952, 226), "完成修桥后开放", HORIZONTAL_ALIGNMENT_LEFT, -1, 18, VISUAL_PALETTE["ink"])
-	if game_state.area_unlocked:
-		draw_string(font, Vector2(962, 360), "新区域开放！", HORIZONTAL_ALIGNMENT_LEFT, -1, 26, Color("fff1a8"))
-	else:
-		draw_string(font, Vector2(945, 360), "暂时不能通过", HORIZONTAL_ALIGNMENT_LEFT, -1, 22, Color("52685b"))
+	draw_string(font, Vector2(952, 226), "修好小桥后开放", HORIZONTAL_ALIGNMENT_LEFT, -1, 18, VISUAL_PALETTE["ink"])
+	draw_string(font, Vector2(945, 360), "暂时不能通过", HORIZONTAL_ALIGNMENT_LEFT, -1, 22, Color("52685b"))
+
+
+func _should_show_region_access_card() -> bool:
+	return not game_state.area_unlocked
 
 
 func _draw_seed_area(font: Font) -> void:
@@ -1419,10 +1473,7 @@ func _draw_q005_area(font: Font) -> void:
 	draw_line(Q005_WATERING_POINT_POSITION + Vector2(-4, -4), Q005_WATERING_POINT_POSITION + Vector2(5, 4), Color("e5fbf2"), 3.0)
 	draw_string(font, Q005_WATERING_POINT_POSITION + Vector2(-25, 32), "已浇水" if game_state.q005_watered else "浇水点", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, VISUAL_PALETTE["ink"])
 	_draw_turtle(Q005_TURTLE_POSITION)
-	if game_state.is_q005_complete():
-		draw_string(font, Q005_TURTLE_POSITION + Vector2(-70, 55), "乌龟：谢谢你！", HORIZONTAL_ALIGNMENT_LEFT, -1, 17, Color("fff1a8"))
-	else:
-		draw_string(font, Q005_TURTLE_POSITION + Vector2(-24, 55), "乌龟", HORIZONTAL_ALIGNMENT_LEFT, -1, 17, VISUAL_PALETTE["ink"])
+	draw_string(font, Q005_TURTLE_POSITION + Vector2(-24, 55), "乌龟", HORIZONTAL_ALIGNMENT_LEFT, -1, 17, VISUAL_PALETTE["ink"])
 	if dragging_q005_plant >= 0:
 		var drag_hint := "绿色槽位可以松开" if _q005_plant_drag_target_at(q005_plant_drag_position) >= 0 else "把幼苗移到绿色槽位再松开"
 		draw_string(font, Vector2(930, 540), drag_hint, HORIZONTAL_ALIGNMENT_LEFT, -1, 16, VISUAL_PALETTE["ink"])
@@ -1431,19 +1482,32 @@ func _draw_q005_area(font: Font) -> void:
 func _draw_q006_area(font: Font) -> void:
 	if not _can_use_q006_build_mode():
 		return
+	var placed_count: int = game_state.q006_placed_count()
+	if not build_mode and placed_count == 0:
+		return
 	_draw_panel(Q006_DECOR_PLOT_RECT, Color("c7df9b"), Color("6cae87"), 14)
 	draw_string(font, Vector2(Q006_DECOR_PLOT_RECT.position.x + 8, Q006_DECOR_PLOT_RECT.position.y - 6), "花园装饰区", HORIZONTAL_ALIGNMENT_LEFT, -1, 16, VISUAL_PALETTE["ink"])
 	for slot_id in range(GameState.Q006_SLOT_TOTAL):
 		var slot: Rect2 = Q006_DECOR_SLOTS[slot_id]
 		var decor_id: int = game_state.q006_slot_occupants[slot_id]
-		var slot_color := VISUAL_PALETTE["target_valid"] if decor_id >= 0 else VISUAL_PALETTE["target_idle"]
-		var slot_fill := VISUAL_PALETTE["target_valid_fill"] if decor_id >= 0 else VISUAL_PALETTE["target_idle_fill"]
-		draw_rect(slot, slot_fill, true)
-		draw_rect(slot, slot_color, false, 3.0)
 		if decor_id >= 0 and not (dragging_q006_decor == decor_id and q006_decor_drag_from_slot == slot_id):
 			_draw_q006_decor_at(slot.position + slot.size / 2.0, decor_id, false)
-		else:
+		elif _should_show_q006_slots():
+			var is_drop_target := _q006_decor_slot_is_drop_target(slot_id)
+			var is_hovered_target := _q006_decor_slot_is_hovered(slot_id)
+			var slot_color: Color = VISUAL_PALETTE["target_valid"] if is_drop_target else VISUAL_PALETTE["target_idle"]
+			var slot_fill: Color = VISUAL_PALETTE["target_valid_fill"] if is_drop_target else VISUAL_PALETTE["target_idle_fill"]
+			draw_rect(slot, slot_fill, true)
+			if is_hovered_target:
+				draw_rect(slot.grow(8), Color(0.20, 0.90, 0.40, 0.36), true)
+				draw_rect(slot.grow(8), Color("16883f"), false, 5.0)
+				draw_rect(slot, Color(0.58, 1.0, 0.56, 0.48), true)
+			draw_rect(slot, Color("16883f") if is_drop_target else slot_color, false, 5.0 if is_drop_target else 3.0)
 			draw_string(font, slot.position + Vector2(17, 23), "装饰位", HORIZONTAL_ALIGNMENT_LEFT, -1, 12, VISUAL_PALETTE["ink"])
+
+
+func _should_show_q006_slots() -> bool:
+	return build_mode and _can_use_q006_build_mode()
 
 
 func _draw_q008_area(font: Font) -> void:
@@ -1853,7 +1917,7 @@ func _bridge_status_text() -> String:
 
 
 func _rabbit_feedback_text() -> String:
-	return "兔子：谢谢你！小桥修好了！" if game_state.is_complete() else "兔子：可以帮我修桥吗？"
+	return "兔子：可以帮我修桥吗？" if _should_show_rabbit_dialog() else ""
 
 
 func _draw_ellipse_custom(center: Vector2, radius: Vector2, color: Color) -> void:
@@ -1892,7 +1956,8 @@ func _draw_hud(font: Font) -> void:
 	_draw_panel(Rect2(26, 22, 760, 104), VISUAL_PALETTE["panel"], VISUAL_PALETTE["panel_border"], 20)
 	draw_string(font, Vector2(48, 58), _hud_title_text(), HORIZONTAL_ALIGNMENT_LEFT, -1, 30, Color("fff7cf"))
 	draw_string(font, Vector2(48, 90), _task_prompt_text(), HORIZONTAL_ALIGNMENT_LEFT, 720, 18, Color("fff7cf"))
-	draw_string(font, Vector2(48, 112), message, HORIZONTAL_ALIGNMENT_LEFT, 720, 16, message_color)
+	if not message.is_empty():
+		draw_string(font, Vector2(48, 112), message, HORIZONTAL_ALIGNMENT_LEFT, 720, 16, message_color)
 	var show_inventory: bool = q011_mode or build_mode or _can_start_q005_stage() or game_state.can_start_q004() or not game_state.is_complete() or (_can_use_q008_side_task() and not game_state.is_q008_complete())
 	if not show_inventory:
 		return
@@ -2028,7 +2093,7 @@ func _task_prompt_text() -> String:
 			return "任务：照料乌龟的花园。先浇水并收集 3 株植物。"
 		return "花园已浇水，植物已收集 %d/3，已摆放 %d/3。" % [collected_count, placed_count]
 	if not game_state.is_q006_complete():
-		return "主线任务完成！点击“建造”布置花园装饰。"
+		return "下一步：布置花园装饰（%d/3）。" % game_state.q006_placed_count()
 	if not game_state.is_q007_complete():
 		return "花园装饰完成！下一步：到池塘边寻找隐藏贝壳。"
 	if not game_state.is_q009_complete():
@@ -2070,7 +2135,8 @@ func _task_action_hint_text() -> String:
 			return "靠近浇水点按互动；也可以先收集花园里的植物。"
 		return "把右下角植物拖到花园中对应的绿色槽位。"
 	if not game_state.is_q006_complete():
-		return "点击右上方“建造”，再把三件装饰拖到花园槽位。"
+		var remaining_decorations: int = GameState.Q006_DECOR_TOTAL - game_state.q006_placed_count()
+		return "点击绿色“开始布置”，把剩余 %d 件装饰拖到空槽。" % remaining_decorations
 	if not game_state.is_q007_complete():
 		return "到池塘边找一找隐藏贝壳，靠近后按互动键。"
 	if not game_state.is_q009_complete():
