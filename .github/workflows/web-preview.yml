@@ -14,11 +14,11 @@ permissions:
   contents: read
 
 concurrency:
-  group: web-preview-${{ github.ref }}
+  group: web-preview-v2-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  build-and-test:
+  web-preview:
     runs-on: ubuntu-latest
     env:
       GODOT_INSTALL_DIR: /tmp/wonder-isle-godot-4.7.2
@@ -44,9 +44,6 @@ jobs:
       - name: Set up Godot and browser test tools
         run: bash tools/setup_web_environment.sh
 
-      - name: Run isolated GDScript regression tests
-        run: python3 tools/run_isolated_tests.py
-
       - name: Export, run Chromium smoke test, and capture screenshot
         run: tools/test_web_preview.sh
 
@@ -67,12 +64,42 @@ jobs:
         with:
           path: build/web
 
+  regression-tests:
+    runs-on: ubuntu-latest
+    env:
+      GODOT_INSTALL_DIR: /tmp/wonder-isle-godot-4.7.2
+      GODOT_BIN: /tmp/wonder-isle-godot-4.7.2/Godot_v4.7.2-stable_linux.x86_64
+      XDG_DATA_HOME: /tmp/wonder-isle-godot-data
+      XDG_CONFIG_HOME: /tmp/wonder-isle-godot-config
+      XDG_CACHE_HOME: /tmp/wonder-isle-godot-cache
+      WEB_TEST_VENV: /tmp/wonder-isle-web-test-venv
+      PYTHON_BIN: /tmp/wonder-isle-web-test-venv/bin/python
+      PLAYWRIGHT_BROWSERS_PATH: /tmp/wonder-isle-playwright-browsers
+      GODOT_TEST_TIMEOUT_SECONDS: "120"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/cache@v4
+        with:
+          path: |
+            /tmp/wonder-isle-godot-4.7.2
+            /tmp/wonder-isle-godot-data/godot/export_templates/4.7.2.stable
+            /tmp/wonder-isle-web-test-venv
+            /tmp/wonder-isle-playwright-browsers
+          key: godot-4.7.2-web-${{ runner.os }}-${{ hashFiles('tools/requirements-web-test.txt') }}
+
+      - name: Set up Godot and browser test tools
+        run: bash tools/setup_web_environment.sh
+
+      - name: Run isolated GDScript regression tests
+        run: python3 -u tools/run_isolated_tests.py
+
   deploy-preview:
     if: >-
       github.event_name == 'push' ||
       (github.event_name == 'workflow_dispatch' &&
       (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/work'))
-    needs: build-and-test
+    needs: web-preview
     runs-on: ubuntu-latest
     permissions:
       pages: write
@@ -81,7 +108,7 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - name: Enable GitHub Pages
+      - name: Confirm GitHub Pages configuration
         uses: actions/configure-pages@v5
 
       - name: Publish browser preview
