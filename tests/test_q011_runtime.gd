@@ -46,7 +46,10 @@ func _run() -> void:
 	for decor_id in range(3):
 		_expect(main.game_state.place_q006_decoration(decor_id, decor_id), "Q006 must complete before Q007")
 	main._refresh_build_controls()
-	_expect(main._can_use_q007_side_task(), "Q006 completion must reveal Q007")
+	_expect(not main._can_use_q007_side_task(), "Q006 completion must pause optional tasks for the ending")
+	_expect(main.game_state.complete_q012(), "the ending must complete before side exploration")
+	main._refresh_build_controls()
+	_expect(main._can_use_q007_side_task(), "Q012 completion must reveal optional Q007")
 	_expect(not main._can_use_q009_side_task(), "Q009 must remain hidden until Q007 is complete")
 	_expect(main.game_state.collect_q007_shell(), "Q007 must complete before Q009")
 	for material_id in range(3):

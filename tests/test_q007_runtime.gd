@@ -45,8 +45,15 @@ func _run() -> void:
 	for decor_id in range(3):
 		_expect(main.game_state.place_q006_decoration(decor_id, decor_id), "completing Q006 must enable each decoration")
 	main._save_game()
-	_expect(main._can_use_q007_side_task(), "Q006 completion must unlock the shell task")
-	_expect(main._task_prompt_text() == "花园装饰完成！下一步：到池塘边寻找隐藏贝壳。", "Q006 completion must guide the player to Q007")
+	_expect(not main._can_use_q007_side_task(), "the shell task must stay hidden until the main ending")
+	_expect(main._task_prompt_text() == "花园装饰已完成！回到兔子身边参加小岛庆祝。", "Q006 completion must guide the player to the ending")
+	main.player_position = main.Q012_RABBIT_POSITION
+	main._try_collect_nearby()
+	_expect(main.game_state.is_q012_complete(), "the rabbit interaction must finish the main story")
+	_expect(main._can_use_q007_side_task(), "the main ending must unlock optional shell exploration")
+	_expect(main._task_prompt_text() == "主线故事完成！可选支线：到池塘边寻找隐藏贝壳。", "Q007 must be labeled optional after the ending")
+
+	main.player_position = main.Q007_SHELL_POSITION
 
 	main._try_collect_nearby()
 	_expect(main.game_state.q007_shell_collected, "runtime interaction must collect the shell")

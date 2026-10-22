@@ -42,7 +42,7 @@ func _write_partial() -> void:
 	_expect(main.game_state.collect_q009_material(1), "partial save must collect the first Q009 material")
 	main._save_game()
 	var saved = _read_save()
-	_expect(saved.get("schema_version") == 11, "partial Q009 save must use Schema 11")
+	_expect(saved.get("schema_version") == 12, "partial Q009 save must use Schema 12")
 	_expect(saved.get("q009_materials_collected") == [false, true, false], "partial Q009 save must preserve materials")
 	_expect(saved.get("q009_completed") == false, "partial Q009 save must remain incomplete")
 	main.queue_free()

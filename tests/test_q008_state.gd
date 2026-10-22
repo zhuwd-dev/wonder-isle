@@ -43,14 +43,14 @@ func _init() -> void:
 	_expect(not state.place_q008_path(0, 0), "a completed Q008 must reject repeated placement")
 
 	var saved: Dictionary = state.to_save_data()
-	_expect(saved.get("schema_version") == 11, "Q008 saves must use Schema 11")
-	_expect(saved.get("q008_path_slot_occupants") == [1, 2, 0], "Schema 11 must save Q008 slot occupants")
-	_expect(saved.get("q008_completed") == true, "Schema 11 must save Q008 completion")
+	_expect(saved.get("schema_version") == 12, "Q008 saves must use Schema 12")
+	_expect(saved.get("q008_path_slot_occupants") == [1, 2, 0], "Schema 12 must save Q008 slot occupants")
+	_expect(saved.get("q008_completed") == true, "Schema 12 must save Q008 completion")
 
 	var restored = state_script.new()
-	_expect(restored.load_save_data(saved), "a valid Schema 11 save must load")
-	_expect(restored.q008_path_slot_occupants == [1, 2, 0], "Schema 11 must restore Q008 slots")
-	_expect(restored.is_q008_complete(), "Schema 11 must restore Q008 completion")
+	_expect(restored.load_save_data(saved), "a valid Schema 12 save must load")
+	_expect(restored.q008_path_slot_occupants == [1, 2, 0], "Schema 12 must restore Q008 slots")
+	_expect(restored.is_q008_complete(), "Schema 12 must restore Q008 completion")
 
 	for schema_version in range(1, 8):
 		var old_save := _schema7_save()
@@ -83,7 +83,7 @@ func _init() -> void:
 			old_save.erase("q007_completed")
 			old_save.erase("q007_reward_unlocked")
 		var migrated = state_script.new()
-		_expect(migrated.load_save_data(old_save), "Schema %d must migrate to Schema 11" % schema_version)
+		_expect(migrated.load_save_data(old_save), "Schema %d must migrate to Schema 12" % schema_version)
 		_expect(migrated.is_complete(), "Schema %d migration must preserve Q001" % schema_version)
 		_expect(migrated.q008_path_slot_occupants == [-1, -1, -1], "Schema %d migration must start Q008 empty" % schema_version)
 		_expect(not migrated.q008_completed, "Schema %d migration must leave Q008 incomplete" % schema_version)

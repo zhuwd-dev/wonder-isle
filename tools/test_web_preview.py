@@ -3,10 +3,13 @@
 
 from __future__ import annotations
 
+import base64
 import functools
 import json
 import os
+import subprocess
 import sys
+import tempfile
 import threading
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -47,6 +50,11 @@ def main() -> int:
     artifact_dir = Path(os.environ.get("WEB_TEST_ARTIFACTS", default_artifact_dir)).resolve()
     artifact_dir.mkdir(parents=True, exist_ok=True)
     screenshot_path = artifact_dir / "web-preview.png"
+    ending_screenshot_path = artifact_dir / "web-q012-ending.png"
+    completed_screenshot_path = artifact_dir / "web-q012-complete.png"
+    godot_bin = os.environ.get(
+        "GODOT_BIN", "/tmp/wonder-isle-godot-4.7.2/Godot_v4.7.2-stable_linux.x86_64"
+    )
 
     try:
         with sync_playwright() as playwright:
@@ -108,6 +116,107 @@ def main() -> int:
                     }
                 )
                 page.screenshot(path=str(screenshot_path), full_page=True)
+
+                with tempfile.TemporaryDirectory(prefix="wonder-isle-q012-") as temp_dir:
+                    fixture_path = Path(temp_dir) / "q012-ending-save.json"
+                    subprocess.run(
+                        [
+                            godot_bin,
+                            "--headless",
+                            "--path",
+                            str(Path(__file__).resolve().parent.parent),
+                            "--script",
+                            "tests/create_q012_web_save.gd",
+                            "--",
+                            str(fixture_path),
+                        ],
+                        check=True,
+                        capture_output=True,
+                        text=True,
+                    )
+                    fixture_base64 = base64.b64encode(fixture_path.read_bytes()).decode("ascii")
+                    save_key = "/userfs/godot/app_userdata/奇趣小岛/qxisland_stage2_save.json"
+                    page.mouse.click(800, 600)
+                    page.keyboard.down("d")
+                    page.wait_for_timeout(900)
+                    page.keyboard.up("d")
+                    page.keyboard.press("e")
+                    page.wait_for_timeout(1_000)
+                    page.evaluate(
+                        """async ({key, payload}) => new Promise((resolve, reject) => {
+                            const binary = atob(payload);
+                            const contents = new Int8Array(binary.length);
+                            for (let index = 0; index < binary.length; index++) {
+                                contents[index] = binary.charCodeAt(index);
+                            }
+                            const opening = indexedDB.open('/userfs');
+                            opening.onerror = () => reject(opening.error);
+                            opening.onsuccess = () => {
+                                const transaction = opening.result.transaction('FILE_DATA', 'readwrite');
+                                const store = transaction.objectStore('FILE_DATA');
+                                const existing = store.get(key);
+                                existing.onsuccess = () => {
+                                    if (!existing.result) {
+                                        reject(new Error('The game did not create its save file'));
+                                        return;
+                                    }
+                                    existing.result.timestamp = new Date();
+                                    existing.result.contents = contents;
+                                    store.put(existing.result, key);
+                                };
+                                transaction.oncomplete = resolve;
+                                transaction.onerror = () => reject(transaction.error);
+                            };
+                        })""",
+                        {"key": save_key, "payload": fixture_base64},
+                    )
+                    page.reload(wait_until="load", timeout=60_000)
+                    page.wait_for_selector("canvas", timeout=60_000)
+                    page.wait_for_timeout(3_000)
+                    page.screenshot(path=str(ending_screenshot_path), full_page=True)
+
+                    page.mouse.click(800, 600)
+                    for key, duration_ms in (("w", 750), ("d", 1_150), ("s", 280)):
+                        page.keyboard.down(key)
+                        page.wait_for_timeout(duration_ms)
+                        page.keyboard.up(key)
+                    page.keyboard.down("w")
+                    page.wait_for_timeout(450)
+                    page.keyboard.up("w")
+                    page.screenshot(path=str(artifact_dir / "web-q012-at-rabbit.png"), full_page=True)
+                    page.keyboard.press("e")
+                    page.wait_for_timeout(1_500)
+                    page.screenshot(path=str(artifact_dir / "web-q012-after-interact.png"), full_page=True)
+                    page.wait_for_timeout(6_000)
+                    page.reload(wait_until="load", timeout=60_000)
+                    page.wait_for_selector("canvas", timeout=60_000)
+                    page.wait_for_timeout(3_000)
+                    page.screenshot(path=str(artifact_dir / "web-q012-after-refresh.png"), full_page=True)
+                    saved_ending = page.evaluate(
+                        """async key => new Promise((resolve, reject) => {
+                            const opening = indexedDB.open('/userfs');
+                            opening.onerror = () => reject(opening.error);
+                            opening.onsuccess = () => {
+                                const transaction = opening.result.transaction('FILE_DATA', 'readonly');
+                                const request = transaction.objectStore('FILE_DATA').get(key);
+                                request.onsuccess = () => {
+                                    const bytes = new Uint8Array(request.result.contents);
+                                    resolve(JSON.parse(new TextDecoder().decode(bytes)));
+                                };
+                                request.onerror = () => reject(request.error);
+                            };
+                        })""",
+                        save_key,
+                    )
+                    if saved_ending.get("q012_completed") is not True:
+                        raise AssertionError(
+                            "The browser did not persist Q012: "
+                            f"{saved_ending.get('q012_completed')}; console errors: {result['console_errors']}"
+                        )
+                    result["q012_browser_flow"] = "passed"
+                    page.screenshot(path=str(completed_screenshot_path), full_page=True)
+                    result["q012_ending_screenshot"] = str(ending_screenshot_path)
+                    result["q012_complete_screenshot"] = str(completed_screenshot_path)
 
                 failure_page = browser.new_page()
                 failure_page.add_init_script(

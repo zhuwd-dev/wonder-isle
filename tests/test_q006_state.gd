@@ -43,16 +43,16 @@ func _init() -> void:
 	_expect(state.q006_slot_occupants == [1, -1, 2], "an invalid move must preserve placement")
 
 	var saved: Dictionary = state.to_save_data()
-	_expect(saved.get("schema_version") == 11, "Q006 save must use Schema 11")
-	_expect(saved.get("q006_decor_placed") == [false, true, true], "Schema 11 must save placed decorations")
-	_expect(saved.get("q006_slot_occupants") == [1, -1, 2], "Schema 11 must save slot occupants")
-	_expect(saved.get("q006_completed") == true, "Schema 11 must save Q006 completion")
-	_expect(saved.get("q006_windmill_unlocked") == true, "Schema 11 must save the windmill reward")
+	_expect(saved.get("schema_version") == 12, "Q006 save must use Schema 12")
+	_expect(saved.get("q006_decor_placed") == [false, true, true], "Schema 12 must save placed decorations")
+	_expect(saved.get("q006_slot_occupants") == [1, -1, 2], "Schema 12 must save slot occupants")
+	_expect(saved.get("q006_completed") == true, "Schema 12 must save Q006 completion")
+	_expect(saved.get("q006_windmill_unlocked") == true, "Schema 12 must save the windmill reward")
 
 	var restored = state_script.new()
-	_expect(restored.load_save_data(saved), "a valid Schema 11 save must load")
-	_expect(restored.is_q006_complete(), "Schema 11 must restore Q006 completion")
-	_expect(restored.q006_slot_occupants == [1, -1, 2], "Schema 11 must restore slot occupants")
+	_expect(restored.load_save_data(saved), "a valid Schema 12 save must load")
+	_expect(restored.is_q006_complete(), "Schema 12 must restore Q006 completion")
+	_expect(restored.q006_slot_occupants == [1, -1, 2], "Schema 12 must restore slot occupants")
 
 	for schema_version in range(1, 6):
 		var old_save := _schema5_save()
@@ -63,7 +63,7 @@ func _init() -> void:
 			old_save.erase("q005_plant_slots")
 			old_save.erase("q005_completed")
 		var migrated = state_script.new()
-		_expect(migrated.load_save_data(old_save), "Schema %d must migrate to Schema 11" % schema_version)
+		_expect(migrated.load_save_data(old_save), "Schema %d must migrate to Schema 12" % schema_version)
 		_expect(not migrated.is_q006_complete(), "Schema %d migration must leave Q006 incomplete" % schema_version)
 		_expect(migrated.q006_decor_inventory == [false, false, false], "Schema %d migration must not grant decorations before Q002" % schema_version)
 

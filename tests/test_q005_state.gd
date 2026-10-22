@@ -48,11 +48,11 @@ func _run() -> void:
 	_expect(q004_independent.can_start_q005(), "Q005 must not depend on Q004")
 
 	var saved: Dictionary = state.to_save_data()
-	_expect(saved.get("schema_version") == 11, "Q005 save must use Schema 11")
-	_expect(saved.get("q005_watered") == true, "Schema 11 must save watering")
-	_expect(saved.get("q005_plants_collected") == [true, true, true], "Schema 11 must save plant collection")
-	_expect(saved.get("q005_plant_slots") == [true, true, true], "Schema 11 must save plant slots")
-	_expect(saved.get("q005_completed") == true, "Schema 11 must save Q005 completion")
+	_expect(saved.get("schema_version") == 12, "Q005 save must use Schema 12")
+	_expect(saved.get("q005_watered") == true, "Schema 12 must save watering")
+	_expect(saved.get("q005_plants_collected") == [true, true, true], "Schema 12 must save plant collection")
+	_expect(saved.get("q005_plant_slots") == [true, true, true], "Schema 12 must save plant slots")
+	_expect(saved.get("q005_completed") == true, "Schema 12 must save Q005 completion")
 	var restored = state_script.new()
 	_expect(restored.load_save_data(saved), "a completed Q005 save must load")
 	_expect(restored.is_q005_complete(), "a completed Q005 save must restore completion")
@@ -65,7 +65,7 @@ func _run() -> void:
 	_expect(migrated.q005_plants_collected == [false, false, false], "Schema 4 plants must default empty")
 	_expect(migrated.q005_plant_slots == [false, false, false], "Schema 4 slots must default empty")
 	_expect(not migrated.is_q005_complete(), "Schema 4 must not unlock Q005 completion")
-	_expect(migrated.to_save_data().get("schema_version") == 11, "migrated Schema 4 must save as Schema 11")
+	_expect(migrated.to_save_data().get("schema_version") == 12, "migrated Schema 4 must save as Schema 12")
 
 	var schema1_migrated = state_script.new()
 	_expect(schema1_migrated.load_save_data({

@@ -60,7 +60,7 @@ func _write_watered() -> void:
 	_expect(main.game_state.water_q005(), "watered progress must be writable")
 	main._save_game()
 	var saved = _read_save()
-	_expect(saved.get("schema_version") == 11, "watered progress must use Schema 11")
+	_expect(saved.get("schema_version") == 12, "watered progress must use Schema 12")
 	_expect(saved.get("q005_watered") == true, "watered progress must be saved")
 	_expect(saved.get("q005_plants_collected") == [false, false, false], "watered progress must not invent plants")
 	_expect(saved.get("q005_plant_slots") == [false, false, false], "watered progress must not invent slots")

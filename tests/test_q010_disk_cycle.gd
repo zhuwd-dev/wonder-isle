@@ -42,7 +42,7 @@ func _write_partial() -> void:
 	_expect(main.game_state.collect_q010_seed(0), "partial save must collect the first Q010 seed")
 	main._save_game()
 	var saved = _read_save()
-	_expect(saved.get("schema_version") == 11, "partial Q010 save must use Schema 11")
+	_expect(saved.get("schema_version") == 12, "partial Q010 save must use Schema 12")
 	_expect(saved.get("q010_seeds_collected") == [true, false, false], "partial Q010 save must preserve one seed")
 	main.queue_free()
 	await process_frame

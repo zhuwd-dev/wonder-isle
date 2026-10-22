@@ -43,6 +43,9 @@ func _run() -> void:
 
 	for decor_id in range(3):
 		_expect(main.game_state.place_q006_decoration(decor_id, decor_id), "Q006 must be completed before Q007")
+	main.player_position = main.Q012_RABBIT_POSITION
+	main._try_collect_nearby()
+	_expect(main.game_state.is_q012_complete(), "the main story ending must unlock the optional quests")
 	main.player_position = main.Q007_SHELL_POSITION
 	main._try_collect_nearby()
 	_expect(main.game_state.is_q007_complete(), "the shell task must complete before Q009 is revealed")

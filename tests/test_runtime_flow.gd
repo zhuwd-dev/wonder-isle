@@ -132,10 +132,46 @@ func _run() -> void:
 	_mouse_button(stone_0, true)
 	_expect(main.dragging_pond_stone == -1, "a placed pond stone must not be draggable again")
 
+	main.player_position = main.Q005_WATERING_POINT_POSITION
+	main._try_collect_nearby()
+	_expect(main.game_state.q005_watered, "the connected flow must water the turtle garden")
+	for plant_id in range(3):
+		main.player_position = main.Q005_PLANT_POSITIONS[plant_id]
+		main._try_collect_nearby()
+		_expect(main.game_state.q005_plants_collected[plant_id], "the connected flow must collect every garden plant")
+		_mouse_button(_center(main._q005_plant_inventory_rect(plant_id)), true)
+		_mouse_motion(_center(main.Q005_PLANT_SLOTS[plant_id]))
+		_mouse_button(_center(main.Q005_PLANT_SLOTS[plant_id]), false)
+		_expect(main.game_state.q005_plant_slots[plant_id], "the connected flow must place every garden plant")
+
 	var saved: Variant = _read_save()
 	_expect(saved is Dictionary, "runtime interactions must create a JSON save")
 	_expect(saved.get("pond_stones_placed") == [true, true, true], "runtime completion must be saved immediately")
 	_expect(saved.get("pond_opened") == true, "runtime pond completion must be saved immediately")
+	_expect(main.game_state.is_q005_complete(), "the connected core flow must complete the turtle garden")
+	_expect(main._task_prompt_text() == "下一步：布置花园装饰（0/3）。", "the turtle garden must lead directly to the final decoration task")
+	_expect(main.build_button.visible and main.build_button.text == "开始布置", "the next main-story action must be visible on the build button")
+
+	# Q006 → Q012: continue the same fresh runtime through the ending.
+	main._toggle_build_mode()
+	_expect(main.build_mode, "the final main-story task must enter decoration mode")
+	for decor_id in range(3):
+		_mouse_button(_center(main._q006_decor_inventory_rect(decor_id)), true)
+		_mouse_motion(_center(main.Q006_DECOR_SLOTS[decor_id]))
+		_mouse_button(_center(main.Q006_DECOR_SLOTS[decor_id]), false)
+		_expect(main.game_state.q006_decor_placed[decor_id], "the connected flow must place every garden decoration")
+	_expect(main.game_state.is_q006_complete(), "three decorations must complete the final garden task")
+	_expect(not main.build_mode, "completing the garden must close decoration mode")
+	_expect(main.game_state.can_start_q012(), "the completed garden must unlock the rabbit celebration")
+	_expect(main._task_prompt_text() == "花园装饰已完成！回到兔子身边参加小岛庆祝。", "the garden must direct the player to the rabbit")
+	_expect(main._task_action_hint_text() == "走到兔子身边按 E 或点击“互动 / 收集”，和伙伴们一起庆祝。", "the ending prompt must explain how to finish the story")
+	_expect(not main._can_use_q007_side_task(), "optional exploration must remain locked before the ending interaction")
+	main.player_position = main.Q012_RABBIT_POSITION
+	main._try_collect_nearby()
+	_expect(main.game_state.is_q012_complete(), "the rabbit interaction must finish the connected main story")
+	_expect(_read_save().get("q012_completed") == true, "the connected main-story ending must save immediately")
+	_expect(main._can_use_q007_side_task(), "finishing the story must unlock optional exploration")
+	_expect(main._task_prompt_text() == "主线故事完成！可选支线：到池塘边寻找隐藏贝壳。", "the post-ending prompt must label the next task optional")
 
 	# Reset through the normal game entry point and verify all three task layers.
 	main._restart_game()

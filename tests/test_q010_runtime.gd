@@ -37,6 +37,7 @@ func _run() -> void:
 	_expect(not main.game_state.q010_seeds_collected.has(true), "locked Q010 interaction must not collect seeds")
 	for decor_id in range(3):
 		_expect(main.game_state.place_q006_decoration(decor_id, decor_id), "Q006 must complete before the side-quest chain")
+	_expect(main.game_state.complete_q012(), "Q012 must complete before optional side tasks")
 	_expect(main.game_state.collect_q007_shell(), "Q007 must complete before Q009")
 	for material_id in range(3):
 		_expect(main.game_state.collect_q009_material(material_id), "Q009 materials must complete before Q010")

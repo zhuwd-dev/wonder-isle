@@ -43,7 +43,7 @@ func _write_partial() -> void:
 	_expect(main.game_state.place_q011_item(2, 0), "first Q011 item must be placeable before process exit")
 	main._save_game()
 	var saved := _read_save()
-	_expect(saved.get("schema_version") == 11, "partial Q011 saves must use Schema 11")
+	_expect(saved.get("schema_version") == 12, "partial Q011 saves must use Schema 12")
 	_expect(saved.get("q011_slot_occupants") == [2, -1, -1], "partial Q011 saves must preserve the first slot")
 	main.queue_free()
 	await process_frame

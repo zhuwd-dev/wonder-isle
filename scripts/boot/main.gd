@@ -37,6 +37,7 @@ const WOOD_POSITIONS := [Vector2(160, 330), Vector2(360, 400), Vector2(620, 540)
 const HOUSE_POSITION := Vector2(520, 500)
 const HOUSE_INTERACTION_RADIUS := 88.0
 const HOUSE_RECT := Rect2(448, 442, 144, 116)
+const Q012_RABBIT_POSITION := Vector2(592, 226)
 const Q006_DECOR_PLOT_RECT := Rect2(928, 544, 288, 30)
 const Q006_DECOR_SLOTS := [
 	Rect2(940, 547, 76, 24),
@@ -384,6 +385,8 @@ func _toggle_build_mode() -> void:
 		message = "完成狐狸小屋、池塘和花园任务后，就可以布置花园装饰。"
 		message_color = Color("ffe1b8")
 		return
+	if game_state.is_q006_complete() and not game_state.is_q012_complete():
+		return
 	build_mode = not build_mode
 	q011_mode = false
 	dragging_q011_item = -1
@@ -446,7 +449,7 @@ func _refresh_build_controls() -> void:
 	if build_button == null:
 		return
 	var available := _can_use_q006_build_mode()
-	build_button.visible = available
+	build_button.visible = available and (not game_state.is_q006_complete() or game_state.is_q012_complete())
 	var next_step: bool = available and not game_state.is_q006_complete() and not build_mode
 	build_button.text = "开始布置" if next_step else ("退出建造" if build_mode else "建造")
 	_apply_build_button_style(next_step)
@@ -477,7 +480,7 @@ func _apply_build_button_style(highlighted: bool) -> void:
 	build_button.add_theme_font_size_override("font_size", 20 if highlighted else 22)
 
 
-func _is_main_story_complete() -> bool:
+func _are_core_tasks_complete() -> bool:
 	return game_state != null and game_state.is_complete() and game_state.is_seed_complete() and game_state.is_q004_complete() and game_state.is_pond_complete() and game_state.is_q005_complete()
 
 
@@ -494,27 +497,27 @@ func _can_start_q005_stage() -> bool:
 
 
 func _can_use_q006_build_mode() -> bool:
-	return _is_main_story_complete() and (game_state.can_edit_q006() or game_state.is_q006_complete())
+	return _are_core_tasks_complete() and (game_state.can_edit_q006() or game_state.is_q006_complete())
 
 
 func _can_use_q007_side_task() -> bool:
-	return _is_main_story_complete() and game_state.is_q006_complete() and (game_state.can_start_q007() or game_state.is_q007_complete())
+	return _are_core_tasks_complete() and game_state.is_q012_complete() and (game_state.can_start_q007() or game_state.is_q007_complete())
 
 
 func _can_use_q008_side_task() -> bool:
-	return _is_main_story_complete() and game_state.is_q010_complete() and (game_state.can_start_q008() or game_state.is_q008_complete())
+	return _are_core_tasks_complete() and game_state.is_q012_complete() and game_state.is_q010_complete() and (game_state.can_start_q008() or game_state.is_q008_complete())
 
 
 func _can_use_q009_side_task() -> bool:
-	return _is_main_story_complete() and game_state.is_q007_complete() and (game_state.can_start_q009() or game_state.is_q009_complete())
+	return _are_core_tasks_complete() and game_state.is_q012_complete() and game_state.is_q007_complete() and (game_state.can_start_q009() or game_state.is_q009_complete())
 
 
 func _can_use_q010_side_task() -> bool:
-	return _is_main_story_complete() and game_state.is_q009_complete() and (game_state.can_start_q010() or game_state.is_q010_complete())
+	return _are_core_tasks_complete() and game_state.is_q012_complete() and game_state.is_q009_complete() and (game_state.can_start_q010() or game_state.is_q010_complete())
 
 
 func _can_use_q011_mode() -> bool:
-	return _is_main_story_complete() and game_state.is_q008_complete() and (game_state.can_start_q011() or game_state.is_q011_complete())
+	return _are_core_tasks_complete() and game_state.is_q012_complete() and game_state.is_q008_complete() and (game_state.can_start_q011() or game_state.is_q011_complete())
 
 
 func _pointer_down(position: Vector2) -> void:
@@ -650,6 +653,7 @@ func _pointer_up(position: Vector2) -> void:
 		var decor_id := dragging_q006_decor
 		var from_slot := q006_decor_drag_from_slot
 		var target_slot := _q006_decor_slot_at(position)
+		var q006_was_complete: bool = game_state.is_q006_complete()
 		dragging_q006_decor = -1
 		q006_decor_drag_from_slot = -1
 		q006_decor_drag_position = Vector2.ZERO
@@ -664,8 +668,10 @@ func _pointer_up(position: Vector2) -> void:
 			message = "装饰摆放成功！继续布置花园。"
 			message_color = Color("d9ffd0")
 			_save_game()
-			if game_state.is_q006_complete():
-				message = "花园装饰完成！小风车已解锁。"
+			if not q006_was_complete and game_state.is_q006_complete():
+				build_mode = false
+				remove_decor_mode = false
+				message = "花园装饰完成！回到兔子身边参加小岛庆祝。"
 				message_color = Color("fff1a8")
 		else:
 			message = "这个位置不合适，装饰没有丢失。"
@@ -702,7 +708,7 @@ func _pointer_up(position: Vector2) -> void:
 			message_color = Color("d9ffd0")
 			_save_game()
 			if game_state.is_q005_complete():
-				message = "花园恢复生机！主线完成，点击“建造”继续布置装饰。"
+				message = "花园恢复生机！下一步：点击“开始布置”，装饰花园。"
 				message_color = Color("fff1a8")
 		else:
 			message = "这个槽位不合适，植物没有丢失。"
@@ -747,6 +753,18 @@ func _pointer_up(position: Vector2) -> void:
 
 
 func _try_collect_nearby() -> void:
+	if game_state.can_start_q012():
+		if player_position.distance_to(Q012_RABBIT_POSITION) <= COLLECTION_RADIUS:
+			if game_state.complete_q012():
+				_save_game()
+				message = "小岛庆祝日开始！主线故事完成，接下来可以自由探索。"
+				message_color = Color("fff1a8")
+		else:
+			message = "主线最后一步：走到兔子身边，按互动键参加小岛庆祝。"
+			message_color = Color("fff1a8")
+		queue_redraw()
+		return
+
 	if _can_use_q007_side_task() and game_state.can_start_q007() and _try_q007_interaction():
 		queue_redraw()
 		return
@@ -1158,6 +1176,8 @@ func _load_game() -> void:
 
 
 func _loaded_progress_message() -> String:
+	if game_state.can_start_q012():
+		return "已恢复进度：花园装饰完成，请回到兔子身边参加庆祝。"
 	if game_state.is_q011_complete():
 		return "已恢复进度：整理完成，额外地块已开放。"
 	if not game_state.is_complete():
@@ -1176,9 +1196,9 @@ func _loaded_progress_message() -> String:
 	if not game_state.is_q005_complete():
 		return "已恢复进度：池塘已经开放，乌龟的花园任务正在进行。"
 	if not game_state.is_q006_complete():
-		return "已恢复进度：主线已完成，点击建造布置花园装饰。"
+		return "已恢复进度：下一步点击“开始布置”，摆好花园装饰。"
 	if not game_state.is_q007_complete():
-		return "已恢复进度：花园装饰完成，池塘边藏着一枚贝壳。"
+		return "已恢复进度：主线故事已完成；池塘边的贝壳是可选支线。"
 	if not game_state.is_q009_complete():
 		return "已恢复进度：鸟屋材料 %d/3。" % game_state.q009_material_count()
 	if not game_state.is_q010_complete():
@@ -1327,7 +1347,11 @@ func _draw_rabbit_area(font: Font) -> void:
 		draw_colored_polygon(PackedVector2Array([Vector2(582, 170), Vector2(600, 170), Vector2(592, 188)]), bubble_fill)
 		draw_circle(Vector2(414, 146), 12.0, Color("e8bd62"))
 		draw_string(font, Vector2(436, 152), _rabbit_feedback_text(), HORIZONTAL_ALIGNMENT_LEFT, -1, 20, VISUAL_PALETTE["ink"])
-	_draw_rabbit(Vector2(592, 226))
+	_draw_rabbit(Q012_RABBIT_POSITION)
+	if game_state.can_start_q012():
+		draw_circle(Q012_RABBIT_POSITION + Vector2(0, -67), 13.0, Color("e8bd62"))
+		draw_string(font, Q012_RABBIT_POSITION + Vector2(-5, -61), "!", HORIZONTAL_ALIGNMENT_LEFT, -1, 19, Color("fff7dc"))
+		draw_string(font, Q012_RABBIT_POSITION + Vector2(18, -63), "庆祝", HORIZONTAL_ALIGNMENT_LEFT, -1, 15, Color("526b43"))
 
 
 func _should_show_rabbit_dialog() -> bool:
@@ -1907,9 +1931,6 @@ func _draw_rabbit(position: Vector2) -> void:
 	draw_circle(position + Vector2(0, 9), 5.0, Color("f28a9b"))
 	if game_state.is_complete():
 		draw_arc(position + Vector2(0, 8), 12.0, 0.0, PI, 16, Color("4b9d63"), 4.0)
-		draw_circle(position + Vector2(0, -58), 9.0, Color("5fba73"))
-		draw_line(position + Vector2(-4, -58), position + Vector2(-1, -55), Color("ffffff"), 3.0)
-		draw_line(position + Vector2(-1, -55), position + Vector2(5, -62), Color("ffffff"), 3.0)
 
 
 func _bridge_status_text() -> String:
@@ -2059,6 +2080,8 @@ func _draw_touch_hint(font: Font) -> void:
 func _task_prompt_text() -> String:
 	if q011_mode:
 		return "额外地块整理：已放置 %d/3 件物品。" % game_state.q011_placed_count()
+	if game_state.can_start_q012():
+		return "花园装饰已完成！回到兔子身边参加小岛庆祝。"
 	if build_mode and _can_use_q006_build_mode():
 		if game_state.is_q006_complete():
 			return "花园装饰完成！小风车已解锁。"
@@ -2101,21 +2124,23 @@ func _task_prompt_text() -> String:
 	if not game_state.is_q006_complete():
 		return "下一步：布置花园装饰（%d/3）。" % game_state.q006_placed_count()
 	if not game_state.is_q007_complete():
-		return "花园装饰完成！下一步：到池塘边寻找隐藏贝壳。"
+		return "主线故事完成！可选支线：到池塘边寻找隐藏贝壳。"
 	if not game_state.is_q009_complete():
-		return _q009_prompt_text()
+		return "可选支线：" + _q009_prompt_text()
 	if not game_state.is_q010_complete():
-		return _q010_prompt_text()
+		return "可选支线：" + _q010_prompt_text()
 	if not game_state.is_q008_complete():
-		return _q008_prompt_text()
+		return "可选支线：" + _q008_prompt_text()
 	if not game_state.is_q011_complete():
-		return "额外地块整理：已放置 %d/3 件物品。" % game_state.q011_placed_count()
+		return "可选整理：额外地块已放置 %d/3 件物品。" % game_state.q011_placed_count()
 	return "小岛主线和支线都完成了！继续自由探索吧。"
 
 
 func _task_action_hint_text() -> String:
 	if q011_mode:
 		return "从右下角托盘拖动木箱、布包和竹篮到三个空槽。"
+	if game_state.can_start_q012():
+		return "走到兔子身边按 E 或点击“互动 / 收集”，和伙伴们一起庆祝。"
 	if build_mode and _can_use_q006_build_mode():
 		if remove_decor_mode:
 			return "点击已放置的装饰移除；再次点击移除按钮可取消。"
@@ -2144,19 +2169,21 @@ func _task_action_hint_text() -> String:
 		var remaining_decorations: int = GameState.Q006_DECOR_TOTAL - game_state.q006_placed_count()
 		return "点击绿色“开始布置”，把剩余 %d 件装饰拖到空槽。" % remaining_decorations
 	if not game_state.is_q007_complete():
-		return "到池塘边找一找隐藏贝壳，靠近后按互动键。"
+		return "支线可以跳过：到池塘边找隐藏贝壳，靠近后按互动键。"
 	if not game_state.is_q009_complete():
-		return _q009_action_hint_text()
+		return "支线可以跳过：" + _q009_action_hint_text()
 	if not game_state.is_q010_complete():
-		return _q010_action_hint_text()
+		return "支线可以跳过：" + _q010_action_hint_text()
 	if not game_state.is_q008_complete():
-		return "把三块路面石板拖到小路空槽里。"
+		return "支线可以跳过：把三块路面石板拖到小路空槽里。"
 	if not game_state.is_q011_complete():
-		return "点击“整理”，把木箱、布包和竹篮放进空槽。"
+		return "支线可以跳过：点击“整理”，把木箱、布包和竹篮放进空槽。"
 	return "花园和小岛都已恢复，可以自由探索。"
 
 
 func _hud_title_text() -> String:
+	if game_state.can_start_q012():
+		return "奇趣小岛 · 小岛庆祝日"
 	if game_state.is_q011_complete():
 		return "奇趣小岛 · 额外地块已开放"
 	if q011_mode:
@@ -2177,6 +2204,8 @@ func _hud_title_text() -> String:
 		return "奇趣小岛 · 乌龟花园任务"
 	if not game_state.is_q006_complete():
 		return "奇趣小岛 · 花园装饰任务"
+	if game_state.is_q012_complete():
+		return "奇趣小岛 · 主线完成"
 	if not game_state.is_q007_complete():
 		return "奇趣小岛 · 寻找隐藏贝壳"
 	if not game_state.is_q009_complete():

@@ -14,6 +14,8 @@ func _init() -> void:
 	_expect(state.q011_completed_task_count() == 0, "a new game must have zero completed prior tasks")
 	_expect(not state.can_start_q011(), "Q011 must be locked at zero completed tasks")
 	_expect(not state.place_q011_item(0, 0), "Q011 must reject placement while locked")
+	_expect(not state.can_start_q012(), "Q012 must stay locked before the garden decorations")
+	_expect(not state.complete_q012(), "Q012 must reject completion before Q006")
 	_complete_q001(state)
 	_expect(state.q011_completed_task_count() == 1, "Q001 must count toward Q011 unlock")
 	_expect(not state.can_start_q011(), "Q011 must remain locked after one prior task")
@@ -44,13 +46,15 @@ func _init() -> void:
 	_expect(not state.q011_item_is_available(0), "placed Q011 items must disappear from availability")
 
 	var saved: Dictionary = state.to_save_data()
-	_expect(saved.get("schema_version") == 11, "Q011 saves must use Schema 11")
-	_expect(saved.get("q011_slot_occupants") == [2, 1, 0], "Schema 11 must save Q011 slot occupants")
+	_expect(saved.get("schema_version") == 12, "Q011 saves must use Schema 12")
+	_expect(saved.get("q011_slot_occupants") == [2, 1, 0], "Schema 12 must save Q011 slot occupants")
+	_expect(saved.get("q012_completed") == false, "Schema 12 must save the main ending state")
 	_expect(not saved.has("q011_completed") and not saved.has("q011_area_unlocked"), "Q011 completion and area unlock must remain derived")
 	var restored = state_script.new()
-	_expect(restored.load_save_data(saved), "a valid Schema 11 save must load")
-	_expect(restored.q011_slot_occupants == [2, 1, 0], "Schema 11 must restore Q011 occupants")
-	_expect(restored.is_q011_complete(), "Schema 11 must derive Q011 completion after load")
+	_expect(restored.load_save_data(saved), "a valid Schema 12 save must load")
+	_expect(restored.q011_slot_occupants == [2, 1, 0], "Schema 12 must restore Q011 occupants")
+	_expect(restored.is_q011_complete(), "Schema 12 must derive Q011 completion after load")
+	_expect(not restored.is_q012_complete(), "an unfinished ending must remain unfinished after load")
 
 	var invalid: Dictionary = saved.duplicate(true)
 	invalid["q011_slot_occupants"] = [-1, 0]
@@ -78,6 +82,10 @@ func _init() -> void:
 	locked_data["q011_slot_occupants"] = [1, -1, -1]
 	_expect(not restored.load_save_data(locked_data), "Q011 progress without three prior completed tasks must be rejected")
 	_expect(restored.to_save_data() == saved, "a locked Q011 progress save must not partially mutate state")
+	locked_data = state_script.new().to_save_data()
+	locked_data["q012_completed"] = true
+	_expect(not restored.load_save_data(locked_data), "Q012 completion without Q006 must be rejected")
+	_expect(restored.to_save_data() == saved, "invalid Q012 completion must not partially mutate state")
 
 	var all_prior = state_script.new()
 	_complete_all_prior_tasks(all_prior)
@@ -88,10 +96,13 @@ func _init() -> void:
 	_expect(all_prior.q011_completed_task_count() == 10, "Q001 through Q010 must count each task exactly once")
 
 	var migration_source: Dictionary = all_prior.to_save_data()
-	for schema_version in range(1, 11):
+	for schema_version in range(1, 12):
 		var old_save := migration_source.duplicate(true)
 		old_save["schema_version"] = schema_version
-		old_save["q011_slot_occupants"] = ["ignored before schema 11"]
+		if schema_version < 11:
+			old_save["q011_slot_occupants"] = ["ignored before schema 11"]
+		if schema_version < 12:
+			old_save.erase("q012_completed")
 		if schema_version < 2:
 			old_save.erase("seed_collected")
 			old_save.erase("seed_planted")
@@ -128,9 +139,10 @@ func _init() -> void:
 		if schema_version < 10:
 			old_save.erase("q010_seeds_collected")
 		var migrated = state_script.new()
-		_expect(migrated.load_save_data(old_save), "Schema %d must migrate to Schema 11" % schema_version)
+		_expect(migrated.load_save_data(old_save), "Schema %d must migrate to Schema 12" % schema_version)
 		_expect(migrated.q011_slot_occupants == [-1, -1, -1], "Schema %d must start Q011 empty and ignore Q011 data" % schema_version)
-		_expect(migrated.to_save_data().get("schema_version") == 11, "Schema %d must save as Schema 11 after migration" % schema_version)
+		_expect(migrated.to_save_data().get("schema_version") == 12, "Schema %d must save as Schema 12 after migration" % schema_version)
+		_expect(not migrated.is_q012_complete(), "Schema %d migration must leave the new ending uncompleted" % schema_version)
 		_expect(migrated.is_complete(), "Schema %d migration must preserve Q001" % schema_version)
 		if schema_version >= 4:
 			_expect(migrated.is_q004_complete(), "Schema %d migration must preserve Q004" % schema_version)
@@ -146,6 +158,18 @@ func _init() -> void:
 			_expect(migrated.is_q009_complete(), "Schema %d migration must preserve Q009" % schema_version)
 		if schema_version < 10:
 			_expect(not migrated.is_q010_complete(), "Schema %d migration must default Q010 incomplete" % schema_version)
+
+	var ending_state = state_script.new()
+	_complete_q005(ending_state)
+	for decor_id in range(3):
+		_expect(ending_state.place_q006_decoration(decor_id, decor_id), "Q006 must complete before Q012")
+	_expect(ending_state.can_start_q012(), "Q006 completion must unlock Q012")
+	_expect(ending_state.complete_q012(), "the main ending must complete once")
+	_expect(not ending_state.complete_q012(), "the main ending must not complete twice")
+	var ending_save: Dictionary = ending_state.to_save_data()
+	var restored_ending = state_script.new()
+	_expect(restored_ending.load_save_data(ending_save), "a completed Q012 save must load")
+	_expect(restored_ending.is_q012_complete(), "the Q012 ending must persist across load")
 
 	state.reset()
 	_expect(state.q011_slot_occupants == [-1, -1, -1], "reset must clear Q011 slots")

@@ -39,14 +39,14 @@ func _init() -> void:
 	_expect(not state.collect_q009_material(0), "completed Q009 must reject repeated collection")
 
 	var saved: Dictionary = state.to_save_data()
-	_expect(saved.get("schema_version") == 11, "Q009 saves must use Schema 11")
-	_expect(saved.get("q009_materials_collected") == [true, true, true], "Schema 11 must save Q009 materials")
-	_expect(saved.get("q009_completed") == true, "Schema 11 must save Q009 completion")
+	_expect(saved.get("schema_version") == 12, "Q009 saves must use Schema 12")
+	_expect(saved.get("q009_materials_collected") == [true, true, true], "Schema 12 must save Q009 materials")
+	_expect(saved.get("q009_completed") == true, "Schema 12 must save Q009 completion")
 
 	var restored = state_script.new()
-	_expect(restored.load_save_data(saved), "a valid Schema 11 save must load")
-	_expect(restored.q009_materials_collected == [true, true, true], "Schema 11 must restore Q009 materials")
-	_expect(restored.is_q009_complete(), "Schema 11 must restore Q009 completion")
+	_expect(restored.load_save_data(saved), "a valid Schema 12 save must load")
+	_expect(restored.q009_materials_collected == [true, true, true], "Schema 12 must restore Q009 materials")
+	_expect(restored.is_q009_complete(), "Schema 12 must restore Q009 completion")
 
 	for schema_version in range(1, 9):
 		var old_save := _schema8_save()
@@ -82,7 +82,7 @@ func _init() -> void:
 			old_save.erase("q008_path_slot_occupants")
 			old_save.erase("q008_completed")
 		var migrated = state_script.new()
-		_expect(migrated.load_save_data(old_save), "Schema %d must migrate to Schema 11" % schema_version)
+		_expect(migrated.load_save_data(old_save), "Schema %d must migrate to Schema 12" % schema_version)
 		_expect(migrated.is_q004_complete() if schema_version >= 4 else not migrated.is_q004_complete(), "Schema %d migration must preserve or default Q004" % schema_version)
 		_expect(migrated.q009_materials_collected == [false, false, false], "Schema %d migration must start Q009 empty" % schema_version)
 		_expect(not migrated.q009_completed, "Schema %d migration must leave Q009 incomplete" % schema_version)

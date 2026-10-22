@@ -43,7 +43,7 @@ func _write_partial() -> void:
 	_expect(main.game_state.place_q008_path(0, 2), "partial save must place the second Q008 material")
 	main._save_game()
 	var saved = _read_save()
-	_expect(saved.get("schema_version") == 11, "partial Q008 save must use Schema 11")
+	_expect(saved.get("schema_version") == 12, "partial Q008 save must use Schema 12")
 	var partial_slots = saved.get("q008_path_slot_occupants")
 	_expect(partial_slots is Array and partial_slots.size() == 3 and partial_slots[0] == -1 and partial_slots[1] == 2 and partial_slots[2] == 0, "partial Q008 save must preserve slot occupants")
 	_expect(saved.get("q008_completed") == false, "partial Q008 save must remain incomplete")

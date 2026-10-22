@@ -44,7 +44,7 @@ func _run() -> void:
 	_expect(main._q008_prompt_text() == "小路任务：已铺设 0/3 块路面石板。", "Q008 must show its progress in the path area")
 
 	_complete_main_story_runtime()
-	_expect(main._is_main_story_complete(), "Q008 must become available only after the main story is complete")
+	_expect(main._are_core_tasks_complete(), "Q008 must become available only after the core tasks are complete")
 	_expect(not main._can_use_q008_side_task(), "Q008 must stay hidden until Q010 is complete")
 	_expect(not main._can_use_q009_side_task(), "Q009 must stay hidden until the shell task is complete")
 	_expect(not main._can_use_q010_side_task(), "Q010 must stay hidden until the birdhouse task is complete")
@@ -126,6 +126,7 @@ func _complete_main_story_runtime() -> void:
 func _complete_prior_optional_tasks() -> void:
 	for decor_id in range(3):
 		main.game_state.place_q006_decoration(decor_id, decor_id)
+	main.game_state.complete_q012()
 	main.game_state.collect_q007_shell()
 	for material_id in range(3):
 		main.game_state.collect_q009_material(material_id)

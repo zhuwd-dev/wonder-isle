@@ -21,6 +21,7 @@ if [[ -z "${GODOT_BIN:-}" || ! -x "$GODOT_BIN" ]]; then
 	echo "Godot 4.7.2 is required. Set GODOT_BIN to the Godot 4.7.2 executable." >&2
 	exit 2
 fi
+export GODOT_BIN
 
 godot_version="$("$GODOT_BIN" --version)"
 if [[ "$godot_version" != 4.7.2.stable.official.* ]]; then
