@@ -50,6 +50,7 @@ func _run() -> void:
 	main._try_collect_nearby()
 	_expect(main.game_state.is_q007_complete(), "the shell task must complete before Q009 is revealed")
 	_expect(main._can_use_q009_side_task(), "Q007 completion must unlock Q009")
+	_expect(main._task_stage_label() == "可选 2/5", "the birdhouse task must be marked as optional task two of five")
 	_expect(not main._can_use_q010_side_task(), "Q010 must stay hidden until Q009 is complete")
 	_expect(main._q009_prompt_text() == "鸟屋计划：已收集 0/3 份材料。", "Q009 must show its material progress")
 

@@ -118,10 +118,12 @@ func _run() -> void:
 
 	main.q011_button.emit_signal("pressed")
 	_expect(main.q011_mode, "Q011 mode must reopen with its partial progress")
+	_expect(main._task_stage_label() == "可选 5/5", "the extra-plot arrangement must be marked as the final optional task")
 	_place_q011_item(main, 0, 2)
 	_expect(main.game_state.q011_slot_occupants == [1, -1, 0], "Q011 placements may be completed in any order")
 	_place_q011_item(main, 2, 1)
 	_expect(main.game_state.is_q011_complete(), "placing three distinct Q011 objects must complete the task")
+	_expect(main._task_stage_label() == "全部完成", "finishing the last optional task must close the progress track")
 	_expect(not main.q011_mode, "Q011 mode must end after completion")
 	_expect(main.message == "额外地块整理完成！可以自由探索，或点击“建造”调整花园。", "Q011 completion must show clear follow-up guidance")
 	_expect(not main._can_use_q011_mode(), "completed Q011 must not reopen an empty placement mode")
@@ -133,7 +135,12 @@ func _run() -> void:
 	main._toggle_q011_mode()
 	_expect(not main.q011_mode, "completed Q011 must not re-enter an empty placement mode")
 	_expect(_read_save().get("q011_slot_occupants") == [1, 2, 0], "Q011 completion must save all three placements")
-	_expect(main._loaded_progress_message() == "已恢复进度：主线与支线都已完成，可以自由探索。", "a completed Q011 must report restoration of the finished island")
+	_expect(main._loaded_progress_message().is_empty(), "a completed island must not show a redundant resume message")
+	main.build_button.emit_signal("pressed")
+	_expect(main.build_mode, "the optional build button must still allow garden adjustments after completion")
+	_expect(main._task_stage_label() == "建造", "optional garden editing must be distinct from unfinished tasks")
+	_expect(main._task_prompt_text() == "花园装饰已完成，可拖动已摆放的装饰调整位置。", "the build mode must explain how to adjust completed decorations")
+	_expect(main._task_action_hint_text() == "拖动已摆放的装饰换位，或点“移除装饰”后收回。", "the build mode must explain both available editing actions")
 
 	main.queue_free()
 	await process_frame

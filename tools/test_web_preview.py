@@ -51,9 +51,11 @@ def main() -> int:
     artifact_dir.mkdir(parents=True, exist_ok=True)
     screenshot_path = artifact_dir / "web-preview.png"
     seed_planted_screenshot_path = artifact_dir / "web-q002-seed-planted.png"
+    turtle_garden_screenshot_path = artifact_dir / "web-q005-turtle-garden.png"
     ending_screenshot_path = artifact_dir / "web-q012-ending.png"
     completed_screenshot_path = artifact_dir / "web-q012-complete.png"
     final_island_screenshot_path = artifact_dir / "web-q011-all-tasks-complete.png"
+    build_adjustment_screenshot_path = artifact_dir / "web-q011-build-adjustment.png"
     godot_bin = os.environ.get(
         "GODOT_BIN", "/tmp/wonder-isle-godot-4.7.2/Godot_v4.7.2-stable_linux.x86_64"
     )
@@ -188,6 +190,74 @@ def main() -> int:
                         raise AssertionError("The browser did not load the seed-planted stage fixture")
                     page.screenshot(path=str(seed_planted_screenshot_path), full_page=True)
                     result["q002_seed_planted_screenshot"] = str(seed_planted_screenshot_path)
+
+                    with tempfile.TemporaryDirectory(prefix="wonder-isle-q005-") as temp_dir:
+                        fixture_path = Path(temp_dir) / "q005-turtle-garden-save.json"
+                        subprocess.run(
+                            [
+                                godot_bin,
+                                "--headless",
+                                "--path",
+                                str(Path(__file__).resolve().parent.parent),
+                                "--script",
+                                "tests/create_q005_web_save.gd",
+                                "--",
+                                str(fixture_path),
+                            ],
+                            check=True,
+                            capture_output=True,
+                            text=True,
+                        )
+                        turtle_fixture = base64.b64encode(fixture_path.read_bytes()).decode("ascii")
+                        page.evaluate(
+                            """async ({key, payload}) => new Promise((resolve, reject) => {
+                                const binary = atob(payload);
+                                const contents = new Int8Array(binary.length);
+                                for (let index = 0; index < binary.length; index++) {
+                                    contents[index] = binary.charCodeAt(index);
+                                }
+                                const opening = indexedDB.open('/userfs');
+                                opening.onerror = () => reject(opening.error);
+                                opening.onsuccess = () => {
+                                    const transaction = opening.result.transaction('FILE_DATA', 'readwrite');
+                                    const store = transaction.objectStore('FILE_DATA');
+                                    const existing = store.get(key);
+                                    existing.onsuccess = () => {
+                                        const record = existing.result || {};
+                                        record.timestamp = new Date();
+                                        record.contents = contents;
+                                        store.put(record, key);
+                                    };
+                                    transaction.oncomplete = resolve;
+                                    transaction.onerror = () => reject(transaction.error);
+                                };
+                            })""",
+                            {"key": save_key, "payload": turtle_fixture},
+                        )
+                        page.reload(wait_until="load", timeout=60_000)
+                        page.wait_for_selector("canvas", timeout=60_000)
+                        page.wait_for_timeout(3_000)
+                        turtle_save = page.evaluate(
+                            """async key => new Promise((resolve, reject) => {
+                                const opening = indexedDB.open('/userfs');
+                                opening.onerror = () => reject(opening.error);
+                                opening.onsuccess = () => {
+                                    const transaction = opening.result.transaction('FILE_DATA', 'readonly');
+                                    const request = transaction.objectStore('FILE_DATA').get(key);
+                                    request.onsuccess = () => {
+                                        const bytes = new Uint8Array(request.result.contents);
+                                        resolve(JSON.parse(new TextDecoder().decode(bytes)));
+                                    };
+                                    request.onerror = () => reject(request.error);
+                                };
+                            })""",
+                            save_key,
+                        )
+                        if turtle_save.get("q005_watered") is not False or turtle_save.get("pond_opened") is not True:
+                            raise AssertionError("The browser did not load the Q005 turtle-garden fixture")
+                        page.screenshot(path=str(turtle_garden_screenshot_path), full_page=True)
+                        result["q005_turtle_garden_screenshot"] = str(turtle_garden_screenshot_path)
+
                     page.mouse.click(1150, 50)
                     page.wait_for_timeout(1_000)
 
@@ -340,6 +410,10 @@ def main() -> int:
                         page.wait_for_timeout(3_000)
                         page.screenshot(path=str(final_island_screenshot_path), full_page=True)
                         result["q011_all_tasks_complete_screenshot"] = str(final_island_screenshot_path)
+                        page.mouse.click(950, 50)
+                        page.wait_for_timeout(500)
+                        page.screenshot(path=str(build_adjustment_screenshot_path), full_page=True)
+                        result["q011_build_adjustment_screenshot"] = str(build_adjustment_screenshot_path)
 
                 failure_page = browser.new_page()
                 failure_page.add_init_script(

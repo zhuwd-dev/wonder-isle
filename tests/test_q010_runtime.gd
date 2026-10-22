@@ -43,6 +43,7 @@ func _run() -> void:
 		_expect(main.game_state.collect_q009_material(material_id), "Q009 materials must complete before Q010")
 	main._save_game()
 	_expect(main._can_use_q010_side_task(), "Q009 completion must unlock Q010")
+	_expect(main._task_stage_label() == "可选 3/5", "the seed collection task must be marked as optional task three of five")
 	_expect(not main._can_use_q008_side_task(), "Q008 must stay hidden until Q010 is complete")
 	_expect(not main._can_use_q011_mode(), "Q011 must stay hidden until Q008 is complete")
 	_expect(main._q010_prompt_text() == "种子收藏：已收集 0/3 个指定种子。", "Q010 must show its progress prompt")

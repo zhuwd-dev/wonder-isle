@@ -1183,7 +1183,7 @@ func _loaded_progress_message() -> String:
 	if game_state.can_start_q012():
 		return "已恢复进度：花园装饰完成，请回到兔子身边参加庆祝。"
 	if game_state.is_q011_complete():
-		return "已恢复进度：主线与支线都已完成，可以自由探索。"
+		return ""
 	if not game_state.is_complete():
 		return "已恢复进度：木板 %d/3。" % game_state.board_count()
 	if not game_state.seed_collected:
@@ -1345,6 +1345,8 @@ func _draw_bridge(font: Font) -> void:
 
 
 func _draw_rabbit_area(font: Font) -> void:
+	if not _should_show_rabbit_area():
+		return
 	if _should_show_rabbit_dialog():
 		var bubble_fill := Color("fff7dc")
 		_draw_panel(Rect2(392, 122, 400, 48), bubble_fill, Color("d7a85b"), 16)
@@ -1360,6 +1362,10 @@ func _draw_rabbit_area(font: Font) -> void:
 
 func _should_show_rabbit_dialog() -> bool:
 	return not game_state.is_complete() or not game_state.seed_planted or not game_state.is_q004_complete()
+
+
+func _should_show_rabbit_area() -> bool:
+	return _should_show_rabbit_dialog() or game_state.can_start_q012() or game_state.is_q012_complete()
 
 
 func _draw_region_area(font: Font) -> void:
@@ -1994,7 +2000,9 @@ func _draw_pond_stone_at(position: Vector2, color: Color, lifted: bool) -> void:
 func _draw_hud(font: Font) -> void:
 	_draw_panel(Rect2(26, 22, 760, 104), VISUAL_PALETTE["panel"], VISUAL_PALETTE["panel_border"], 20)
 	draw_string(font, Vector2(48, 58), _hud_title_text(), HORIZONTAL_ALIGNMENT_LEFT, -1, 30, Color("fff7cf"))
-	draw_string(font, Vector2(48, 90), _task_prompt_text(), HORIZONTAL_ALIGNMENT_LEFT, 720, 18, Color("fff7cf"))
+	_draw_panel(Rect2(46, 72, 88, 26), Color("426b51"), Color("8fc47d"), 9)
+	draw_string(font, Vector2(56, 91), _task_stage_label(), HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color("fff7cf"))
+	draw_string(font, Vector2(148, 90), _task_prompt_text(), HORIZONTAL_ALIGNMENT_LEFT, 620, 18, Color("fff7cf"))
 	if not message.is_empty():
 		draw_string(font, Vector2(48, 112), message, HORIZONTAL_ALIGNMENT_LEFT, 720, 16, message_color)
 	var show_inventory: bool = q011_mode or build_mode or _can_start_q005_stage() or game_state.can_start_q004() or not game_state.is_complete() or (_can_use_q008_side_task() and not game_state.is_q008_complete())
@@ -2096,7 +2104,7 @@ func _task_prompt_text() -> String:
 		return "花园装饰已完成！回到兔子身边参加小岛庆祝。"
 	if build_mode and _can_use_q006_build_mode():
 		if game_state.is_q006_complete():
-			return "花园装饰完成！小风车已解锁。"
+			return "花园装饰已完成，可拖动已摆放的装饰调整位置。"
 		return "任务：布置花园装饰。已完成 %d/3。" % game_state.q006_placed_count()
 	if game_state.is_q011_complete():
 		return "额外地块整理完成！可以自由探索，或点击“建造”调整花园。"
@@ -2124,14 +2132,14 @@ func _task_prompt_text() -> String:
 				return "木材已收集 %d/3，已交付 %d/3；继续寻找木材。" % [wood_count, delivered_count]
 			return "木材已集齐，交付进度：%d/3。" % delivered_count
 	if not game_state.is_pond_complete():
-		return "狐狸已经入住！池塘石头还可以继续摆好。"
+		return "狐狸入住了！池塘石头已摆放 %d/3。" % game_state.pond_stones_placed.count(true)
 	if not game_state.is_q005_complete():
 		var collected_count: int = game_state.q005_plant_count()
 		var placed_count: int = game_state.q005_plant_slot_count()
 		if not game_state.q005_watered and placed_count == GameState.Q005_PLANT_TOTAL:
 			return "植物已摆好，请给乌龟的花园浇水。"
 		if not game_state.q005_watered:
-			return "任务：照料乌龟的花园。先浇水并收集 3 株植物。"
+			return "先给花园浇水，再收集并摆好 3 株植物（已收集 %d/3）。" % collected_count
 		return "花园已浇水，植物已收集 %d/3，已摆放 %d/3。" % [collected_count, placed_count]
 	if not game_state.is_q006_complete():
 		return "下一步：布置花园装饰（%d/3）。" % game_state.q006_placed_count()
@@ -2148,6 +2156,40 @@ func _task_prompt_text() -> String:
 	return "小岛主线和支线都完成了！继续自由探索吧。"
 
 
+func _task_stage_label() -> String:
+	if q011_mode:
+		return "可选 5/5"
+	if game_state.can_start_q012():
+		return "主线 7/7"
+	if build_mode and _can_use_q006_build_mode():
+		return "主线 6/7" if not game_state.is_q006_complete() else "建造"
+	if game_state.is_q011_complete():
+		return "全部完成"
+	if not game_state.is_complete():
+		return "主线 1/7"
+	if not game_state.seed_collected or not game_state.seed_planted:
+		return "主线 2/7"
+	if not game_state.is_q004_complete():
+		return "主线 3/7"
+	if not game_state.is_pond_complete():
+		return "主线 4/7"
+	if not game_state.is_q005_complete():
+		return "主线 5/7"
+	if not game_state.is_q006_complete():
+		return "主线 6/7"
+	if not game_state.is_q007_complete():
+		return "可选 1/5"
+	if not game_state.is_q009_complete():
+		return "可选 2/5"
+	if not game_state.is_q010_complete():
+		return "可选 3/5"
+	if not game_state.is_q008_complete():
+		return "可选 4/5"
+	if not game_state.is_q011_complete():
+		return "可选 5/5"
+	return "全部完成"
+
+
 func _task_action_hint_text() -> String:
 	if q011_mode:
 		return "从右下角托盘拖动木箱、布包和竹篮到三个空槽。"
@@ -2156,6 +2198,8 @@ func _task_action_hint_text() -> String:
 	if build_mode and _can_use_q006_build_mode():
 		if remove_decor_mode:
 			return "点击已放置的装饰移除；再次点击移除按钮可取消。"
+		if game_state.is_q006_complete():
+			return "拖动已摆放的装饰换位，或点“移除装饰”后收回。"
 		return "拖动木栅栏、花盆和庭院路灯到对应槽位。"
 	if game_state.is_q011_complete():
 		return "没有必做任务：自由探索，或点“建造”调整花园。"
@@ -2172,11 +2216,13 @@ func _task_action_hint_text() -> String:
 			return "靠近木材后按 E 或点击互动 / 收集来拾取。"
 		return "带着木材到小屋旁按互动 / 收集交付。"
 	if not game_state.is_pond_complete():
-		return "把池塘边的 3 块石头拖到对应轮廓里。"
+		return "下一步：把池塘边剩余的石头拖进对应轮廓。"
 	if not game_state.is_q005_complete():
 		if not game_state.q005_watered:
-			return "靠近浇水点按互动；也可以先收集花园里的植物。"
-		return "把右下角植物拖到花园中对应的绿色槽位。"
+			return "下一步：靠近“浇水点”，按 E 或点“互动 / 收集”浇水。"
+		if game_state.q005_plant_count() < GameState.Q005_PLANT_TOTAL:
+			return "下一步：靠近花园里未采的植物，按互动键收集。"
+		return "下一步：把右下角的植物逐个拖到绿色空槽。"
 	if not game_state.is_q006_complete():
 		var remaining_decorations: int = GameState.Q006_DECOR_TOTAL - game_state.q006_placed_count()
 		return "点击绿色“开始布置”，把剩余 %d 件装饰拖到空槽。" % remaining_decorations

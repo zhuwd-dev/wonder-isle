@@ -43,6 +43,7 @@ func _run() -> void:
 	_expect(main.build_mode, "the build button must enter Q006 build mode")
 	_expect(main._should_show_q006_slots(), "garden placement slots must appear in build mode")
 	_expect(main._task_prompt_text() == "任务：布置花园装饰。已完成 0/3。", "Q006 build prompt must be visible")
+	_expect(main._task_stage_label() == "主线 6/7", "the garden decoration task must be identified as the sixth main-story step")
 
 	var first_inventory := _center(main._q006_decor_inventory_rect(0))
 	var first_slot := _center(main.Q006_DECOR_SLOTS[0])
@@ -71,6 +72,7 @@ func _run() -> void:
 	_expect(main.game_state.is_q006_complete(), "three runtime decoration placements must complete Q006")
 	_expect(main.game_state.q006_windmill_unlocked, "Q006 runtime completion must unlock the windmill")
 	_expect(main.game_state.can_start_q012(), "Q006 completion must start the main story ending step")
+	_expect(main._task_stage_label() == "主线 7/7", "the ending interaction must be identified as the seventh main-story step")
 	_expect(main._task_prompt_text() == "花园装饰已完成！回到兔子身边参加小岛庆祝。", "Q006 completion must guide the player to the ending")
 	_expect(not main.build_button.visible, "the optional build control must pause while the ending step is active")
 	_expect(not main._can_use_q007_side_task(), "optional tasks must wait until the main story ending")

@@ -51,6 +51,7 @@ func _run() -> void:
 	_expect(not main._can_use_q011_mode(), "Q011 must stay hidden until Q008 is complete")
 	_complete_prior_optional_tasks()
 	_expect(main._can_use_q008_side_task(), "completed main story must reveal the optional path task")
+	_expect(main._task_stage_label() == "可选 4/5", "the path task must be marked as optional task four of five")
 
 	var source_0 := _center(main._q008_path_material_rect(0))
 	var source_1 := _center(main._q008_path_material_rect(1))

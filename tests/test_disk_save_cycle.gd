@@ -225,7 +225,7 @@ func _read_q004_complete_after_process_restart() -> void:
 	_expect(main.game_state.is_q004_complete(), "Q004 完成状态应跨进程恢复")
 	_expect(main.game_state.fox_moved_in, "跨进程恢复后应保留狐狸入住")
 	_expect(not main.game_state.is_pond_complete(), "Q004 完成后 Q003 仍应保持未完成")
-	_expect(main._task_prompt_text() == "狐狸已经入住！池塘石头还可以继续摆好。", "Q004 完成恢复后应引导继续 Q003")
+	_expect(main._task_prompt_text() == "狐狸入住了！池塘石头已摆放 0/3。", "Q004 完成恢复后应引导继续 Q003")
 	main._restart_game()
 	_expect(not main.game_state.can_start_q004(), "重新开始应锁定 Q004")
 	_expect(main.game_state.wood_collected == [false, false, false], "重新开始应清除 Q004 木材收集")
@@ -272,7 +272,7 @@ func _read_after_process_restart() -> void:
 	for wood_id in range(3):
 		_expect(main.game_state.collect_wood(wood_id), "种下种子后应能收集狐狸小屋木材")
 		_expect(main.game_state.deliver_wood(wood_id), "种下种子后应能交付狐狸小屋木材")
-	_expect(main._task_prompt_text() == "狐狸已经入住！池塘石头还可以继续摆好。", "狐狸入住后应切换到池塘整理任务")
+	_expect(main._task_prompt_text() == "狐狸入住了！池塘石头已摆放 0/3。", "狐狸入住后应切换到池塘整理任务")
 	for stone_id in range(3):
 		var stone_position: Vector2 = main.POND_STONE_POSITIONS[stone_id]
 		var slot_position: Vector2 = main.POND_SLOTS[stone_id].position + main.POND_SLOTS[stone_id].size / 2.0
@@ -289,7 +289,7 @@ func _read_planted_after_process_restart() -> void:
 	_expect(main.game_state.is_seed_complete(), "再次启动后应恢复已种植状态")
 	_expect(main.game_state.seed_collected, "已种植状态必须同时保留种子收集状态")
 	_expect(main.game_state.is_pond_complete(), "再次启动后应恢复池塘开放状态")
-	_expect(main._task_prompt_text() == "任务：照料乌龟的花园。先浇水并收集 3 株植物。", "池塘完成存档加载后应显示 Q005 引导")
+	_expect(main._task_prompt_text() == "先给花园浇水，再收集并摆好 3 株植物（已收集 0/3）。", "池塘完成存档加载后应显示 Q005 引导")
 	main.queue_free()
 	await process_frame
 

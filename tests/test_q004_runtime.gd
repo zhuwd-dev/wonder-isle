@@ -51,7 +51,7 @@ func _run() -> void:
 	_expect(main.game_state.is_q004_complete(), "third house interaction must complete Q004")
 	_expect(main.game_state.fox_moved_in, "Q004 completion must show the fox moved in")
 	_expect(not main.game_state.is_pond_complete(), "Q003 must remain incomplete after Q004")
-	_expect(main._task_prompt_text() == "狐狸已经入住！池塘石头还可以继续摆好。", "Q004 completion must not hide unfinished Q003")
+	_expect(main._task_prompt_text() == "狐狸入住了！池塘石头已摆放 0/3。", "Q004 completion must clearly direct the player to the unfinished pond task")
 	_expect(main._can_start_pond_stage(), "Q004 completion must unlock the pond stage")
 
 	main._try_collect_nearby()

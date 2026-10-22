@@ -77,7 +77,7 @@ func _read_complete() -> void:
 	var main = await _spawn_main()
 	_expect(main.game_state.q011_slot_occupants == [2, 0, 1], "completed Q011 slots must restore across processes")
 	_expect(main.game_state.is_q011_complete(), "Q011 completion must be derived after process restart")
-	_expect(main._loaded_progress_message() == "已恢复进度：主线与支线都已完成，可以自由探索。", "restarted Main must report that the island tasks are finished")
+	_expect(main._loaded_progress_message().is_empty(), "a finished island must not show a redundant resume message")
 	_expect(main._task_prompt_text() == "额外地块整理完成！可以自由探索，或点击“建造”调整花园。", "restarted Main must offer clear post-completion choices")
 	_expect(not main.q011_button.visible, "a completed Q011 must not expose another placement session")
 	main.queue_free()

@@ -30,7 +30,7 @@ func _run() -> void:
 	_complete_q003_runtime()
 	_expect(main.game_state.can_start_q005(), "Q003 completion must unlock Q005 at runtime")
 	_expect(main.game_state.is_q004_complete(), "the main story must finish the fox house before the pond garden")
-	_expect(main._task_prompt_text() == "任务：照料乌龟的花园。先浇水并收集 3 株植物。", "Q005 unlock prompt must be visible")
+	_expect(main._task_prompt_text() == "先给花园浇水，再收集并摆好 3 株植物（已收集 0/3）。", "Q005 unlock prompt must show the order and current progress")
 
 	for plant_id in range(3):
 		main.player_position = main.Q005_PLANT_POSITIONS[plant_id]
