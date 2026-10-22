@@ -56,6 +56,7 @@ func _run() -> void:
 	_expect(main.game_state.is_q010_complete(), "collecting three Q010 seeds must complete the task")
 	_expect(main.message == "种子收藏完成！植物外观已解锁。", "Q010 completion must show direct feedback")
 	_expect(main._q010_prompt_text() == "种子收藏完成！植物外观已解锁。", "Q010 completion prompt must be visible")
+	_expect(main._q010_action_hint_text() == "可选：回乌龟花园看看新花。", "Q010 must label the garden visit as optional")
 	_expect(_read_save().get("q010_seeds_collected") == [true, true, true], "Q010 completion must save immediately")
 
 	main.player_position = main.Q010_SEED_POSITIONS[0]

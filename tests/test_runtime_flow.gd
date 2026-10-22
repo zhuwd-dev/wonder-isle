@@ -79,6 +79,8 @@ func _run() -> void:
 	main.player_position = main.FLOWERBED_POSITION
 	main._try_collect_nearby()
 	_expect(main.game_state.seed_planted, "runtime interaction at the flowerbed must plant the seed")
+	_expect(main._should_show_rabbit_dialog(), "the rabbit must guide the player into the fox task after planting")
+	_expect(main._rabbit_feedback_text().contains("狐狸") and main._rabbit_feedback_text().contains("木材"), "the rabbit must name the next wood-gathering objective")
 	_expect(not main._can_start_pond_stage(), "the pond task must wait until the fox house is complete")
 	_expect(not main._can_use_q006_build_mode(), "garden decorations must stay hidden during the main introduction")
 	_expect(not main.build_button.visible, "the build button must stay hidden until the main story is complete")
@@ -93,6 +95,7 @@ func _run() -> void:
 	for delivery_id in range(3):
 		main._try_collect_nearby()
 	_expect(main.game_state.is_q004_complete(), "three wood deliveries must finish the fox house before Q003")
+	_expect(not main._should_show_rabbit_dialog(), "the fox guidance must clear when its task is finished")
 	_expect(main._can_start_pond_stage(), "the pond stage must unlock after the fox house is complete")
 
 	# Q003: mouse drag, invalid release, recovery, completion, and duplicate protection.

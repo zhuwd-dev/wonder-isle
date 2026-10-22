@@ -95,7 +95,8 @@ func _run() -> void:
 	main.player_position = main.FLOWERBED_POSITION
 	main._try_collect_nearby()
 	_expect(main.game_state.seed_planted, "在花圃范围内应能种植")
-	_expect(not main._should_show_rabbit_dialog(), "种下种子后兔子的临时任务对白应结束")
+	_expect(main._should_show_rabbit_dialog(), "种下种子后兔子应接着提示狐狸任务")
+	_expect(main._rabbit_feedback_text().contains("狐狸") and main._rabbit_feedback_text().contains("木材"), "种下种子后兔子应告诉玩家去收集木材")
 	_expect(main._task_prompt_text() == "任务：帮狐狸建小屋。先收集 3 份木材。", "种植完成后应引导狐狸小屋任务")
 	_expect(main._task_action_hint_text() == "靠近木材后按 E 或点击互动 / 收集来拾取。", "种植完成后应显示木材收集提示")
 	main._try_collect_nearby()

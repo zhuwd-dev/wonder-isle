@@ -517,6 +517,10 @@ func _can_use_q010_side_task() -> bool:
 
 
 func _can_use_q011_mode() -> bool:
+	return _can_show_q011_area() and game_state.can_start_q011()
+
+
+func _can_show_q011_area() -> bool:
 	return _are_core_tasks_complete() and game_state.is_q012_complete() and game_state.is_q008_complete() and (game_state.can_start_q011() or game_state.is_q011_complete())
 
 
@@ -640,7 +644,7 @@ func _pointer_up(position: Vector2) -> void:
 			_save_game()
 			if game_state.is_q011_complete():
 				q011_mode = false
-				message = "整理完成！额外地块已开放。"
+				message = "额外地块整理完成！可以自由探索，或点击“建造”调整花园。"
 				message_color = Color("fff1a8")
 		else:
 			message = "这个位置不合适，%s没有丢失。" % Q011_ITEM_NAMES[item_id]
@@ -1179,7 +1183,7 @@ func _loaded_progress_message() -> String:
 	if game_state.can_start_q012():
 		return "已恢复进度：花园装饰完成，请回到兔子身边参加庆祝。"
 	if game_state.is_q011_complete():
-		return "已恢复进度：整理完成，额外地块已开放。"
+		return "已恢复进度：主线与支线都已完成，可以自由探索。"
 	if not game_state.is_complete():
 		return "已恢复进度：木板 %d/3。" % game_state.board_count()
 	if not game_state.seed_collected:
@@ -1355,7 +1359,7 @@ func _draw_rabbit_area(font: Font) -> void:
 
 
 func _should_show_rabbit_dialog() -> bool:
-	return not game_state.is_complete() or not game_state.seed_planted
+	return not game_state.is_complete() or not game_state.seed_planted or not game_state.is_q004_complete()
 
 
 func _draw_region_area(font: Font) -> void:
@@ -1581,7 +1585,10 @@ func _draw_q007_area(font: Font) -> void:
 func _draw_q009_area(font: Font) -> void:
 	if not _can_use_q009_side_task():
 		return
-	_draw_panel(Rect2(74, 222, 300, 76), Color(0.82, 0.96, 0.80, 0.86), VISUAL_PALETTE["island_highlight"], 16)
+	var complete: bool = game_state.is_q009_complete()
+	var panel_color: Color = Color(0.91, 0.93, 0.86, 0.82) if complete else Color(0.82, 0.96, 0.80, 0.86)
+	var panel_border: Color = Color("a9bda3") if complete else VISUAL_PALETTE["island_highlight"]
+	_draw_panel(Rect2(74, 222, 300, 76), panel_color, panel_border, 16)
 	draw_string(font, Vector2(94, 251), _q009_prompt_text(), HORIZONTAL_ALIGNMENT_LEFT, -1, 17, VISUAL_PALETTE["ink"])
 	draw_string(font, Vector2(94, 278), _q009_action_hint_text(), HORIZONTAL_ALIGNMENT_LEFT, 260, 14, VISUAL_PALETTE["ink"])
 	if not game_state.is_q009_complete():
@@ -1606,14 +1613,17 @@ func _q009_prompt_text() -> String:
 
 func _q009_action_hint_text() -> String:
 	if game_state.is_q009_complete():
-		return "靠近小鸟按互动键，和它打个招呼。"
+		return "可选：靠近小鸟按互动键打招呼。"
 	return "找到树枝、羽毛和草绳，靠近后按互动键收集。"
 
 
 func _draw_q010_area(font: Font) -> void:
 	if not _can_use_q010_side_task():
 		return
-	_draw_panel(Rect2(74, 312, 300, 76), Color(0.82, 0.96, 0.80, 0.86), VISUAL_PALETTE["island_highlight"], 16)
+	var complete: bool = game_state.is_q010_complete()
+	var panel_color: Color = Color(0.91, 0.93, 0.86, 0.82) if complete else Color(0.82, 0.96, 0.80, 0.86)
+	var panel_border: Color = Color("a9bda3") if complete else VISUAL_PALETTE["island_highlight"]
+	_draw_panel(Rect2(74, 312, 300, 76), panel_color, panel_border, 16)
 	draw_string(font, Vector2(92, 342), _q010_prompt_text(), HORIZONTAL_ALIGNMENT_LEFT, 270, 17, VISUAL_PALETTE["ink"])
 	draw_string(font, Vector2(92, 371), _q010_action_hint_text(), HORIZONTAL_ALIGNMENT_LEFT, 270, 14, VISUAL_PALETTE["ink"])
 	if game_state.is_q010_complete():
@@ -1627,7 +1637,7 @@ func _draw_q010_area(font: Font) -> void:
 
 
 func _draw_q011_area(font: Font) -> void:
-	if not _can_use_q011_mode():
+	if not _can_show_q011_area():
 		return
 	var complete: bool = game_state.is_q011_complete()
 	var fill := Color("bfe4a0") if complete else Color("c7ad79")
@@ -1711,7 +1721,7 @@ func _q010_prompt_text() -> String:
 
 func _q010_action_hint_text() -> String:
 	if game_state.is_q010_complete():
-		return "植物外观已解锁，回到乌龟的花园看看吧。"
+		return "可选：回乌龟花园看看新花。"
 	return "找到红花种子、蓝花种子和金色种子，靠近后按互动键收集。"
 
 
@@ -1944,7 +1954,9 @@ func _rabbit_feedback_text() -> String:
 		return "兔子：帮我修好小桥，好吗？"
 	if not game_state.seed_collected:
 		return "兔子：谢谢你！过桥找发光种子吧！"
-	return "兔子：种子找到了！去花圃种下吧！"
+	if not game_state.seed_planted:
+		return "兔子：种子找到了！去花圃种下吧！"
+	return "兔子：去帮狐狸找 3 份木材吧！"
 
 
 func _draw_ellipse_custom(center: Vector2, radius: Vector2, color: Color) -> void:
@@ -2087,7 +2099,7 @@ func _task_prompt_text() -> String:
 			return "花园装饰完成！小风车已解锁。"
 		return "任务：布置花园装饰。已完成 %d/3。" % game_state.q006_placed_count()
 	if game_state.is_q011_complete():
-		return "整理完成！额外地块已开放。"
+		return "额外地块整理完成！可以自由探索，或点击“建造”调整花园。"
 	if not game_state.is_complete():
 		var collected_count: int = game_state.board_count()
 		var placed_count: int = game_state.placed_count()
@@ -2146,7 +2158,7 @@ func _task_action_hint_text() -> String:
 			return "点击已放置的装饰移除；再次点击移除按钮可取消。"
 		return "拖动木栅栏、花盆和庭院路灯到对应槽位。"
 	if game_state.is_q011_complete():
-		return "额外地块已经整理开放，木箱、布包和竹篮都留在原位。"
+		return "没有必做任务：自由探索，或点“建造”调整花园。"
 	if not game_state.is_complete():
 		if game_state.board_count() < GameState.BOARD_TOTAL:
 			return "靠近木板后按 E 或点击木板收集。"
@@ -2184,8 +2196,6 @@ func _task_action_hint_text() -> String:
 func _hud_title_text() -> String:
 	if game_state.can_start_q012():
 		return "奇趣小岛 · 小岛庆祝日"
-	if game_state.is_q011_complete():
-		return "奇趣小岛 · 额外地块已开放"
 	if q011_mode:
 		return "奇趣小岛 · 帮忙整理"
 	if build_mode and _can_use_q006_build_mode():
@@ -2204,8 +2214,6 @@ func _hud_title_text() -> String:
 		return "奇趣小岛 · 乌龟花园任务"
 	if not game_state.is_q006_complete():
 		return "奇趣小岛 · 花园装饰任务"
-	if game_state.is_q012_complete():
-		return "奇趣小岛 · 主线完成"
 	if not game_state.is_q007_complete():
 		return "奇趣小岛 · 寻找隐藏贝壳"
 	if not game_state.is_q009_complete():
@@ -2214,4 +2222,10 @@ func _hud_title_text() -> String:
 		return "奇趣小岛 · 种子收藏"
 	if not game_state.is_q008_complete():
 		return "奇趣小岛 · 铺设小路"
+	if _can_use_q011_mode():
+		return "奇趣小岛 · 额外地块整理"
+	if game_state.is_q011_complete():
+		return "奇趣小岛 · 全部任务完成"
+	if game_state.is_q012_complete():
+		return "奇趣小岛 · 主线完成"
 	return "奇趣小岛 · 自由探索"

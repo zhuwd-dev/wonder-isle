@@ -63,7 +63,7 @@ func _run() -> void:
 	_expect(main.game_state.q009_bird_interaction_unlocked(), "Q009 completion must unlock bird interaction")
 	_expect(main.message == "鸟屋计划完成！小鸟互动已开放。", "Q009 completion must show direct feedback")
 	_expect(main._q009_prompt_text() == "鸟屋计划完成！小鸟互动已开放。", "Q009 completion prompt must be visible")
-	_expect(main._q009_action_hint_text() == "靠近小鸟按互动键，和它打个招呼。", "Q009 completion action hint must be visible")
+	_expect(main._q009_action_hint_text() == "可选：靠近小鸟按互动键打招呼。", "Q009 completion must label the bird greeting as optional")
 	_expect(_read_save().get("q009_completed") == true, "Q009 completion must save immediately")
 
 	main.player_position = main.Q009_BIRD_POSITION
