@@ -31,6 +31,7 @@ fi
 build_dir="${WEB_BUILD_DIR:-$project_root/build/web}"
 mkdir -p "$build_dir"
 "$GODOT_BIN" --headless --path "$project_root" --export-release Web "$build_dir/index.html"
+"${PYTHON_BIN:-python3}" "$project_root/tools/prepare_web_export.py" "$build_dir"
 
 python_bin="${PYTHON_BIN:-python3}"
 if [[ -x /tmp/wonder-isle-web-test-venv/bin/python && -z "${PYTHON_BIN:-}" ]]; then

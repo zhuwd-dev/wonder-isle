@@ -1323,15 +1323,15 @@ func _draw_bridge(font: Font) -> void:
 func _draw_rabbit_area(font: Font) -> void:
 	if _should_show_rabbit_dialog():
 		var bubble_fill := Color("fff7dc")
-		_draw_panel(Rect2(468, 122, 324, 48), bubble_fill, Color("d7a85b"), 16)
+		_draw_panel(Rect2(392, 122, 400, 48), bubble_fill, Color("d7a85b"), 16)
 		draw_colored_polygon(PackedVector2Array([Vector2(582, 170), Vector2(600, 170), Vector2(592, 188)]), bubble_fill)
-		draw_circle(Vector2(490, 146), 12.0, Color("e8bd62"))
-		draw_string(font, Vector2(512, 152), _rabbit_feedback_text(), HORIZONTAL_ALIGNMENT_LEFT, -1, 20, VISUAL_PALETTE["ink"])
+		draw_circle(Vector2(414, 146), 12.0, Color("e8bd62"))
+		draw_string(font, Vector2(436, 152), _rabbit_feedback_text(), HORIZONTAL_ALIGNMENT_LEFT, -1, 20, VISUAL_PALETTE["ink"])
 	_draw_rabbit(Vector2(592, 226))
 
 
 func _should_show_rabbit_dialog() -> bool:
-	return not game_state.is_complete()
+	return not game_state.is_complete() or not game_state.seed_planted
 
 
 func _draw_region_area(font: Font) -> void:
@@ -1917,7 +1917,13 @@ func _bridge_status_text() -> String:
 
 
 func _rabbit_feedback_text() -> String:
-	return "兔子：可以帮我修桥吗？" if _should_show_rabbit_dialog() else ""
+	if not _should_show_rabbit_dialog():
+		return ""
+	if not game_state.is_complete():
+		return "兔子：帮我修好小桥，好吗？"
+	if not game_state.seed_collected:
+		return "兔子：谢谢你！过桥找发光种子吧！"
+	return "兔子：种子找到了！去花圃种下吧！"
 
 
 func _draw_ellipse_custom(center: Vector2, radius: Vector2, color: Color) -> void:
@@ -2070,9 +2076,9 @@ func _task_prompt_text() -> String:
 			return "已收集 %d/3 块木板，还要 %d 块。" % [collected_count, GameState.BOARD_TOTAL - collected_count]
 		return "木板已集齐，已放置 %d/3 块；把剩余木板拖到桥面高亮位置。" % placed_count
 	if not game_state.seed_collected:
-		return "小桥已修好！到右侧寻找种子并种下。"
+		return "下一步：过桥到右侧寻找发光的种子。"
 	if not game_state.seed_planted:
-		return "种子已找到，请到右侧花圃种下。"
+		return "下一步：到右侧花圃种下种子。"
 	if not game_state.is_q004_complete():
 		var wood_count: int = game_state.wood_count()
 		var delivered_count: int = game_state.delivered_wood_count()
@@ -2121,9 +2127,9 @@ func _task_action_hint_text() -> String:
 			return "靠近木板后按 E 或点击木板收集。"
 		return "拖动右下角已收集木板到桥上高亮位置。"
 	if not game_state.seed_collected:
-		return "过桥后到右侧寻找闪亮的种子，靠近后按互动键收集。"
+		return "过桥到右侧，靠近发光种子后按“互动 / 收集”。"
 	if not game_state.seed_planted:
-		return "到右侧花圃附近按互动键种下种子。"
+		return "到右侧花圃附近按“互动 / 收集”种下种子。"
 	if not game_state.is_q004_complete():
 		if game_state.wood_count() < GameState.Q004_WOOD_TOTAL:
 			return "靠近木材后按 E 或点击互动 / 收集来拾取。"

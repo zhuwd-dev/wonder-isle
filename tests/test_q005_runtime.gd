@@ -91,7 +91,7 @@ func _run() -> void:
 	var build_style: StyleBox = main.build_button.get_theme_stylebox("normal")
 	_expect(build_style is StyleBoxFlat and build_style.bg_color == Color("68bd72"), "the current next action button must use its green primary style")
 	_expect(not main._should_show_q006_slots(), "empty garden slots must stay hidden outside build mode")
-	_expect(not main._should_show_rabbit_dialog(), "the rabbit's bridge dialogue must end after the bridge is repaired")
+	_expect(not main._should_show_rabbit_dialog(), "the rabbit's seed guidance must end after the seed is planted")
 	_expect(not main._should_show_region_access_card(), "the bridge access card must disappear after the area opens")
 	_expect(not main._can_use_q007_side_task(), "Q007 must stay hidden while Q006 is the current task")
 	_expect(not main._can_use_q009_side_task(), "Q009 must stay hidden while Q006 is the current task")

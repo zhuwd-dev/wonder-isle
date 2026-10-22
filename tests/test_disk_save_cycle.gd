@@ -263,7 +263,7 @@ func _read_after_process_restart() -> void:
 	_expect(main.game_state.area_unlocked, "新进程恢复后区域应为已开放")
 	_expect(main.game_state.seed_collected, "新进程恢复后应保留种子收集状态")
 	_expect(not main.game_state.seed_planted, "新进程恢复后种子应仍未种植")
-	_expect(main._task_prompt_text() == "种子已找到，请到右侧花圃种下。", "种子未种植存档加载后应显示种植引导")
+	_expect(main._task_prompt_text() == "下一步：到右侧花圃种下种子。", "种子未种植存档加载后应显示种植引导")
 	main.player_position = main.FLOWERBED_POSITION
 	main._try_collect_nearby()
 	_expect(main.game_state.seed_planted, "花圃交互后应保存种植状态")
