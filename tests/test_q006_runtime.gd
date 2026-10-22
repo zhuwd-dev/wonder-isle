@@ -30,7 +30,13 @@ func _run() -> void:
 	_expect(not main.game_state.is_pond_complete(), "Q006 runtime must not require Q003")
 	_expect(not main.game_state.is_q004_complete(), "Q006 runtime must not require Q004")
 	_expect(not main.game_state.is_q005_complete(), "Q006 runtime must not require Q005")
+	_expect(not main._can_use_q006_build_mode(), "Q006 must remain hidden until the main story is complete")
+	_expect(not main.build_button.visible, "the build button must stay hidden while the fox and pond stories remain")
 
+	main._toggle_build_mode()
+	_expect(not main.build_mode, "the build mode must not interrupt an active main story task")
+	_complete_main_story_runtime()
+	_expect(main._can_use_q006_build_mode(), "the main story must unlock Q006 runtime controls")
 	main._toggle_build_mode()
 	_expect(main.build_mode, "the build button must enter Q006 build mode")
 	_expect(main._task_prompt_text() == "任务：布置花园装饰。已完成 0/3。", "Q006 build prompt must be visible")
@@ -62,7 +68,7 @@ func _run() -> void:
 	_expect(_read_save().get("q006_windmill_unlocked") == true, "Q006 reward must save immediately")
 	main._toggle_build_mode()
 	_expect(not main.build_mode, "the build button must exit Q006 build mode")
-	_expect(main._task_prompt_text() == "花园装饰完成！小风车已解锁。", "Q006 completion must remain visible after leaving build mode")
+	_expect(main._task_prompt_text() == "花园装饰完成！下一步：到池塘边寻找隐藏贝壳。", "Q006 completion must guide the player to the next side task")
 	main._toggle_build_mode()
 
 	main._toggle_remove_mode()
@@ -101,6 +107,19 @@ func _complete_q002_runtime() -> void:
 		main.game_state.place_board(board_id, board_id)
 	main.game_state.collect_seed()
 	main.game_state.plant_seed()
+	main._save_game()
+
+
+func _complete_main_story_runtime() -> void:
+	for wood_id in range(3):
+		main.game_state.collect_wood(wood_id)
+		main.game_state.deliver_wood(wood_id)
+	for stone_id in range(3):
+		main.game_state.place_pond_stone(stone_id)
+	main.game_state.water_q005()
+	for plant_id in range(3):
+		main.game_state.collect_q005_plant(plant_id)
+		main.game_state.place_q005_plant(plant_id, plant_id)
 	main._save_game()
 
 

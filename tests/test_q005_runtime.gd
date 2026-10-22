@@ -29,7 +29,7 @@ func _run() -> void:
 
 	_complete_q003_runtime()
 	_expect(main.game_state.can_start_q005(), "Q003 completion must unlock Q005 at runtime")
-	_expect(not main.game_state.is_q004_complete(), "Q005 runtime must not require Q004")
+	_expect(main.game_state.is_q004_complete(), "the main story must finish the fox house before the pond garden")
 	_expect(main._task_prompt_text() == "任务：照料乌龟的花园。先浇水并收集 3 株植物。", "Q005 unlock prompt must be visible")
 
 	for plant_id in range(3):
@@ -79,18 +79,13 @@ func _run() -> void:
 		_expect(main.game_state.q005_plant_slots[plant_id], "a valid plant drag must fill each remaining slot")
 
 	_expect(main.game_state.is_q005_complete(), "three placed plants and watering must complete Q005")
-	_expect(main._task_prompt_text() == "花园完成！乌龟很开心，新植物正在生长。", "Q005 completion prompt must be visible")
-	_expect(main._task_action_hint_text() == "花园已焕发生机，乌龟正在照料新植物。", "Q005 completion action hint must be visible")
-	_expect(main._hud_title_text() == "奇趣小岛 · 乌龟花园任务", "Q005 completion title must be visible")
+	_expect(main._task_prompt_text() == "主线任务完成！点击“建造”布置花园装饰。", "Q005 completion must clearly lead to the optional garden task")
+	_expect(main._task_action_hint_text() == "点击右上方“建造”，再把三件装饰拖到花园槽位。", "Q005 completion must explain the next action")
+	_expect(main._hud_title_text() == "奇趣小岛 · 花园装饰任务", "Q005 completion must update the HUD title")
+	_expect(main.build_button.visible, "the optional garden build button must unlock after the main story")
 	_mouse_button(_center(main._q005_plant_inventory_rect(0)), true)
 	_expect(main.dragging_q005_plant == -1, "a placed Q005 plant must not be draggable again")
 	_expect(_read_save().get("q005_completed") == true, "Q005 completion must be saved immediately")
-	main.player_position = main.WOOD_POSITIONS[0]
-	main._try_collect_nearby()
-	_expect(main.game_state.wood_collected[0], "Q004 must remain interactable after Q005 completion")
-	main.player_position = main.HOUSE_POSITION
-	main._try_collect_nearby()
-	_expect(main.game_state.wood_delivered[0], "Q004 delivery must remain functional after Q005 completion")
 
 	main._restart_game()
 	_expect(not main.game_state.is_q005_complete(), "restart must reset Q005 completion")
@@ -118,6 +113,12 @@ func _complete_q003_runtime() -> void:
 	main._try_collect_nearby()
 	main.player_position = main.FLOWERBED_POSITION
 	main._try_collect_nearby()
+	for wood_id in range(3):
+		main.player_position = main.WOOD_POSITIONS[wood_id]
+		main._try_collect_nearby()
+	main.player_position = main.HOUSE_POSITION
+	for delivery_id in range(3):
+		main._try_collect_nearby()
 	for stone_id in range(3):
 		_mouse_button(main.POND_STONE_POSITIONS[stone_id], true)
 		_mouse_motion(_center(main.POND_SLOTS[stone_id]))

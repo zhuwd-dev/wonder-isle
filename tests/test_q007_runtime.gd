@@ -27,10 +27,10 @@ func _run() -> void:
 	main._restart_game()
 	_complete_q003_runtime()
 	_expect(main.game_state.can_start_q007(), "opening the pond must unlock Q007 at runtime")
-	_expect(not main.game_state.is_q004_complete(), "Q007 runtime must not require Q004")
-	_expect(not main.game_state.is_q005_complete(), "Q007 runtime must not require Q005")
+	_expect(main.game_state.is_q004_complete(), "the main story must complete the fox house before side tasks appear")
+	_expect(main.game_state.is_q005_complete(), "the main story must complete the pond garden before side tasks appear")
 	_expect(not main.game_state.is_q006_complete(), "Q007 runtime must not require Q006")
-	_expect(main._task_prompt_text() == "任务：照料乌龟的花园。先浇水并收集 3 株植物。", "Q005 prompt must remain the active prompt after the pond opens")
+	_expect(main._task_prompt_text() == "主线任务完成！点击“建造”布置花园装饰。", "the main story prompt must lead into optional content")
 
 	main.player_position = Vector2(700, 500)
 	main._try_collect_nearby()
@@ -64,8 +64,15 @@ func _complete_q003_runtime() -> void:
 		main.game_state.place_board(board_id, board_id)
 	main.game_state.collect_seed()
 	main.game_state.plant_seed()
+	for wood_id in range(3):
+		main.game_state.collect_wood(wood_id)
+		main.game_state.deliver_wood(wood_id)
 	for stone_id in range(3):
 		main.game_state.place_pond_stone(stone_id)
+	main.game_state.water_q005()
+	for plant_id in range(3):
+		main.game_state.collect_q005_plant(plant_id)
+		main.game_state.place_q005_plant(plant_id, plant_id)
 	main._save_game()
 
 

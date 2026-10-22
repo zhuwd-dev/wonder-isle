@@ -36,8 +36,12 @@ func _run() -> void:
 	_expect(not main.q011_button.visible, "two prior completions must keep the Q011 control locked")
 	_complete_q003(main)
 	main._refresh_build_controls()
-	_expect(main.game_state.q011_completed_task_count() == 3, "the third completed old task must unlock Q011 at runtime")
-	_expect(main.q011_button.visible, "the Q011 control must appear after the third old task")
+	_expect(main.game_state.q011_completed_task_count() >= 3, "the main story must complete at least three tasks")
+	_expect(not main.q011_button.visible, "Q011 must stay hidden until the main story is finished")
+	_complete_q004_and_q005(main)
+	main._refresh_build_controls()
+	_expect(main.game_state.q011_completed_task_count() >= 3, "the completed main story must satisfy the Q011 progress requirement")
+	_expect(main.q011_button.visible, "the Q011 control must appear after the main story is finished")
 	_expect(not main.game_state.is_q010_complete(), "Q010 must remain optional at runtime")
 	_expect(not main.game_state.is_q011_complete(), "the extra plot must start unfinished")
 
@@ -120,6 +124,17 @@ func _complete_q001_q002(target) -> void:
 func _complete_q003(target) -> void:
 	for stone_id in range(3):
 		target.game_state.place_pond_stone(stone_id)
+	target._save_game()
+
+
+func _complete_q004_and_q005(target) -> void:
+	for wood_id in range(3):
+		target.game_state.collect_wood(wood_id)
+		target.game_state.deliver_wood(wood_id)
+	target.game_state.water_q005()
+	for plant_id in range(3):
+		target.game_state.collect_q005_plant(plant_id)
+		target.game_state.place_q005_plant(plant_id, plant_id)
 	target._save_game()
 
 

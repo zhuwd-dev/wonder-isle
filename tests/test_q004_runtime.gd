@@ -30,6 +30,9 @@ func _run() -> void:
 	_expect(main.game_state.can_start_q004(), "Q002 completion must unlock Q004 at runtime")
 	_expect(not main.game_state.is_pond_complete(), "Q004 must not require Q003 completion")
 	_expect(main._task_prompt_text() == "任务：帮狐狸建小屋。先收集 3 份木材。", "Q004 unlock prompt must be visible")
+	_expect(not main._can_start_pond_stage(), "Q003 must stay staged until Q004 is complete")
+	_expect(not main._can_use_q006_build_mode(), "Q006 must stay hidden until the main story is complete")
+	_expect(not main.build_button.visible, "garden build controls must stay hidden during Q004")
 
 	for wood_id in range(3):
 		main.player_position = main.WOOD_POSITIONS[wood_id]
@@ -49,6 +52,7 @@ func _run() -> void:
 	_expect(main.game_state.fox_moved_in, "Q004 completion must show the fox moved in")
 	_expect(not main.game_state.is_pond_complete(), "Q003 must remain incomplete after Q004")
 	_expect(main._task_prompt_text() == "狐狸已经入住！池塘石头还可以继续摆好。", "Q004 completion must not hide unfinished Q003")
+	_expect(main._can_start_pond_stage(), "Q004 completion must unlock the pond stage")
 
 	main._try_collect_nearby()
 	_expect(main.game_state.delivered_wood_count() == 3, "repeated delivery after completion must not change count")

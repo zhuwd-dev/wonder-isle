@@ -144,6 +144,13 @@ func _read_pond_progress_after_process_restart() -> void:
 	_expect(main.game_state.pond_stones_placed == [true, false, false], "新进程应恢复已放置的第 1 块石头")
 	_expect(not main.game_state.is_pond_complete(), "中途恢复不应提前开放池塘")
 	_expect(main._task_prompt_text() == "任务：帮狐狸建小屋。先收集 3 份木材。", "中途恢复后应显示狐狸小屋任务提示")
+	var locked_stone_position: Vector2 = main.POND_STONE_POSITIONS[1]
+	main._pointer_down(locked_stone_position)
+	_expect(main.dragging_pond_stone == -1, "旧存档中的池塘进度应在狐狸入住前保持锁定")
+	for wood_id in range(3):
+		_expect(main.game_state.collect_wood(wood_id), "恢复池塘存档后应能收集狐狸小屋木材")
+		_expect(main.game_state.deliver_wood(wood_id), "恢复池塘存档后应能交付狐狸小屋木材")
+	_expect(main.game_state.is_q004_complete(), "交付木材后狐狸小屋应完成并开放池塘任务")
 	for stone_id in [1, 2]:
 		var stone_position: Vector2 = main.POND_STONE_POSITIONS[stone_id]
 		var slot_position: Vector2 = main.POND_SLOTS[stone_id].position + main.POND_SLOTS[stone_id].size / 2.0
@@ -262,6 +269,10 @@ func _read_after_process_restart() -> void:
 	_expect(main.game_state.seed_planted, "花圃交互后应保存种植状态")
 	_expect(_read_save().get("seed_planted") == true, "种植后应立即写入存档")
 	_expect(main._task_prompt_text() == "任务：帮狐狸建小屋。先收集 3 份木材。", "种植后应进入狐狸小屋任务")
+	for wood_id in range(3):
+		_expect(main.game_state.collect_wood(wood_id), "种下种子后应能收集狐狸小屋木材")
+		_expect(main.game_state.deliver_wood(wood_id), "种下种子后应能交付狐狸小屋木材")
+	_expect(main._task_prompt_text() == "狐狸已经入住！池塘石头还可以继续摆好。", "狐狸入住后应切换到池塘整理任务")
 	for stone_id in range(3):
 		var stone_position: Vector2 = main.POND_STONE_POSITIONS[stone_id]
 		var slot_position: Vector2 = main.POND_SLOTS[stone_id].position + main.POND_SLOTS[stone_id].size / 2.0

@@ -31,6 +31,8 @@ func _run() -> void:
 
 	_complete_bridge_runtime()
 	_expect(main.game_state.can_start_q008(), "bridge completion must unlock Q008 at runtime")
+	_expect(not main._can_use_q008_side_task(), "Q008 stones must remain hidden during the main story")
+	_expect(main._q008_path_slot_at(main.Q008_PATH_SLOT_RECTS[0].position + Vector2(4, 4)) == -1, "staged Q008 slots must not be interactive")
 	_expect(not main.game_state.seed_planted, "Q008 runtime must not require Q002")
 	_expect(not main.game_state.is_pond_complete(), "Q008 runtime must not require Q003")
 	_expect(not main.game_state.is_q004_complete(), "Q008 runtime must not require Q004")
@@ -38,8 +40,12 @@ func _run() -> void:
 	_expect(not main.game_state.is_q006_complete(), "Q008 runtime must not require Q006")
 	_expect(not main.game_state.is_q007_complete(), "Q008 runtime must not require Q007")
 	_expect(main._task_prompt_text() == "小桥已修好！到右侧寻找种子并种下。", "Q008 must not replace the existing main task prompt")
-	_expect(main._task_action_hint_text() == "过桥后靠近种子并按互动键收集。", "Q008 must not replace the existing main action hint")
+	_expect(main._task_action_hint_text() == "过桥后到右侧寻找闪亮的种子，靠近后按互动键收集。", "Q008 must not replace the existing main action hint")
 	_expect(main._q008_prompt_text() == "小路任务：已铺设 0/3 块路面石板。", "Q008 must show its progress in the path area")
+
+	_complete_main_story_runtime()
+	_expect(main._is_main_story_complete(), "Q008 must become available only after the main story is complete")
+	_expect(main._can_use_q008_side_task(), "completed main story must reveal the optional path task")
 
 	var source_0 := _center(main._q008_path_material_rect(0))
 	var source_1 := _center(main._q008_path_material_rect(1))
@@ -76,9 +82,7 @@ func _run() -> void:
 
 	# Q008 must not steal pointer input while the existing Q006 build mode is active.
 	main._restart_game()
-	_complete_bridge_runtime()
-	main.game_state.collect_seed()
-	main.game_state.plant_seed()
+	_complete_main_story_runtime()
 	main.build_mode = true
 	main._pointer_down(_center(main._q008_path_material_rect(0)))
 	_expect(main.dragging_q008_path == -1, "Q006 build mode must retain input priority over Q008")
@@ -93,6 +97,23 @@ func _complete_bridge_runtime() -> void:
 	for board_id in range(3):
 		main.game_state.collect_board(board_id)
 		main.game_state.place_board(board_id, board_id)
+	main._save_game()
+
+
+func _complete_main_story_runtime() -> void:
+	if not main.game_state.is_complete():
+		_complete_bridge_runtime()
+	main.game_state.collect_seed()
+	main.game_state.plant_seed()
+	for wood_id in range(3):
+		main.game_state.collect_wood(wood_id)
+		main.game_state.deliver_wood(wood_id)
+	for stone_id in range(3):
+		main.game_state.place_pond_stone(stone_id)
+	main.game_state.water_q005()
+	for plant_id in range(3):
+		main.game_state.collect_q005_plant(plant_id)
+		main.game_state.place_q005_plant(plant_id, plant_id)
 	main._save_game()
 
 

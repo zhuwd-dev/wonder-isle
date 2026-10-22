@@ -33,8 +33,8 @@ func _run() -> void:
 
 	_complete_q004_runtime()
 	_expect(main.game_state.can_start_q009(), "Q004 completion must unlock Q009 at runtime")
-	_expect(not main.game_state.is_pond_complete(), "Q009 runtime must not require Q003")
-	_expect(not main.game_state.is_q005_complete(), "Q009 runtime must not require Q005")
+	_expect(main.game_state.is_pond_complete(), "side tasks must wait until the pond is complete")
+	_expect(main.game_state.is_q005_complete(), "side tasks must wait until the garden is complete")
 	_expect(not main.game_state.is_q006_complete(), "Q009 runtime must not require Q006")
 	_expect(not main.game_state.is_q007_complete(), "Q009 runtime must not require Q007")
 	_expect(not main.game_state.is_q008_complete(), "Q009 runtime must not require Q008")
@@ -77,6 +77,12 @@ func _complete_q004_runtime() -> void:
 	for wood_id in range(3):
 		main.game_state.collect_wood(wood_id)
 		main.game_state.deliver_wood(wood_id)
+	for stone_id in range(3):
+		main.game_state.place_pond_stone(stone_id)
+	main.game_state.water_q005()
+	for plant_id in range(3):
+		main.game_state.collect_q005_plant(plant_id)
+		main.game_state.place_q005_plant(plant_id, plant_id)
 	main._save_game()
 
 

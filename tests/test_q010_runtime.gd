@@ -65,6 +65,9 @@ func _complete_q005_runtime() -> void:
 		main.game_state.place_board(board_id, board_id)
 	main.game_state.collect_seed()
 	main.game_state.plant_seed()
+	for wood_id in range(3):
+		main.game_state.collect_wood(wood_id)
+		main.game_state.deliver_wood(wood_id)
 	for stone_id in range(3):
 		main.game_state.place_pond_stone(stone_id)
 	main.game_state.water_q005()

@@ -141,7 +141,7 @@ func _read_complete() -> void:
 	_expect(main.game_state.is_q005_complete(), "completed Q005 must restore across processes")
 	_expect(main.game_state.is_pond_complete(), "completed Q005 must preserve Q003")
 	_expect(not main.game_state.is_q004_complete(), "Q005 completion must not require Q004")
-	_expect(main._task_prompt_text() == "花园完成！乌龟很开心，新植物正在生长。", "completed Q005 restart must show completion feedback")
+	_expect(main._task_prompt_text() == "任务：帮狐狸建小屋。先收集 3 份木材。", "completed Q005 must stay queued until the fox task is complete")
 	main._restart_game()
 	main.queue_free()
 

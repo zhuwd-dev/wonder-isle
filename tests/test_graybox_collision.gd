@@ -76,7 +76,7 @@ func _run() -> void:
 	_expect(main._drag_target_slot_at(slot_center_2) == -1, "placed board must no longer have an active target")
 	_expect(main.game_state.is_complete(), "placing the third board must complete the bridge")
 	_expect(main._task_prompt_text() == "小桥已修好！到右侧寻找种子并种下。", "完成修桥后应引导后续种子任务")
-	_expect(main._task_action_hint_text() == "过桥后靠近种子并按互动键收集。", "完成修桥后应显示种子互动提示")
+	_expect(main._task_action_hint_text() == "过桥后到右侧寻找闪亮的种子，靠近后按互动键收集。", "完成修桥后应显示种子互动提示")
 	main.player_position = main.SEED_POSITION
 	main._try_collect_nearby()
 	_expect(main.game_state.seed_collected, "修桥后靠近种子应能收集")
@@ -96,6 +96,17 @@ func _run() -> void:
 	_expect(main._task_action_hint_text() == "靠近木材后按 E 或点击互动 / 收集来拾取。", "种植完成后应显示木材收集提示")
 	main._try_collect_nearby()
 	_expect(main.game_state.seed_planted, "重复互动不能重复改变种植状态")
+	main._pointer_down(main.POND_STONE_POSITIONS[0])
+	_expect(main.dragging_pond_stone == -1, "池塘石头应等狐狸小屋完成后再开放")
+	for wood_id in range(3):
+		main.player_position = main.WOOD_POSITIONS[wood_id]
+		main._try_collect_nearby()
+		_expect(main.game_state.wood_collected[wood_id], "狐狸小屋任务应能收集木材")
+	main.player_position = main.HOUSE_POSITION
+	for delivery_id in range(3):
+		main._try_collect_nearby()
+	_expect(main.game_state.is_q004_complete(), "交付三份木材后狐狸应入住")
+	_expect(main._can_start_pond_stage(), "狐狸入住后池塘任务应开放")
 	var pond_slot_0: Vector2 = main.POND_SLOTS[0].position + main.POND_SLOTS[0].size / 2.0
 	main._pointer_down(main.POND_STONE_POSITIONS[0])
 	_expect(main.dragging_pond_stone == 0, "种植完成后第 1 块石头应能拖动")

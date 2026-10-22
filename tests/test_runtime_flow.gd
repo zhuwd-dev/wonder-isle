@@ -66,6 +66,8 @@ func _run() -> void:
 	_expect(main.game_state.is_complete(), "the bridge must repair after three runtime board drops")
 	_expect(main._is_walkable(Vector2(800, 375)), "the repaired bridge must be walkable")
 	_expect(main.game_state.area_unlocked, "bridge completion must unlock the right area")
+	_expect(main.game_state.can_start_q008(), "the optional path task may be staged after the main story")
+	_expect(not main._can_use_q008_side_task(), "optional path stones must stay hidden during the bridge and seed introduction")
 
 	# Q002: use the actual proximity interaction path for seed and flowerbed.
 	main.player_position = main.SEED_POSITION
@@ -77,7 +79,21 @@ func _run() -> void:
 	main.player_position = main.FLOWERBED_POSITION
 	main._try_collect_nearby()
 	_expect(main.game_state.seed_planted, "runtime interaction at the flowerbed must plant the seed")
-	_expect(main.game_state.can_start_pond_task(), "planting must unlock Q003")
+	_expect(not main._can_start_pond_stage(), "the pond task must wait until the fox house is complete")
+	_expect(not main._can_use_q006_build_mode(), "garden decorations must stay hidden during the main introduction")
+	_expect(not main.build_button.visible, "the build button must stay hidden until the main story is complete")
+	_expect(main._task_prompt_text() == "任务：帮狐狸建小屋。先收集 3 份木材。", "planting must lead directly to the fox house task")
+
+	# Complete the fox house before revealing the pond stones.
+	for wood_id in range(3):
+		main.player_position = main.WOOD_POSITIONS[wood_id]
+		main._try_collect_nearby()
+		_expect(main.game_state.wood_collected[wood_id], "the fox task must collect wood through runtime interaction")
+	main.player_position = main.HOUSE_POSITION
+	for delivery_id in range(3):
+		main._try_collect_nearby()
+	_expect(main.game_state.is_q004_complete(), "three wood deliveries must finish the fox house before Q003")
+	_expect(main._can_start_pond_stage(), "the pond stage must unlock after the fox house is complete")
 
 	# Q003: mouse drag, invalid release, recovery, completion, and duplicate protection.
 	var stone_0: Vector2 = main.POND_STONE_POSITIONS[0]
