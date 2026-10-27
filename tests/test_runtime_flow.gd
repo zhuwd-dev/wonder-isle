@@ -35,8 +35,11 @@ func _run() -> void:
 	_expect(not main.game_state.can_start_pond_task(), "pond task must be locked at the start")
 	_expect(main._task_stage_label() == "主线 1/7", "the HUD must identify the first of seven connected main-story steps")
 	_expect(main._should_show_rabbit_area(), "the rabbit must be visible while it introduces the first task")
-	_expect(main.interact_button.position == Vector2(1208, 652), "the collection control must sit in the bottom-right thumb zone")
-	_expect(main.interact_button.size == Vector2(64, 58), "the bottom-right collection control must stay compact beside the inventory")
+	_expect(main.interact_button.position == Vector2(1156, 616), "the interaction control must sit in the bottom-right thumb zone")
+	_expect(main.interact_button.size == Vector2(116, 92), "the bottom-right interaction control must be large enough for touch")
+	_expect(not main.INVENTORY_PANEL_RECT.intersects(Rect2(main.interact_button.position, main.interact_button.size)), "the interaction control must not overlap the inventory tray")
+	_expect(main.INVENTORY_PANEL_RECT.position.x >= 880, "the inventory tray must stay clear of the bottom instruction banner")
+	_expect(main._inventory_rect(2).end.x <= main.INVENTORY_PANEL_RECT.end.x, "the last inventory slot must remain inside the tray")
 	_expect(main._is_button_control_position(main.interact_button.position + main.interact_button.size / 2.0), "the moved interaction button must not leak clicks into world dragging")
 	_expect(main.Q011_AREA_RECT.end.x < main.HOUSE_RECT.position.x, "the extra-plot area must not overlap the fox house")
 	_mouse_button(main.JOYSTICK_CENTER, true)
@@ -82,11 +85,15 @@ func _run() -> void:
 
 	for board_id in range(3):
 		main.player_position = main.BOARD_POSITIONS[board_id]
+		main._update_interact_button()
+		_expect(main.interact_button.text == "收木板" and main.interaction_button_ready, "the touch action must name a nearby board and show that it is in range")
 		main._try_collect_nearby()
 		_expect(main.game_state.collected[board_id], "runtime proximity interaction must collect each board")
 		_expect(main.collect_sparkle_remaining > 0.0, "collecting a board must show the short sparkle feedback")
 
 	_expect(main.game_state.board_count() == 3, "runtime flow must collect all three boards")
+	main._update_interact_button()
+	_expect(not main.interact_button.visible, "the interaction button must get out of the way while the player drags boards")
 
 	# Q001: exercise actual mouse button, motion, and release events.
 	var first_inventory := _center(main._inventory_rect(0))
@@ -116,12 +123,16 @@ func _run() -> void:
 
 	# Q002: use the actual proximity interaction path for seed and flowerbed.
 	main.player_position = main.SEED_POSITION
+	main._update_interact_button()
+	_expect(main.interact_button.text == "收种子" and main.interaction_button_ready, "the touch action must name the nearby seed")
 	main._try_collect_nearby()
 	_expect(main.game_state.seed_collected, "runtime interaction must collect the seed after bridge repair")
 	_expect(not main.game_state.seed_planted, "collecting the seed must not plant it immediately")
 	main._try_collect_nearby()
 	_expect(main.game_state.seed_collected, "repeated seed interaction must be idempotent")
 	main.player_position = main.FLOWERBED_POSITION
+	main._update_interact_button()
+	_expect(main.interact_button.text == "种下" and main.interaction_button_ready, "the touch action must name planting at the flowerbed")
 	main._try_collect_nearby()
 	_expect(main.game_state.seed_planted, "runtime interaction at the flowerbed must plant the seed")
 	_expect(main._should_show_rabbit_dialog(), "the rabbit must guide the player into the fox task after planting")
@@ -187,16 +198,22 @@ func _run() -> void:
 	_expect(main.dragging_pond_stone == -1, "a placed pond stone must not be draggable again")
 
 	main.player_position = main.Q005_WATERING_POINT_POSITION
+	main._update_interact_button()
+	_expect(main.interact_button.text == "浇水" and main.interaction_button_ready, "the touch action must identify watering as the current garden action")
 	main._try_collect_nearby()
 	_expect(main.game_state.q005_watered, "the connected flow must water the turtle garden")
-	_expect(main._task_action_hint_text() == "下一步：靠近长好的植物，按 E 或点右下角“收集 / 互动”采集 3 株。", "watering must advance the guidance to plant collection")
+	_expect(main._task_action_hint_text() == "下一步：靠近长好的植物，按 E 或点右下角按钮采集 3 株。", "watering must advance the guidance to plant collection")
 	for plant_id in range(3):
 		main.player_position = main.Q005_PLANT_POSITIONS[plant_id]
+		main._update_interact_button()
+		_expect(main.interact_button.text == "采花" and main.interaction_button_ready, "watering must change the nearby touch action to plant collection")
 		main._try_collect_nearby()
 		_expect(main.game_state.q005_plants_collected[plant_id], "the connected flow must collect every garden plant")
 		if plant_id == 0:
-			_expect(main._task_action_hint_text() == "下一步：靠近长好的植物，按 E 或点右下角“收集 / 互动”采集 3 株。", "partial plant collection must keep collection as the current action")
+			_expect(main._task_action_hint_text() == "下一步：靠近长好的植物，按 E 或点右下角按钮采集 3 株。", "partial plant collection must keep collection as the current action")
 	_expect(main._task_action_hint_text() == "下一步：把右下角的植物逐个拖到绿色空槽。", "collecting all plants must advance the guidance to placement")
+	main._update_interact_button()
+	_expect(not main.interact_button.visible, "the interaction button must hide while the collected plants are being placed")
 	for plant_id in range(3):
 		_mouse_button(_center(main._q005_plant_inventory_rect(plant_id)), true)
 		_mouse_motion(_center(main.Q005_PLANT_SLOTS[plant_id]))
@@ -226,7 +243,7 @@ func _run() -> void:
 	_expect(main._should_show_rabbit_area(), "the rabbit must return for the final celebration objective")
 	_expect(main._task_stage_label() == "主线 7/7", "finishing decorations must identify the final main-story step")
 	_expect(main._task_prompt_text() == "花园装饰已完成！回到兔子身边参加小岛庆祝。", "the garden must direct the player to the rabbit")
-	_expect(main._task_action_hint_text() == "走到兔子身边，按 E 或点右下角“收集 / 互动”参加庆祝。", "the ending prompt must explain how to finish the story")
+	_expect(main._task_action_hint_text() == "走到兔子身边，按 E 或点右下角按钮参加庆祝。", "the ending prompt must explain how to finish the story")
 	_expect(not main._can_use_q007_side_task(), "optional exploration must remain locked before the ending interaction")
 	main.player_position = main.Q012_RABBIT_POSITION
 	main._try_collect_nearby()

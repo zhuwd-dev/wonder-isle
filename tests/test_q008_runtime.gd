@@ -40,7 +40,7 @@ func _run() -> void:
 	_expect(not main.game_state.is_q006_complete(), "Q008 runtime must not require Q006")
 	_expect(not main.game_state.is_q007_complete(), "Q008 runtime must not require Q007")
 	_expect(main._task_prompt_text() == "下一步：过桥到右侧寻找发光的种子。", "Q008 must not replace the existing main task prompt")
-	_expect(main._task_action_hint_text() == "过桥到右侧靠近发光种子，按 E 或点右下角“收集 / 互动”。", "Q008 must not replace the existing main action hint")
+	_expect(main._task_action_hint_text() == "过桥到右侧靠近发光种子，按 E 或点右下角按钮。", "Q008 must not replace the existing main action hint")
 	_expect(main._q008_prompt_text() == "小路任务：已铺设 0/3 块路面石板。", "Q008 must show its progress in the path area")
 
 	_complete_main_story_runtime()
@@ -52,6 +52,8 @@ func _run() -> void:
 	_complete_prior_optional_tasks()
 	_expect(main._can_use_q008_side_task(), "completed main story must reveal the optional path task")
 	_expect(main._task_stage_label() == "可选 4/5", "the path task must be marked as optional task four of five")
+	main._update_interact_button()
+	_expect(not main.interact_button.visible, "the collection button must leave the way clear during the drag-only path task")
 
 	var source_0 := _center(main._q008_path_material_rect(0))
 	var source_1 := _center(main._q008_path_material_rect(1))

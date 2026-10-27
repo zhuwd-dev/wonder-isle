@@ -316,7 +316,7 @@ def main() -> int:
                             page.wait_for_timeout(duration_ms)
                             page.keyboard.up(key)
                         page.screenshot(path=str(artifact_dir / "web-q005-at-watering-point.png"), full_page=True)
-                        page.mouse.click(1_240, 681)
+                        page.mouse.click(1_214, 662)
                         page.wait_for_timeout(180)
                         page.screenshot(path=str(turtle_growth_screenshot_path), full_page=True)
                         # Godot WebFS commits writes to IndexedDB asynchronously.
@@ -344,7 +344,7 @@ def main() -> int:
                             page.keyboard.down(key)
                             page.wait_for_timeout(duration_ms)
                             page.keyboard.up(key)
-                        page.mouse.click(1_240, 681)
+                        page.mouse.click(1_214, 662)
                         page.wait_for_timeout(180)
                         page.screenshot(path=str(turtle_collection_screenshot_path), full_page=True)
                         collected_save = {}

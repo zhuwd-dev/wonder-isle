@@ -66,6 +66,8 @@ func _run() -> void:
 	_expect(main.q011_button.visible, "the Q011 control must appear after Q008 is finished")
 	_expect(not main.game_state.is_q011_complete(), "the extra plot must start unfinished")
 	_expect(main.q011_button.text == "开始整理", "the Q011 button must directly name the next action")
+	main._update_interact_button()
+	_expect(not main.interact_button.visible, "the collection button must stay out of the way while Q011 awaits item placement")
 	_expect(main._task_prompt_text() == "额外地块整理：先点“开始整理”，再放置 3 件物品（0/3）。", "the inactive Q011 step must explain how to begin")
 	_expect(main._task_action_hint_text().contains("右下角已显示 3 件物品"), "the Q011 hint must identify both the visible tray and start button")
 	_expect(main.game_state.q011_item_is_available(1) and main._q011_item_inventory_rect(1).size.x > 0.0, "the tray items must be available before entering placement mode")
@@ -74,6 +76,8 @@ func _run() -> void:
 
 	main.q011_button.emit_signal("pressed")
 	_expect(main.q011_mode, "the Q011 control must enter its independent placement mode")
+	main._update_interact_button()
+	_expect(not main.interact_button.visible, "the collection button must remain hidden during Q011 drag placement")
 	_expect(not main.build_mode, "Q011 mode must exclude Q006 build mode")
 	_expect(main.dragging_q008_path == -1, "Q011 mode must clear any Q008 drag state")
 	_expect(main._task_prompt_text() == "额外地块整理：已放置 0/3 件物品。", "Q011 mode must display its initial progress")

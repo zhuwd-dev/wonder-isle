@@ -145,7 +145,7 @@ def main() -> int:
                     page.wait_for_timeout(180)
 
                 def interact() -> None:
-                    page.mouse.click(1_240, 681)
+                    page.mouse.click(1_214, 662)
                     page.wait_for_timeout(650)
 
                 def drag(source: tuple[int, int], target: tuple[int, int], screenshot: str | None = None) -> None:
@@ -175,9 +175,13 @@ def main() -> int:
                 snap("web-q007-shell-collected.png")
 
                 # Return across the bridge and gather all birdhouse materials.
+                # Cross on the bridge centerline, then turn onto the west bank
+                # before walking down to the rope pickup.
                 move("w", 211)
-                move("a", 946)
-                move("s", 788)
+                move("a", 1_200)
+                move("s", 700)
+                move("d", 240)
+                snap("web-q009-before-rope.png")
                 interact()
                 verify(lambda save: save.get("q009_materials_collected") == [False, False, True], "Q009 collect rope at west shore")
                 move("a", 1_692)
@@ -199,9 +203,11 @@ def main() -> int:
                 move("a", 1_808)
                 interact()
                 verify(lambda save: save.get("q010_seeds_collected") == [True, False, False], "Q010 collect red seed")
-                move("d", 308)
+                move("d", 160)
+                snap("web-q010-before-gold-seed.png")
                 interact()
                 verify(lambda save: save.get("q010_seeds_collected") == [True, False, True], "Q010 collect gold seed")
+                snap("web-q010-after-gold-seed.png")
                 move("w", 500)
                 move("d", 1_115)
                 interact()
@@ -209,7 +215,7 @@ def main() -> int:
                 snap("web-q010-seeds-complete.png")
 
                 # Lay the three path pavers, checking the first live drag target.
-                for item_id, (source_x, target_x) in enumerate(((971, 560), (1067, 620), (1163, 680))):
+                for item_id, (source_x, target_x) in enumerate(((938, 560), (1018, 620), (1098, 680))):
                     drag(
                         (source_x, 661),
                         (target_x, 375),
@@ -222,7 +228,7 @@ def main() -> int:
                 # Enter the extra-plot mode and place each item in an empty slot.
                 page.mouse.click(950, 112)
                 page.wait_for_timeout(500)
-                for item_id, (source_x, target_x) in enumerate(((971, 230), (1067, 290), (1163, 350))):
+                for item_id, (source_x, target_x) in enumerate(((942, 230), (1022, 290), (1102, 350))):
                     drag((source_x, 642), (target_x, 588), "web-q011-green-drop-target.png" if item_id == 0 else None)
                     verify(lambda save, i=item_id: isinstance(save.get("q011_slot_occupants"), list) and save["q011_slot_occupants"][i] == i, f"Q011 place item {item_id + 1}/3")
                 verify(lambda save: save.get("q011_slot_occupants") == [0, 1, 2], "Q011 finish extra-plot arrangement")
