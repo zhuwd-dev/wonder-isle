@@ -121,26 +121,45 @@ def main() -> int:
                 )
                 page.screenshot(path=str(screenshot_path), full_page=True)
 
-                # Exercise touch-first layout on its own page so resizing cannot affect
-                # keyboard and drag timings in the end-to-end story flow below.
-                touch_page = browser.new_page(viewport={"width": 1280, "height": 720}, device_scale_factor=1)
-                touch_page.goto(f"http://127.0.0.1:{server.server_port}/index.html", wait_until="load", timeout=60_000)
-                touch_page.wait_for_selector("canvas", timeout=60_000)
-                touch_page.wait_for_timeout(2_000)
-                touch_page.mouse.move(96, 622)
-                touch_page.mouse.down()
-                touch_page.mouse.move(138, 622, steps=5)
-                touch_page.wait_for_timeout(250)
-                touch_page.screenshot(path=str(artifact_dir / "web-virtual-joystick-active.png"), full_page=True)
-                touch_page.mouse.up()
-                touch_page.set_viewport_size({"width": 844, "height": 390})
-                touch_page.wait_for_timeout(750)
-                touch_canvas_box = touch_page.locator("canvas").first.bounding_box()
+                # Exercise the virtual joystick and landscape touch layout before the
+                # story walkthrough, then restart the browser page at its desktop size.
+                page.mouse.move(96, 622)
+                page.mouse.down()
+                page.mouse.move(138, 622, steps=5)
+                page.wait_for_timeout(250)
+                page.screenshot(path=str(artifact_dir / "web-virtual-joystick-active.png"), full_page=True)
+                page.mouse.up()
+                page.set_viewport_size({"width": 844, "height": 390})
+                page.wait_for_timeout(750)
+                touch_canvas_box = page.locator("canvas").first.bounding_box()
                 if touch_canvas_box is None or touch_canvas_box["width"] < 640 or touch_canvas_box["height"] < 360:
                     raise AssertionError(f"Unexpected landscape touch canvas bounds: {touch_canvas_box}")
-                touch_page.screenshot(path=str(artifact_dir / "web-touch-landscape.png"), full_page=True)
+                page.screenshot(path=str(artifact_dir / "web-touch-landscape.png"), full_page=True)
                 result["touch_landscape_canvas_box"] = touch_canvas_box
-                touch_page.close()
+                page.close()
+
+                # Use a fresh engine instance at desktop size for deterministic game input.
+                page = browser.new_page(viewport={"width": 1280, "height": 720}, device_scale_factor=1)
+                page.on(
+                    "console",
+                    lambda message: result["console_errors"].append(message.text)
+                    if message.type == "error"
+                    else None,
+                )
+                page.on("pageerror", lambda error: result["page_errors"].append(str(error)))
+                page.on(
+                    "requestfailed",
+                    lambda request: result["request_failures"].append(
+                        {"url": request.url, "failure": request.failure}
+                    ),
+                )
+                page.goto(
+                    f"http://127.0.0.1:{server.server_port}/index.html",
+                    wait_until="load",
+                    timeout=60_000,
+                )
+                page.wait_for_selector("canvas", timeout=60_000)
+                page.wait_for_timeout(3_000)
 
                 with tempfile.TemporaryDirectory(prefix="wonder-isle-seed-planted-") as temp_dir:
                     fixture_path = Path(temp_dir) / "seed-planted-save.json"
