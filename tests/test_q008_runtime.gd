@@ -85,7 +85,7 @@ func _run() -> void:
 	_expect(main.game_state.q008_path_slot_occupants == [1, 2, 0], "Q008 must allow materials in arbitrary slot order")
 	_expect(main.game_state.is_q008_complete(), "three runtime Q008 placements must complete the task")
 	_expect(main._q008_prompt_text() == "小路连起来完成！", "Q008 completion must update the path-area prompt")
-	_expect(main.message == "小路连起来完成！", "Q008 completion must show direct feedback")
+	_expect(main.message == "三块石板连成小路！小路整理完成。", "Q008 completion must show direct feedback")
 	_expect(_read_save().get("q008_completed") == true, "Q008 completion must save immediately")
 
 	main._pointer_down(slot_0)
@@ -127,6 +127,7 @@ func _complete_main_story_runtime() -> void:
 	for plant_id in range(3):
 		main.game_state.collect_q005_plant(plant_id)
 		main.game_state.place_q005_plant(plant_id, plant_id)
+	main.game_state.deliver_q005_harvest()
 	main._save_game()
 
 
@@ -137,6 +138,8 @@ func _complete_prior_optional_tasks() -> void:
 	main.game_state.collect_q007_shell()
 	for material_id in range(3):
 		main.game_state.collect_q009_material(material_id)
+	for delivery_id in range(3):
+		main.game_state.deliver_next_q009_material()
 	for seed_id in range(3):
 		main.game_state.collect_q010_seed(seed_id)
 	main._save_game()

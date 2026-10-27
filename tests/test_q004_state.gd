@@ -35,7 +35,7 @@ func _run() -> void:
 	_expect(not state.deliver_wood(2), "completed Q004 must not deliver wood again")
 
 	var saved: Dictionary = state.to_save_data()
-	_expect(saved.get("schema_version") == 12, "Q004 save must remain compatible with Schema 12")
+	_expect(saved.get("schema_version") == 13, "Q004 save must remain compatible with Schema 13")
 	_expect(saved.get("wood_collected") == [true, true, true], "save must contain all collected Q004 woods")
 	_expect(saved.get("wood_delivered") == [true, true, true], "save must contain all delivered Q004 woods")
 	_expect(saved.get("q004_completed") == true, "save must contain Q004 completion")

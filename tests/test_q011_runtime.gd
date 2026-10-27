@@ -54,6 +54,9 @@ func _run() -> void:
 	_expect(main.game_state.collect_q007_shell(), "Q007 must complete before Q009")
 	for material_id in range(3):
 		_expect(main.game_state.collect_q009_material(material_id), "Q009 must complete before Q010")
+	_expect(not main.game_state.is_q009_complete(), "Q009 materials must be delivered before Q010")
+	for delivery_id in range(3):
+		_expect(main.game_state.deliver_next_q009_material(), "Q009 birdhouse delivery must unlock Q010")
 	_expect(main._can_use_q010_side_task(), "Q009 completion must reveal Q010")
 	_expect(not main._can_use_q008_side_task(), "Q008 must remain hidden until Q010 is complete")
 	for seed_id in range(3):
@@ -66,16 +69,18 @@ func _run() -> void:
 	_expect(main.q011_button.visible, "the Q011 control must appear after Q008 is finished")
 	_expect(not main.game_state.is_q011_complete(), "the extra plot must start unfinished")
 	_expect(main.q011_button.text == "开始整理", "the Q011 button must directly name the next action")
+	_expect(not main._should_show_q011_area_contents(), "Q011 slots and tray content must stay hidden until the start button is pressed")
 	main._update_interact_button()
 	_expect(not main.interact_button.visible, "the collection button must stay out of the way while Q011 awaits item placement")
-	_expect(main._task_prompt_text() == "额外地块整理：先点“开始整理”，再放置 3 件物品（0/3）。", "the inactive Q011 step must explain how to begin")
-	_expect(main._task_action_hint_text().contains("右下角已显示 3 件物品"), "the Q011 hint must identify both the visible tray and start button")
-	_expect(main.game_state.q011_item_is_available(1) and main._q011_item_inventory_rect(1).size.x > 0.0, "the tray items must be available before entering placement mode")
+	_expect(main._task_prompt_text() == "额外地块整理：先点右上角“开始整理”，再放置 3 件物品（0/3）。", "the inactive Q011 step must explain how to begin")
+	_expect(main._task_action_hint_text().contains("点下后物品托盘才会出现"), "the Q011 hint must explain that the tray appears after starting")
+	_expect(main.game_state.q011_item_is_available(1) and main._q011_item_inventory_rect(1).size.x > 0.0, "the tray items must remain ready before entering placement mode")
 	var q011_button_style: StyleBox = main.q011_button.get_theme_stylebox("normal")
 	_expect(q011_button_style is StyleBoxFlat and q011_button_style.bg_color == Color("68bd72"), "the Q011 start button must be highlighted as the next action")
 
 	main.q011_button.emit_signal("pressed")
 	_expect(main.q011_mode, "the Q011 control must enter its independent placement mode")
+	_expect(main._should_show_q011_area_contents(), "the item slots must appear only after placement mode starts")
 	main._update_interact_button()
 	_expect(not main.interact_button.visible, "the collection button must remain hidden during Q011 drag placement")
 	_expect(not main.build_mode, "Q011 mode must exclude Q006 build mode")
@@ -113,17 +118,18 @@ func _run() -> void:
 	_expect(main.build_mode, "Q006 build mode must still open after Q011 unlock")
 	_expect(not main.q011_button.visible, "the Q011 control must not overlap Q006 build controls")
 	_expect(main._task_prompt_text() == "花园装饰已完成，可拖动已摆放的装饰调整位置。", "Q011 must not replace the active build-mode prompt")
-	_expect(main._task_action_hint_text() == "拖动已摆放的装饰换位，或点“移除装饰”后收回。", "Q011 must not replace the active build-mode instructions")
-	var q006_slot: Vector2 = main._q006_decor_slot_rect(0).get_center()
+	_expect(main._task_action_hint_text() == "在右侧草地拖动装饰即可自由调整位置；点“移除装饰”可收回托盘。", "Q011 must not replace the active build-mode instructions")
+	var q006_position: Vector2 = main._q006_decor_rect(0).get_center()
 	main._toggle_remove_mode()
-	_mouse_button(q006_slot, true)
+	_mouse_button(q006_position, true)
 	_expect(main.game_state.q006_decor_inventory[0], "completed Q006 decorations must remain editable")
 	main._toggle_remove_mode()
 	_mouse_button(main._q006_decor_inventory_rect(0).get_center(), true)
 	_expect(main.dragging_q006_decor == 0, "Q006 decoration dragging must remain available in its own mode")
-	_mouse_motion(q006_slot)
-	_mouse_button(q006_slot, false)
-	_expect(main.game_state.q006_slot_occupants[0] == 0, "Q006 placement must continue to use its own state")
+	var free_position := Vector2(1030, 210)
+	_mouse_motion(free_position)
+	_mouse_button(free_position, false)
+	_expect(main.game_state.q006_decor_positions[0] == free_position, "Q006 decoration movement must continue to use its own free-position state")
 	_expect(main.game_state.q011_slot_occupants == [1, -1, -1], "Q006 placement must not change Q011 state")
 	main.build_button.emit_signal("pressed")
 	_expect(not main.build_mode, "Q006 build mode must exit normally")
@@ -153,7 +159,7 @@ func _run() -> void:
 	_expect(main.build_mode, "the optional build button must still allow garden adjustments after completion")
 	_expect(main._task_stage_label() == "建造", "optional garden editing must be distinct from unfinished tasks")
 	_expect(main._task_prompt_text() == "花园装饰已完成，可拖动已摆放的装饰调整位置。", "the build mode must explain how to adjust completed decorations")
-	_expect(main._task_action_hint_text() == "拖动已摆放的装饰换位，或点“移除装饰”后收回。", "the build mode must explain both available editing actions")
+	_expect(main._task_action_hint_text() == "在右侧草地拖动装饰即可自由调整位置；点“移除装饰”可收回托盘。", "the build mode must explain both available editing actions")
 
 	main.queue_free()
 	await process_frame
@@ -183,6 +189,7 @@ func _complete_q004_and_q005(target) -> void:
 	for plant_id in range(3):
 		target.game_state.collect_q005_plant(plant_id)
 		target.game_state.place_q005_plant(plant_id, plant_id)
+	target.game_state.deliver_q005_harvest()
 	target._save_game()
 
 

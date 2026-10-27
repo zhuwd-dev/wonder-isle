@@ -51,7 +51,7 @@ func _write_unlocked() -> void:
 	_complete_q003(main)
 	main._save_game()
 	_expect(not main.game_state.q007_shell_collected, "unlocked save must not collect the shell")
-	_expect(_read_save().get("schema_version") == 12, "unlocked save must use Schema 12")
+	_expect(_read_save().get("schema_version") == 13, "unlocked save must use Schema 13")
 	main.queue_free()
 
 

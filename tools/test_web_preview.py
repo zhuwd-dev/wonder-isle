@@ -54,6 +54,8 @@ def main() -> int:
     turtle_garden_screenshot_path = artifact_dir / "web-q005-turtle-garden.png"
     turtle_growth_screenshot_path = artifact_dir / "web-q005-watered-growth.png"
     turtle_collection_screenshot_path = artifact_dir / "web-q005-plant-collected.png"
+    turtle_bouquet_screenshot_path = artifact_dir / "web-q005-bouquet-ready.png"
+    turtle_delivery_screenshot_path = artifact_dir / "web-q005-bouquet-delivered.png"
     ending_screenshot_path = artifact_dir / "web-q012-ending.png"
     completed_screenshot_path = artifact_dir / "web-q012-complete.png"
     final_island_screenshot_path = artifact_dir / "web-q011-all-tasks-complete.png"
@@ -307,9 +309,9 @@ def main() -> int:
                         page.screenshot(path=str(turtle_garden_screenshot_path), full_page=True)
                         result["q005_turtle_garden_screenshot"] = str(turtle_garden_screenshot_path)
 
-                        # Play the ordered Q005 interaction in the browser: reach the
-                        # watering point, use the bottom-right control, then collect a
-                        # grown plant and confirm the save reflects that sequence.
+                        # Play the complete Q005 interaction in the browser: water,
+                        # collect all three blooms without a redundant tray drag, then
+                        # carry the bouquet to the turtle and deliver it.
                         page.mouse.click(800, 600)
                         for key, duration_ms in (("w", 500), ("d", 2_750), ("s", 570)):
                             page.keyboard.down(key)
@@ -340,7 +342,7 @@ def main() -> int:
                             page.wait_for_timeout(500)
                         if watered_save.get("q005_watered") is not True:
                             raise AssertionError("The bottom-right control did not water the Q005 garden")
-                        for key, duration_ms in (("d", 200), ("w", 200)):
+                        for key, duration_ms in (("d", 190), ("w", 250), ("s", 150)):
                             page.keyboard.down(key)
                             page.wait_for_timeout(duration_ms)
                             page.keyboard.up(key)
@@ -367,9 +369,87 @@ def main() -> int:
                             page.wait_for_timeout(500)
                         if collected_save.get("q005_plants_collected") != [True, False, False]:
                             raise AssertionError("The Q005 plant was not collected after watering through the browser")
+                        if collected_save.get("q005_plant_slots") != [True, False, False] or collected_save.get("q005_completed") is True:
+                            raise AssertionError("Harvesting must leave the flower in its bed and wait for bouquet delivery")
+
+                        # The first pickup leaves the player inside range of the
+                        # neighboring bloom. Move only one short step toward the
+                        # middle flower, then collect the middle and right blooms
+                        # from the same spot so the browser test cannot overshoot.
+                        page.keyboard.down("d")
+                        page.wait_for_timeout(180)
+                        page.keyboard.up("d")
+                        for harvest_step in range(1, 3):
+                            page.mouse.click(1_214, 662)
+                            page.wait_for_timeout(180)
+                            page.screenshot(
+                                path=str(artifact_dir / f"web-q005-harvest-{harvest_step + 1}.png"),
+                                full_page=True,
+                            )
+                            if harvest_step == 1:
+                                page.keyboard.down("d")
+                                page.wait_for_timeout(90)
+                                page.keyboard.up("d")
+                        harvested_save = {}
+                        for _ in range(12):
+                            harvested_save = page.evaluate(
+                                """async key => new Promise((resolve, reject) => {
+                                    const opening = indexedDB.open('/userfs');
+                                    opening.onerror = () => reject(opening.error);
+                                    opening.onsuccess = () => {
+                                        const transaction = opening.result.transaction('FILE_DATA', 'readonly');
+                                        const request = transaction.objectStore('FILE_DATA').get(key);
+                                        request.onsuccess = () => resolve(JSON.parse(new TextDecoder().decode(new Uint8Array(request.result.contents))));
+                                        request.onerror = () => reject(request.error);
+                                    };
+                                })""",
+                                save_key,
+                            )
+                            if harvested_save.get("q005_plants_collected") == [True, True, True]:
+                                break
+                            page.wait_for_timeout(500)
+                        if harvested_save.get("q005_plants_collected") != [True, True, True]:
+                            raise AssertionError(
+                                "The browser must allow the full three-flower harvest; latest save: "
+                                + json.dumps(harvested_save, ensure_ascii=False)
+                            )
+                        if harvested_save.get("q005_harvest_delivered") is True or harvested_save.get("q005_completed") is True:
+                            raise AssertionError("A full harvest must still wait for the turtle delivery interaction")
+                        page.screenshot(path=str(turtle_bouquet_screenshot_path), full_page=True)
+
+                        for key, duration_ms in (("d", 150), ("w", 700)):
+                            page.keyboard.down(key)
+                            page.wait_for_timeout(duration_ms)
+                            page.keyboard.up(key)
+                        page.screenshot(path=str(artifact_dir / "web-q005-at-turtle.png"), full_page=True)
+                        page.mouse.click(1_214, 662)
+                        page.wait_for_timeout(180)
+                        delivered_save = {}
+                        for _ in range(12):
+                            delivered_save = page.evaluate(
+                                """async key => new Promise((resolve, reject) => {
+                                    const opening = indexedDB.open('/userfs');
+                                    opening.onerror = () => reject(opening.error);
+                                    opening.onsuccess = () => {
+                                        const transaction = opening.result.transaction('FILE_DATA', 'readonly');
+                                        const request = transaction.objectStore('FILE_DATA').get(key);
+                                        request.onsuccess = () => resolve(JSON.parse(new TextDecoder().decode(new Uint8Array(request.result.contents))));
+                                        request.onerror = () => reject(request.error);
+                                    };
+                                })""",
+                                save_key,
+                            )
+                            if delivered_save.get("q005_harvest_delivered") is True:
+                                break
+                            page.wait_for_timeout(500)
+                        if delivered_save.get("q005_harvest_delivered") is not True or delivered_save.get("q005_completed") is not True:
+                            raise AssertionError("Interacting with the turtle must deliver the bouquet and complete Q005")
+                        page.screenshot(path=str(turtle_delivery_screenshot_path), full_page=True)
                         result["q005_watered_browser_flow"] = "passed"
                         result["q005_growth_screenshot"] = str(turtle_growth_screenshot_path)
                         result["q005_collection_screenshot"] = str(turtle_collection_screenshot_path)
+                        result["q005_bouquet_screenshot"] = str(turtle_bouquet_screenshot_path)
+                        result["q005_delivery_screenshot"] = str(turtle_delivery_screenshot_path)
 
                     page.mouse.click(1150, 50)
                     page.wait_for_timeout(1_000)
@@ -397,7 +477,9 @@ def main() -> int:
                     page.keyboard.down("d")
                     page.wait_for_timeout(900)
                     page.keyboard.up("d")
-                    page.keyboard.press("e")
+                    # Use the right-thumb interaction control for the final
+                    # celebration, matching the intended touch-friendly action.
+                    page.mouse.click(1_214, 662)
                     page.wait_for_timeout(1_000)
                     page.evaluate(
                         """async ({key, payload}) => new Promise((resolve, reject) => {
@@ -440,8 +522,14 @@ def main() -> int:
                     page.keyboard.down("w")
                     page.wait_for_timeout(450)
                     page.keyboard.up("w")
+                    # Finish the approach using the same prominent right-thumb
+                    # control the player sees; the small final correction keeps
+                    # the avatar inside the rabbit interaction radius.
+                    page.keyboard.down("w")
+                    page.wait_for_timeout(150)
+                    page.keyboard.up("w")
                     page.screenshot(path=str(artifact_dir / "web-q012-at-rabbit.png"), full_page=True)
-                    page.keyboard.press("e")
+                    page.mouse.click(1_214, 662)
                     page.wait_for_timeout(1_500)
                     page.screenshot(path=str(artifact_dir / "web-q012-after-interact.png"), full_page=True)
                     page.wait_for_timeout(6_000)

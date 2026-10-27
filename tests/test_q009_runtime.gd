@@ -46,6 +46,8 @@ func _run() -> void:
 	main.player_position = main.Q012_RABBIT_POSITION
 	main._try_collect_nearby()
 	_expect(main.game_state.is_q012_complete(), "the main story ending must unlock the optional quests")
+	main.celebration_remaining = 0.0
+	main._update_interact_button()
 	main.player_position = main.Q007_SHELL_POSITION
 	main._try_collect_nearby()
 	_expect(main.game_state.is_q007_complete(), "the shell task must complete before Q009 is revealed")
@@ -56,14 +58,32 @@ func _run() -> void:
 
 	for material_id in range(3):
 		main.player_position = main.Q009_MATERIAL_POSITIONS[material_id]
+		main._update_interact_button()
+		_expect(main.interact_button.text == "收材料" and main.interaction_button_ready, "the action button must identify a nearby birdhouse material")
 		_press_interact()
 		_expect(main.game_state.q009_materials_collected[material_id], "runtime interaction must collect Q009 material %d" % material_id)
 		_expect(main.game_state.q009_material_count() == material_id + 1, "Q009 runtime progress must count collected materials")
 
-	_expect(main.game_state.is_q009_complete(), "collecting three Q009 materials must complete the task")
+	_expect(not main.game_state.is_q009_complete(), "collecting three materials must not skip the birdhouse delivery")
+	_expect(main._q009_prompt_text() == "材料已收集 3/3，鸟屋交付 0/3。", "the birdhouse card must distinguish collected from delivered materials")
+	_expect(main._q009_action_hint_text().contains("逐份交材料"), "the birdhouse card must explain the hands-on construction step")
+	main.player_position = main.Q009_MATERIAL_POSITIONS[0]
+	main._update_interact_button()
+	_expect(main.interact_button.text == "去鸟屋" and not main.interaction_button_ready, "the action button must guide the player from the materials to the birdhouse")
+	main._try_collect_nearby()
+	_expect(main.game_state.q009_material_delivery_count() == 0, "materials must not deliver from a distance")
+	main.player_position = main.Q009_BIRDHOUSE_POSITION
+	main._update_interact_button()
+	_expect(main.interact_button.text == "交材料" and main.interaction_button_ready, "the birdhouse must expose a nearby material delivery interaction")
+	for delivery_id in range(3):
+		_press_interact()
+		_expect(main.game_state.q009_material_delivery_count() == delivery_id + 1, "each birdhouse interaction must add visible construction progress")
+		if delivery_id < 2:
+			_expect(not main.game_state.is_q009_complete(), "the birdhouse must remain under construction until all three deliveries")
+	_expect(main.game_state.is_q009_complete(), "three birdhouse deliveries must complete the task")
 	_expect(main.game_state.q009_bird_interaction_unlocked(), "Q009 completion must unlock bird interaction")
 	_expect(main._should_show_q009_task_card(), "the completed birdhouse card must keep its optional greeting available during Q010")
-	_expect(main.message == "鸟屋计划完成！小鸟互动已开放。", "Q009 completion must show direct feedback")
+	_expect(main.message == "鸟屋建好了！去小鸟身边和它打个招呼。", "Q009 completion must show direct feedback and its next interaction")
 	_expect(main._q009_prompt_text() == "鸟屋计划完成！小鸟互动已开放。", "Q009 completion prompt must be visible")
 	_expect(main._q009_action_hint_text() == "可选：靠近小鸟按互动键打招呼。", "Q009 completion must label the bird greeting as optional")
 	_expect(_read_save().get("q009_completed") == true, "Q009 completion must save immediately")
@@ -98,6 +118,7 @@ func _complete_q004_runtime() -> void:
 	for plant_id in range(3):
 		main.game_state.collect_q005_plant(plant_id)
 		main.game_state.place_q005_plant(plant_id, plant_id)
+	main.game_state.deliver_q005_harvest()
 	main._save_game()
 
 

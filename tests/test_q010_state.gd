@@ -40,14 +40,14 @@ func _init() -> void:
 	_expect(not state.collect_q010_seed(0), "completed Q010 must reject repeated collection")
 
 	var saved: Dictionary = state.to_save_data()
-	_expect(saved.get("schema_version") == 12, "Q010 saves must use Schema 12")
-	_expect(saved.get("q010_seeds_collected") == [true, true, true], "Schema 12 must save Q010 seed progress")
+	_expect(saved.get("schema_version") == 13, "Q010 saves must use Schema 13")
+	_expect(saved.get("q010_seeds_collected") == [true, true, true], "Schema 13 must save Q010 seed progress")
 	_expect(not saved.has("q010_completed"), "Q010 must not save a redundant completion field")
 
 	var restored = state_script.new()
-	_expect(restored.load_save_data(saved), "a valid Schema 12 save must load")
-	_expect(restored.q010_seeds_collected == [true, true, true], "Schema 12 must restore Q010 seeds")
-	_expect(restored.is_q010_complete(), "Schema 12 must restore Q010 completion")
+	_expect(restored.load_save_data(saved), "a valid Schema 13 save must load")
+	_expect(restored.q010_seeds_collected == [true, true, true], "Schema 13 must restore Q010 seeds")
+	_expect(restored.is_q010_complete(), "Schema 13 must restore Q010 completion")
 
 	var prior_tasks = state_script.new()
 	_complete_all_prior_tasks(prior_tasks)
@@ -102,7 +102,7 @@ func _init() -> void:
 			old_save.erase("q009_materials_collected")
 			old_save.erase("q009_completed")
 		var migrated = state_script.new()
-		_expect(migrated.load_save_data(old_save), "Schema %d must migrate to Schema 12" % schema_version)
+		_expect(migrated.load_save_data(old_save), "Schema %d must migrate to Schema 13" % schema_version)
 		_expect(migrated.q010_seeds_collected == [false, false, false], "Schema %d migration must start Q010 empty" % schema_version)
 		_expect(not migrated.is_q010_complete(), "Schema %d migration must leave Q010 incomplete" % schema_version)
 
@@ -149,6 +149,7 @@ func _complete_q005(state) -> void:
 		state.place_q005_plant(plant_id, plant_id)
 
 
+	state.deliver_q005_harvest()
 func _complete_all_prior_tasks(state) -> void:
 	_complete_q005(state)
 	for wood_id in range(3):
@@ -161,6 +162,8 @@ func _complete_all_prior_tasks(state) -> void:
 		state.place_q008_path(material_id, material_id)
 	for material_id in range(3):
 		state.collect_q009_material(material_id)
+	for delivery_id in range(3):
+		state.deliver_next_q009_material()
 
 
 func _schema9_save() -> Dictionary:

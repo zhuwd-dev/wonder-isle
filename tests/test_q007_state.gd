@@ -29,14 +29,14 @@ func _init() -> void:
 	_expect(not state.collect_q007_shell(), "the shell must not be collected twice")
 
 	var saved: Dictionary = state.to_save_data()
-	_expect(saved.get("schema_version") == 12, "Q007 must use Schema 12")
-	_expect(saved.get("q007_shell_collected") == true, "Schema 12 must save shell collection")
-	_expect(saved.get("q007_completed") == true, "Schema 12 must save Q007 completion")
-	_expect(saved.get("q007_reward_unlocked") == true, "Schema 12 must save the Q007 reward")
+	_expect(saved.get("schema_version") == 13, "Q007 must use Schema 13")
+	_expect(saved.get("q007_shell_collected") == true, "Schema 13 must save shell collection")
+	_expect(saved.get("q007_completed") == true, "Schema 13 must save Q007 completion")
+	_expect(saved.get("q007_reward_unlocked") == true, "Schema 13 must save the Q007 reward")
 
 	var restored = state_script.new()
-	_expect(restored.load_save_data(saved), "a valid Schema 12 save must load")
-	_expect(restored.is_q007_complete(), "Schema 12 must restore Q007 completion")
+	_expect(restored.load_save_data(saved), "a valid Schema 13 save must load")
+	_expect(restored.is_q007_complete(), "Schema 13 must restore Q007 completion")
 
 	for schema_version in range(1, 8):
 		var old_save := _schema6_save()
@@ -69,7 +69,7 @@ func _init() -> void:
 			old_save.erase("q007_completed")
 			old_save.erase("q007_reward_unlocked")
 		var migrated = state_script.new()
-		_expect(migrated.load_save_data(old_save), "Schema %d must migrate to Schema 12" % schema_version)
+		_expect(migrated.load_save_data(old_save), "Schema %d must migrate to Schema 13" % schema_version)
 		_expect(not migrated.q007_shell_collected, "Schema %d migration must not collect Q007 shell" % schema_version)
 		_expect(not migrated.q007_completed, "Schema %d migration must not complete Q007" % schema_version)
 		_expect(not migrated.q007_reward_unlocked, "Schema %d migration must not grant Q007 reward" % schema_version)

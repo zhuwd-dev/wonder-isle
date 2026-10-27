@@ -33,12 +33,20 @@ const Q005_PLANT_SLOTS := [
 ]
 const Q005_GARDEN_RECT := Rect2(1000, 438, 160, 84)
 const Q005_TURTLE_POSITION := Vector2(1160, 280)
+const Q005_TURTLE_INTERACTION_RADIUS := 72.0
 const WOOD_POSITIONS := [Vector2(160, 330), Vector2(360, 400), Vector2(620, 540)]
 const HOUSE_POSITION := Vector2(520, 500)
 const HOUSE_INTERACTION_RADIUS := 88.0
 const HOUSE_RECT := Rect2(448, 442, 144, 116)
 const Q012_RABBIT_POSITION := Vector2(592, 226)
 const Q006_DECOR_PLOT_RECT := Rect2(928, 544, 288, 30)
+const Q006_DECOR_BOUNDS := Rect2(916, 148, 306, 484)
+const Q006_DECOR_ISLAND_POLYGON := [
+	Vector2(944, 162), Vector2(958, 146), Vector2(1024, 138), Vector2(1138, 146),
+	Vector2(1180, 170), Vector2(1194, 224), Vector2(1190, 562), Vector2(1164, 592),
+	Vector2(1070, 606), Vector2(974, 600), Vector2(940, 568),
+]
+const Q006_DECOR_CLEARANCE := 58.0
 const Q006_DECOR_SLOTS := [
 	Rect2(940, 547, 76, 24),
 	Rect2(1034, 547, 76, 24),
@@ -59,6 +67,7 @@ const Q009_MATERIAL_LABELS := ["树枝", "羽毛", "草绳"]
 const Q009_BIRDHOUSE_POSITION := Vector2(650, 500)
 const Q009_BIRD_POSITION := Vector2(650, 465)
 const Q009_BIRD_INTERACTION_RADIUS := 72.0
+const Q009_BIRDHOUSE_INTERACTION_RADIUS := 82.0
 const Q010_SEED_POSITIONS := [Vector2(180, 430), Vector2(550, 300), Vector2(260, 430)]
 const Q010_SEED_LABELS := ["红花种子", "蓝花种子", "金色种子"]
 const Q011_AREA_RECT := Rect2(196, 568, 188, 56)
@@ -82,6 +91,8 @@ const COLLECT_SPARKLE_DURATION := 0.72
 const Q005_GROWTH_DURATION := 1.4
 const BRIDGE_REPAIR_DURATION := 1.05
 const CELEBRATION_DURATION := 2.4
+const TASK_TRANSITION_DURATION := 1.15
+const POND_INTERACTION_RADIUS := 112.0
 const BRIDGE_SLOTS := [
 	Rect2(772, 356, 34, 38),
 	Rect2(813, 356, 34, 38),
@@ -132,6 +143,10 @@ var collect_sparkle_color := Color("fff1a8")
 var q005_growth_remaining := 0.0
 var bridge_repair_remaining := 0.0
 var celebration_remaining := 0.0
+var task_transition_remaining := 0.0
+var task_transition_position := Vector2.ZERO
+var task_transition_text := ""
+var pond_ripple_remaining := 0.0
 var touch_direction := Vector2.ZERO
 var virtual_joystick_active := false
 var virtual_joystick_mouse_active := false
@@ -194,6 +209,8 @@ func _physics_process(delta: float) -> void:
 	q005_growth_remaining = maxf(q005_growth_remaining - delta, 0.0)
 	bridge_repair_remaining = maxf(bridge_repair_remaining - delta, 0.0)
 	celebration_remaining = maxf(celebration_remaining - delta, 0.0)
+	task_transition_remaining = maxf(task_transition_remaining - delta, 0.0)
+	pond_ripple_remaining = maxf(pond_ripple_remaining - delta, 0.0)
 	player_is_moving = false
 	_tick_transient_message(delta)
 	if Input.is_action_just_pressed("interact"):
@@ -220,6 +237,13 @@ func _start_collect_sparkles(position: Vector2, color := Color("fff1a8")) -> voi
 	collect_sparkle_color = color
 	collect_sparkle_remaining = COLLECT_SPARKLE_DURATION
 	queue_redraw()
+
+
+func _start_task_transition(position: Vector2, label: String) -> void:
+	task_transition_position = position
+	task_transition_text = label
+	task_transition_remaining = TASK_TRANSITION_DURATION
+	_start_collect_sparkles(position, Color("fff1a8"))
 
 
 func _character_bob(phase: float, amplitude := 1.8) -> float:
@@ -506,7 +530,7 @@ func _update_interact_button() -> void:
 		action_tooltip = "把右下角托盘物品拖进左侧空槽"
 	elif build_mode:
 		action_label = "摆装饰"
-		action_tooltip = "把托盘里的装饰拖到花园空槽"
+		action_tooltip = "把托盘里的装饰拖到右侧草地空位"
 	elif game_state.can_start_q012():
 		action_label = "庆祝"
 		action_ready = player_position.distance_to(Q012_RABBIT_POSITION) <= COLLECTION_RADIUS
@@ -518,26 +542,32 @@ func _update_interact_button() -> void:
 	elif _can_start_q005_stage():
 		var watering_distance := player_position.distance_to(Q005_WATERING_POINT_POSITION)
 		var nearby_plant_id := _nearest_uncollected_q005_plant()
-		if not game_state.q005_watered:
-			if watering_distance <= Q005_INTERACTION_RADIUS:
-				action_label = "浇水"
-				action_ready = true
-			elif nearby_plant_id >= 0:
-				action_label = "先浇水"
-			else:
-				action_label = "浇水"
+		var turtle_distance := player_position.distance_to(Q005_TURTLE_POSITION)
+		var pond_distance := player_position.distance_to(POND_RECT.get_center())
+		if game_state.q005_plant_count() == GameState.Q005_PLANT_TOTAL and not game_state.q005_harvest_delivered:
+			action_label = "送花" if turtle_distance <= Q005_TURTLE_INTERACTION_RADIUS else "找乌龟"
+			action_ready = turtle_distance <= Q005_TURTLE_INTERACTION_RADIUS
+			action_tooltip = "把采好的花交给乌龟" if action_ready else "花已采齐，回到乌龟身边交给它"
+		elif turtle_distance <= Q005_TURTLE_INTERACTION_RADIUS:
+			action_label = "问乌龟"
+			action_ready = true
+			action_tooltip = "和乌龟聊聊花园的照料方法"
+		elif pond_distance <= POND_INTERACTION_RADIUS:
+			action_label = "看池塘"
+			action_ready = true
+			action_tooltip = "看看刚整理好的池塘"
+		elif not game_state.q005_watered:
+			action_label = "浇水"
+			action_ready = watering_distance <= Q005_INTERACTION_RADIUS
 			action_tooltip = "先给乌龟花园浇水，花苗才会长大"
 		else:
 			if nearby_plant_id >= 0:
 				action_label = "采花"
 				action_ready = true
-				action_tooltip = "靠近长好的花苗并收集"
-			elif game_state.q005_plant_count() == GameState.Q005_PLANT_TOTAL:
-				action_label = "摆花"
-				action_tooltip = "把右下角托盘中的花苗拖到花园空槽"
+				action_tooltip = "采下这朵花；花圃会保留盛开的植株"
 			else:
 				action_label = "采花"
-				action_tooltip = "寻找长好的花苗并收集"
+				action_tooltip = "沿着花圃寻找还没采过的花"
 	elif _can_use_q010_side_task() and game_state.can_start_q010():
 		action_label = "收种子"
 		action_ready = _nearest_uncollected_q010_seed() >= 0
@@ -561,9 +591,15 @@ func _update_interact_button() -> void:
 			action_ready = near_wood_id >= 0
 			action_tooltip = "木材齐了就去狐狸小屋交付" if game_state.wood_count() >= GameState.Q004_WOOD_TOTAL else "靠近木材并收集"
 	elif _can_use_q009_side_task() and game_state.can_start_q009():
-		action_label = "收材料"
-		action_ready = _nearest_uncollected_q009_material() >= 0
-		action_tooltip = "靠近树枝、羽毛或草绳并收集"
+		if game_state.q009_material_count() == GameState.Q009_MATERIAL_TOTAL:
+			var near_birdhouse := player_position.distance_to(Q009_BIRDHOUSE_POSITION) <= Q009_BIRDHOUSE_INTERACTION_RADIUS
+			action_label = "交材料" if near_birdhouse else "去鸟屋"
+			action_ready = near_birdhouse
+			action_tooltip = "在鸟屋旁逐份交付材料（%d/3）" % game_state.q009_material_delivery_count()
+		else:
+			action_label = "收材料"
+			action_ready = _nearest_uncollected_q009_material() >= 0
+			action_tooltip = "靠近树枝、羽毛或草绳并收集；集齐后到鸟屋交付"
 	elif _can_use_q009_side_task() and game_state.q009_bird_interaction_unlocked():
 		action_label = "打招呼"
 		action_ready = player_position.distance_to(Q009_BIRD_POSITION) <= Q009_BIRD_INTERACTION_RADIUS
@@ -582,9 +618,14 @@ func _update_interact_button() -> void:
 			action_label = "收木板"
 			action_ready = true
 		action_tooltip = "靠近木板并收集"
-	elif _can_use_q008_side_task() and game_state.can_start_q008():
-		action_label = "铺石板"
-		action_tooltip = "把右下角石板拖到左侧小路空槽"
+	elif _can_show_pond_area() and player_position.distance_to(POND_RECT.get_center()) <= POND_INTERACTION_RADIUS:
+		action_label = "看池塘"
+		action_ready = true
+		action_tooltip = "按下互动按钮，看看池塘的变化"
+	elif player_position.distance_to(Q005_TURTLE_POSITION) <= Q005_TURTLE_INTERACTION_RADIUS and game_state.is_pond_complete():
+		action_label = "问乌龟"
+		action_ready = true
+		action_tooltip = "和乌龟聊聊小岛上的新变化"
 
 	if action_label == interaction_button_label and action_ready == interaction_button_ready and action_tooltip == interaction_button_tooltip:
 		interact_button.visible = _should_show_interact_button()
@@ -617,12 +658,14 @@ func _update_interact_button() -> void:
 func _should_show_interact_button() -> bool:
 	if game_state == null or q011_mode or build_mode:
 		return false
+	if game_state.is_q012_complete() and celebration_remaining > 0.0:
+		return false
 	if game_state.can_start_q012():
 		return true
 	if _can_use_q007_side_task() and game_state.can_start_q007():
 		return true
 	if _can_start_q005_stage():
-		return not game_state.q005_watered or game_state.q005_plant_count() < GameState.Q005_PLANT_TOTAL
+		return true
 	if _can_use_q010_side_task() and game_state.can_start_q010():
 		return true
 	if game_state.can_start_q004():
@@ -639,7 +682,7 @@ func _should_show_interact_button() -> bool:
 		return true
 	if not game_state.is_complete():
 		return game_state.board_count() < GameState.BOARD_TOTAL
-	return false
+	return _can_show_pond_area() and player_position.distance_to(POND_RECT.get_center()) <= POND_INTERACTION_RADIUS or player_position.distance_to(Q005_TURTLE_POSITION) <= Q005_TURTLE_INTERACTION_RADIUS and game_state.is_pond_complete()
 
 
 func _nearest_uncollected_board() -> int:
@@ -693,7 +736,7 @@ func _toggle_build_mode() -> void:
 	q006_decor_drag_from_slot = -1
 	q006_decor_drag_position = Vector2.ZERO
 	if build_mode:
-		message = "花园装饰模式已打开：拖动装饰到对应槽位。"
+		message = "花园装饰模式已打开：右侧草地都可摆放，绿色提示圈表示位置合适。"
 		message_color = Color("fff7cf")
 	else:
 		message = "已退出花园装饰模式。"
@@ -755,6 +798,7 @@ func _refresh_build_controls() -> void:
 	var q011_next_step := q011_button.visible and not q011_mode
 	q011_button.text = "退出整理" if q011_mode else "开始整理"
 	_apply_button_style(q011_button, q011_next_step)
+	_update_interact_button()
 
 
 func _apply_build_button_style(highlighted: bool) -> void:
@@ -837,6 +881,10 @@ func _can_show_q011_area() -> bool:
 	return _are_core_tasks_complete() and game_state.is_q012_complete() and game_state.is_q008_complete() and (game_state.can_start_q011() or game_state.is_q011_complete())
 
 
+func _should_show_q011_area_contents() -> bool:
+	return _can_show_q011_area() and (q011_mode or game_state.is_q011_complete())
+
+
 func _pointer_down(position: Vector2) -> void:
 	if dragging_board >= 0 or dragging_pond_stone >= 0 or dragging_q005_plant >= 0 or dragging_q006_decor >= 0 or dragging_q008_path >= 0 or dragging_q011_item >= 0:
 		return
@@ -857,12 +905,12 @@ func _pointer_down(position: Vector2) -> void:
 		return
 	if build_mode and _can_use_q006_build_mode():
 		if remove_decor_mode:
-			for slot_id in range(GameState.Q006_SLOT_TOTAL):
-				var placed_decor_id: int = game_state.q006_slot_occupants[slot_id]
-				if placed_decor_id >= 0 and _q006_decor_slot_rect(slot_id).grow(10).has_point(position):
-					if game_state.remove_q006_decoration(placed_decor_id, slot_id):
+			for placed_decor_id in range(GameState.Q006_DECOR_TOTAL):
+				var placed_slot: int = game_state.q006_slot_for_decoration(placed_decor_id)
+				if placed_slot >= 0 and _q006_decor_rect(placed_decor_id).grow(12).has_point(position):
+					if game_state.remove_q006_decoration(placed_decor_id, placed_slot):
 						_save_game()
-						message = "装饰已移除，可以重新摆放。"
+						message = "装饰已收回托盘，可以换个位置摆放。"
 						message_color = Color("d9ffd0")
 						queue_redraw()
 					return
@@ -870,13 +918,13 @@ func _pointer_down(position: Vector2) -> void:
 			message_color = Color("ffe1b8")
 			queue_redraw()
 			return
-		for slot_id in range(GameState.Q006_SLOT_TOTAL):
-			var placed_decor_id: int = game_state.q006_slot_occupants[slot_id]
-			if placed_decor_id >= 0 and _q006_decor_slot_rect(slot_id).grow(10).has_point(position):
+		for placed_decor_id in range(GameState.Q006_DECOR_TOTAL):
+			var placed_slot: int = game_state.q006_slot_for_decoration(placed_decor_id)
+			if placed_slot >= 0 and _q006_decor_rect(placed_decor_id).grow(12).has_point(position):
 				dragging_q006_decor = placed_decor_id
-				q006_decor_drag_from_slot = slot_id
+				q006_decor_drag_from_slot = placed_slot
 				q006_decor_drag_position = position
-				message = "把装饰拖到空槽位，绿色时松开。"
+				message = "拖动装饰到右侧草地，绿圈亮起时松开。"
 				message_color = Color("fff7cf")
 				queue_redraw()
 				return
@@ -885,7 +933,7 @@ func _pointer_down(position: Vector2) -> void:
 				dragging_q006_decor = decor_id
 				q006_decor_drag_from_slot = -1
 				q006_decor_drag_position = position
-				message = "把装饰拖到对应槽位，绿色时松开。"
+				message = "把装饰拖到右侧草地，绿圈亮起时松开。"
 				message_color = Color("fff7cf")
 				queue_redraw()
 				return
@@ -906,16 +954,9 @@ func _pointer_down(position: Vector2) -> void:
 				return
 
 	if _can_start_q005_stage():
-		for plant_id in range(GameState.Q005_PLANT_TOTAL):
-			if not game_state.q005_plants_collected[plant_id] or game_state.q005_plant_slots[plant_id]:
-				continue
-			if _q005_plant_inventory_rect(plant_id).has_point(position):
-				dragging_q005_plant = plant_id
-				q005_plant_drag_position = position
-				message = "把植物拖到花园中对应的空槽，绿色时松开。"
-				message_color = Color("fff7cf")
-				queue_redraw()
-				return
+		# Flower collection is an interaction step; the bloom remains in its bed,
+		# so there is no second inventory-to-the-same-plot drag operation.
+		pass
 
 	if _can_use_q008_side_task() and game_state.can_start_q008():
 		for material_id in range(GameState.Q008_PATH_SLOT_TOTAL):
@@ -969,25 +1010,25 @@ func _pointer_up(position: Vector2) -> void:
 	if dragging_q006_decor >= 0:
 		var decor_id := dragging_q006_decor
 		var from_slot := q006_decor_drag_from_slot
-		var target_slot := _q006_decor_slot_at(position)
 		var q006_was_complete: bool = game_state.is_q006_complete()
+		var drop_valid := _q006_decor_drop_is_valid(decor_id, position)
 		dragging_q006_decor = -1
 		q006_decor_drag_from_slot = -1
 		q006_decor_drag_position = Vector2.ZERO
 		var placed_successfully := false
-		if from_slot >= 0:
-			if target_slot >= 0 and game_state.move_q006_decoration(decor_id, from_slot, target_slot):
-				placed_successfully = true
-		else:
-			if target_slot >= 0 and game_state.place_q006_decoration(decor_id, target_slot):
-				placed_successfully = true
+		if drop_valid and from_slot >= 0:
+			placed_successfully = game_state.move_q006_decoration_to(decor_id, from_slot, position)
+		elif drop_valid:
+			placed_successfully = game_state.place_q006_decoration_at(decor_id, position)
 		if placed_successfully:
-			message = "装饰摆放成功！继续布置花园。"
+			_start_task_transition(position, "装饰摆好了")
+			message = "摆放成功！可在右侧草地自由移动，也能继续放下一件。"
 			message_color = Color("d9ffd0")
 			_save_game()
 			if not q006_was_complete and game_state.is_q006_complete():
 				build_mode = false
 				remove_decor_mode = false
+				_start_task_transition(position, "花园布置完成")
 				message = "花园装饰完成！回到兔子身边参加小岛庆祝。"
 				message_color = Color("fff1a8")
 		else:
@@ -1003,10 +1044,13 @@ func _pointer_up(position: Vector2) -> void:
 		dragging_pond_stone = -1
 		pond_drag_position = Vector2.ZERO
 		if target_slot >= 0 and game_state.place_pond_stone(stone_id):
-			message = "石头放置正确！继续摆好其他轮廓。"
+			_start_collect_sparkles(POND_SLOTS[target_slot].get_center(), Color("a9e7f0"))
+			message = "池边石头放好 %d/3！" % game_state.pond_stones_placed.count(true)
 			message_color = Color("d9ffd0")
 			_save_game()
 			if game_state.is_pond_complete():
+				pond_ripple_remaining = 1.0
+				_start_task_transition(POND_RECT.get_center(), "池塘恢复清澈")
 				message = "池塘整理好了！下一步：去照料乌龟的花园。"
 				message_color = Color("fff1a8")
 		else:
@@ -1016,21 +1060,10 @@ func _pointer_up(position: Vector2) -> void:
 		return
 
 	if dragging_q005_plant >= 0:
-		var plant_id := dragging_q005_plant
-		var target_slot := _q005_plant_drag_target_at(position)
 		dragging_q005_plant = -1
 		q005_plant_drag_position = Vector2.ZERO
-		if target_slot >= 0 and game_state.place_q005_plant(plant_id, target_slot):
-			_start_collect_sparkles(Q005_PLANT_SLOTS[target_slot].get_center(), Color("a9e98b"))
-			message = "植物摆放正确！继续照料花园。"
-			message_color = Color("d9ffd0")
-			_save_game()
-			if game_state.is_q005_complete():
-				message = "花园恢复生机！下一步：点击“开始布置”，装饰花园。"
-				message_color = Color("fff1a8")
-		else:
-			message = "这个槽位不合适，植物没有丢失。"
-			message_color = Color("ffe1b8")
+		message = "花苗已经留在花圃里，不需要再拖回去。走近乌龟交花束即可。"
+		message_color = Color("fff1a8")
 		queue_redraw()
 		return
 
@@ -1040,11 +1073,13 @@ func _pointer_up(position: Vector2) -> void:
 		dragging_q008_path = -1
 		q008_path_drag_position = Vector2.ZERO
 		if target_slot >= 0 and game_state.place_q008_path(material_id, target_slot):
-			message = "路面石板放置成功！继续铺设小路。"
+			_start_collect_sparkles(Q008_PATH_SLOT_RECTS[target_slot].get_center(), Color("fff1a8"))
+			message = "路面石板放好 %d/3！" % game_state.q008_path_placed_count()
 			message_color = Color("d9ffd0")
 			_save_game()
 			if game_state.is_q008_complete():
-				message = "小路连起来完成！"
+				_start_task_transition(Q008_PATH_SLOT_RECTS[target_slot].get_center(), "小路连起来了")
+				message = "三块石板连成小路！小路整理完成。"
 				message_color = Color("fff1a8")
 		else:
 			message = "这个位置不合适，路面石板没有丢失。"
@@ -1059,11 +1094,12 @@ func _pointer_up(position: Vector2) -> void:
 	dragging_board = -1
 	if target_slot >= 0 and game_state.place_board(board_id, target_slot):
 		_start_collect_sparkles(BRIDGE_SLOTS[target_slot].get_center(), Color("fff1a8"))
-		message = "木板放置正确！继续修好桥。"
+		message = "桥板放好 %d/3！" % game_state.placed_count()
 		message_color = Color("d9ffd0")
 		_save_game()
 		if game_state.is_complete():
 			bridge_repair_remaining = BRIDGE_REPAIR_DURATION
+			_start_task_transition(BRIDGE_RECT.get_center(), "小桥修好了")
 			message = "太棒了！小桥修好了，右侧区域已经开放！"
 			message_color = Color("fff1a8")
 	else:
@@ -1073,13 +1109,15 @@ func _pointer_up(position: Vector2) -> void:
 
 
 func _try_collect_nearby() -> void:
+	if game_state.is_q012_complete() and celebration_remaining > 0.0:
+		return
 	if game_state.can_start_q012():
 		if player_position.distance_to(Q012_RABBIT_POSITION) <= COLLECTION_RADIUS:
 			if game_state.complete_q012():
 				celebration_remaining = CELEBRATION_DURATION
-				_start_collect_sparkles(Q012_RABBIT_POSITION, Color("fff1a8"))
+				_start_task_transition(Q012_RABBIT_POSITION, "主线完成 · 开始庆祝")
 				_save_game()
-				message = "小岛庆祝日开始！主线故事完成，接下来可以自由探索。"
+				message = "主线故事完成！和兔子一起庆祝吧，之后可自由探索。"
 				message_color = Color("fff1a8")
 		else:
 			message = "主线最后一步：走到兔子身边，按互动键参加小岛庆祝。"
@@ -1092,6 +1130,10 @@ func _try_collect_nearby() -> void:
 		return
 
 	if _can_start_q005_stage() and _try_q005_interaction():
+		queue_redraw()
+		return
+
+	if _try_pond_interaction():
 		queue_redraw()
 		return
 
@@ -1112,6 +1154,10 @@ func _try_collect_nearby() -> void:
 		queue_redraw()
 		return
 
+	if _try_turtle_interaction():
+		queue_redraw()
+		return
+
 	if game_state.can_collect_seed():
 		if player_position.distance_to(SEED_POSITION) <= COLLECTION_RADIUS:
 			if game_state.collect_seed():
@@ -1128,7 +1174,7 @@ func _try_collect_nearby() -> void:
 	if game_state.can_plant_seed():
 		if player_position.distance_to(FLOWERBED_POSITION) <= FLOWERBED_INTERACTION_RADIUS:
 			if game_state.plant_seed():
-				_start_collect_sparkles(FLOWERBED_POSITION, Color("a9e98b"))
+				_start_task_transition(FLOWERBED_POSITION, "种子种下了")
 				message = "种植成功！幼苗长出来了！"
 				message_color = Color("d9ffd0")
 				_save_game()
@@ -1178,6 +1224,24 @@ func _try_q007_interaction() -> bool:
 
 
 func _try_q005_interaction() -> bool:
+	var turtle_distance := player_position.distance_to(Q005_TURTLE_POSITION)
+	if game_state.q005_plant_count() == GameState.Q005_PLANT_TOTAL and not game_state.q005_harvest_delivered:
+		if turtle_distance <= Q005_TURTLE_INTERACTION_RADIUS and game_state.deliver_q005_harvest():
+			_start_task_transition(Q005_TURTLE_POSITION, "乌龟收到花束")
+			_save_game()
+			message = "花束交给乌龟了！花园恢复生机，可以开始布置装饰。"
+			message_color = Color("fff1a8")
+		else:
+			message = "花束已经采好，走到乌龟身边点“送花”。"
+			message_color = Color("fff7cf")
+		return true
+	if turtle_distance <= Q005_TURTLE_INTERACTION_RADIUS:
+		if not game_state.q005_watered:
+			message = "乌龟：先给浇水点浇水，花苗长好后再采花。"
+		elif game_state.q005_plant_count() < GameState.Q005_PLANT_TOTAL:
+			message = "乌龟：花已经开了，采下三朵后带回来给我看看吧。"
+		message_color = Color("d9ffd0")
+		return true
 	var target_kind := 0
 	var target_id := -1
 	var nearest_distance := Q005_INTERACTION_RADIUS
@@ -1196,12 +1260,12 @@ func _try_q005_interaction() -> bool:
 	if target_kind == 1:
 		if game_state.water_q005():
 			q005_growth_remaining = Q005_GROWTH_DURATION
-			_start_collect_sparkles(Q005_WATERING_POINT_POSITION, Color("9be7f0"))
+			_start_task_transition(Q005_WATERING_POINT_POSITION, "花苗喝饱水了")
 			_save_game()
-			message = "浇水成功！现在收集 3 株植物并摆进花园。"
+			message = "浇水成功！等花苗长好，再逐株采下三朵花。"
 			message_color = Color("d9ffd0")
 		else:
-			message = "花园已经浇过水了。继续收集并摆放植物。"
+			message = "花园已经浇过水了。走近盛开的花，逐株采收。"
 			message_color = Color("fff1a8")
 		return true
 	if target_kind == 2 and not game_state.q005_watered:
@@ -1209,12 +1273,40 @@ func _try_q005_interaction() -> bool:
 		message_color = Color("fff1a8")
 		return true
 	if target_kind == 2 and game_state.collect_q005_plant(target_id):
-		_start_collect_sparkles(Q005_PLANT_POSITIONS[target_id], Color("a9e98b"))
+		_start_task_transition(Q005_PLANT_POSITIONS[target_id], "采下一朵花")
 		_save_game()
-		message = "植物收集成功：%d/3。" % game_state.q005_plant_count()
-		message_color = Color("d9ffd0")
+		if game_state.q005_plant_count() == GameState.Q005_PLANT_TOTAL:
+			message = "三朵花都采好了！花圃仍然盛开，回到乌龟身边交花束。"
+			message_color = Color("fff1a8")
+		else:
+			message = "采到一朵花！收获 %d/3；花圃会保留盛开的植株。" % game_state.q005_plant_count()
+			message_color = Color("d9ffd0")
 		return true
+	if _can_show_pond_area() and player_position.distance_to(POND_RECT.get_center()) <= POND_INTERACTION_RADIUS:
+		return _try_pond_interaction()
 	return false
+
+
+func _try_pond_interaction() -> bool:
+	if not _can_show_pond_area() or player_position.distance_to(POND_RECT.get_center()) > POND_INTERACTION_RADIUS:
+		return false
+	if game_state.is_pond_complete():
+		pond_ripple_remaining = 1.0
+		message = "池塘水面荡开一圈涟漪，乌龟开心地探出头。"
+		message_color = Color("d9ffd0")
+	else:
+		message = "池塘还需要 %d 块石头。把石头拖到池边的轮廓里。" % (GameState.POND_STONE_TOTAL - game_state.pond_stones_placed.count(true))
+		message_color = Color("fff7cf")
+	return true
+
+
+func _try_turtle_interaction() -> bool:
+	if not game_state.is_pond_complete() or player_position.distance_to(Q005_TURTLE_POSITION) > Q005_TURTLE_INTERACTION_RADIUS:
+		return false
+	message = "乌龟：谢谢你把池塘和花园照料得这么好！"
+	message_color = Color("d9ffd0")
+	_start_collect_sparkles(Q005_TURTLE_POSITION, Color("a9df88"))
+	return true
 
 
 func _try_q004_interaction() -> void:
@@ -1222,6 +1314,7 @@ func _try_q004_interaction() -> void:
 		if game_state.deliver_next_wood():
 			_save_game()
 			if game_state.is_q004_complete():
+				_start_task_transition(HOUSE_POSITION, "狐狸搬进新家")
 				message = "小屋建好了！狐狸入住了！下一步：整理池塘边的石头。"
 				message_color = Color("fff1a8")
 			else:
@@ -1258,6 +1351,22 @@ func _try_q004_interaction() -> void:
 
 
 func _try_q009_interaction() -> bool:
+	if game_state.q009_material_count() == GameState.Q009_MATERIAL_TOTAL:
+		if player_position.distance_to(Q009_BIRDHOUSE_POSITION) > Q009_BIRDHOUSE_INTERACTION_RADIUS:
+			message = "材料已经找齐了！走到鸟屋旁边点“交材料”，亲手帮小鸟搭建。"
+			message_color = Color("fff1a8")
+			return true
+		if game_state.deliver_next_q009_material():
+			_start_task_transition(Q009_BIRDHOUSE_POSITION, "鸟屋逐渐搭起来")
+			_save_game()
+			if game_state.is_q009_complete():
+				_start_task_transition(Q009_BIRDHOUSE_POSITION, "小鸟有新家了")
+				message = "鸟屋建好了！去小鸟身边和它打个招呼。"
+				message_color = Color("fff1a8")
+			else:
+				message = "材料交付 %d/3，小鸟正在搭建鸟屋。" % game_state.q009_material_delivery_count()
+				message_color = Color("d9ffd0")
+			return true
 	var nearest_id := -1
 	var nearest_distance := COLLECTION_RADIUS
 	for material_id in range(GameState.Q009_MATERIAL_TOTAL):
@@ -1270,11 +1379,11 @@ func _try_q009_interaction() -> bool:
 	if nearest_id >= 0 and game_state.collect_q009_material(nearest_id):
 		_start_collect_sparkles(Q009_MATERIAL_POSITIONS[nearest_id], Color("fff1a8"))
 		_save_game()
-		if game_state.is_q009_complete():
-			message = "鸟屋计划完成！小鸟互动已开放。"
+		if game_state.q009_material_count() == GameState.Q009_MATERIAL_TOTAL:
+			message = "材料收集齐了！现在去鸟屋旁边逐份交付。"
 			message_color = Color("fff1a8")
 		else:
-			message = "鸟屋材料收集成功：%d/3。" % game_state.q009_material_count()
+			message = "找到%s！材料收集 %d/3。" % [Q009_MATERIAL_LABELS[nearest_id], game_state.q009_material_count()]
 			message_color = Color("d9ffd0")
 		return true
 	message = "请在岛上找到 3 份鸟屋材料，靠近后按互动键收集。"
@@ -1392,27 +1501,50 @@ func _q006_decor_slot_rect(slot_id: int) -> Rect2:
 	return Q006_DECOR_SLOTS[slot_id]
 
 
+func _q006_decor_rect(decor_id: int) -> Rect2:
+	if decor_id < 0 or decor_id >= game_state.q006_decor_positions.size():
+		return Rect2()
+	return Rect2(game_state.q006_decor_positions[decor_id] - Vector2(28, 23), Vector2(56, 46))
+
+
+func _q006_decor_drop_is_valid(decor_id: int, position: Vector2) -> bool:
+	if decor_id < 0 or decor_id >= GameState.Q006_DECOR_TOTAL:
+		return false
+	var safe_bounds := Q006_DECOR_BOUNDS.grow(-14.0)
+	if not safe_bounds.has_point(position) or not Geometry2D.is_point_in_polygon(position, PackedVector2Array(Q006_DECOR_ISLAND_POLYGON)):
+		return false
+	if POND_RECT.grow(28.0).has_point(position) or Q005_GARDEN_RECT.grow(20.0).has_point(position):
+		return false
+	if position.distance_to(Q005_TURTLE_POSITION) < 76.0:
+		return false
+	if position.distance_to(Q007_REWARD_POSITION) < 42.0:
+		return false
+	for flower_position in [Vector2(1182, 205), Vector2(1182, 584)]:
+		if position.distance_to(flower_position) < 42.0:
+			return false
+	for stone_id in range(GameState.POND_STONE_TOTAL):
+		if game_state.pond_stones_placed[stone_id] and position.distance_to(POND_STONE_POSITIONS[stone_id]) < 44.0:
+			return false
+	for other_id in range(GameState.Q006_DECOR_TOTAL):
+		if other_id == decor_id or not game_state.q006_decor_placed[other_id]:
+			continue
+		if position.distance_to(game_state.q006_decor_positions[other_id]) < Q006_DECOR_CLEARANCE:
+			return false
+	return true
+
+
 func _q006_decor_slot_at(position: Vector2) -> int:
 	if dragging_q006_decor < 0:
 		return -1
-	for slot_id in range(GameState.Q006_SLOT_TOTAL):
-		if _q006_decor_slot_rect(slot_id).grow(18).has_point(position):
-			if q006_decor_drag_from_slot == slot_id and game_state.q006_slot_occupants[slot_id] == dragging_q006_decor:
-				continue
-			return slot_id
-	return -1
+	return dragging_q006_decor if _q006_decor_drop_is_valid(dragging_q006_decor, position) else -1
 
 
 func _q006_decor_slot_is_drop_target(slot_id: int) -> bool:
-	if dragging_q006_decor < 0 or slot_id < 0 or slot_id >= GameState.Q006_SLOT_TOTAL:
-		return false
-	if q006_decor_drag_from_slot >= 0:
-		return game_state.can_move_q006_decoration(dragging_q006_decor, q006_decor_drag_from_slot, slot_id)
-	return game_state.can_place_q006_decoration(dragging_q006_decor, slot_id)
+	return dragging_q006_decor >= 0 and slot_id == dragging_q006_decor and _q006_decor_drop_is_valid(dragging_q006_decor, q006_decor_drag_position)
 
 
 func _q006_decor_slot_is_hovered(slot_id: int) -> bool:
-	return _q006_decor_slot_is_drop_target(slot_id) and _q006_decor_slot_rect(slot_id).grow(18).has_point(q006_decor_drag_position)
+	return _q006_decor_slot_is_drop_target(slot_id)
 
 
 func _q008_path_material_rect(material_id: int) -> Rect2:
@@ -1595,6 +1727,26 @@ func _draw_feedback_effects() -> void:
 			var sparkle_center := collect_sparkle_position + direction * radius
 			draw_line(sparkle_center - direction * 3.5, sparkle_center + direction * 3.5, ring_color, 2.5)
 			draw_circle(sparkle_center, 2.0 + fade, ring_color)
+	if task_transition_remaining > 0.0 and not task_transition_text.is_empty():
+		var progress := 1.0 - task_transition_remaining / TASK_TRANSITION_DURATION
+		var fade_in := clampf(progress / 0.16, 0.0, 1.0)
+		var fade_out := clampf((1.0 - progress) / 0.24, 0.0, 1.0)
+		var alpha := minf(fade_in, fade_out)
+		var ripple_color := Color(0.92, 1.0, 0.72, alpha * 0.72)
+		draw_arc(task_transition_position, 24.0 + progress * 48.0, 0.0, TAU, 36, ripple_color, 3.0)
+		var label_width := maxf(118.0, UI_FONT.get_string_size(task_transition_text, HORIZONTAL_ALIGNMENT_CENTER, -1, 16).x + 28.0)
+		var label_rect := Rect2(task_transition_position + Vector2(-label_width * 0.5, -65.0 - progress * 9.0), Vector2(label_width, 34.0))
+		var label_fill := Color(0.08, 0.22, 0.17, alpha * 0.88)
+		var label_border := Color(0.70, 0.92, 0.60, alpha)
+		_draw_panel(label_rect, label_fill, label_border, 12)
+		draw_string(UI_FONT, label_rect.position + Vector2(10, 22), task_transition_text, HORIZONTAL_ALIGNMENT_CENTER, label_width - 20, 16, Color(1.0, 0.97, 0.82, alpha))
+	if pond_ripple_remaining > 0.0:
+		var progress := 1.0 - pond_ripple_remaining / 1.0
+		var ripple_alpha := 1.0 - progress
+		for ring_id in range(3):
+			var ring_progress := clampf(progress + float(ring_id) * 0.12, 0.0, 1.0)
+			var ring_color := Color(0.89, 0.99, 0.95, ripple_alpha * 0.52)
+			draw_arc(POND_RECT.get_center(), 14.0 + ring_progress * 70.0, 0.0, TAU, 42, ring_color, 2.0)
 	if celebration_remaining > 0.0:
 		var celebration_progress := 1.0 - celebration_remaining / CELEBRATION_DURATION
 		var confetti_colors := [Color("f2c879"), Color("e96b70"), Color("67a9dc"), Color("a9df88"), Color("fff1a8")]
@@ -1637,11 +1789,12 @@ func _draw_world(font: Font) -> void:
 	_draw_q004_area(font)
 	_draw_q005_area(font)
 	_draw_q006_area(font)
-	_draw_q008_area(font)
-	_draw_q007_area(font)
-	_draw_q009_area(font)
-	_draw_q010_area(font)
-	_draw_q011_area(font)
+	if celebration_remaining <= 0.0:
+		_draw_q008_area(font)
+		_draw_q007_area(font)
+		_draw_q009_area(font)
+		_draw_q010_area(font)
+		_draw_q011_area(font)
 	_draw_boards(font)
 	_draw_player()
 
@@ -1782,6 +1935,12 @@ func _draw_rabbit_area(font: Font) -> void:
 		draw_colored_polygon(PackedVector2Array([Vector2(582, 170), Vector2(600, 170), Vector2(592, 188)]), bubble_fill)
 		draw_circle(Vector2(414, 146), 12.0, Color("e8bd62"))
 		draw_string(font, Vector2(436, 152), _rabbit_feedback_text(), HORIZONTAL_ALIGNMENT_LEFT, -1, 20, VISUAL_PALETTE["ink"])
+	if game_state.can_start_q012():
+		var pulse := 0.5 + sin(animation_time * 3.0) * 0.5
+		draw_arc(Q012_RABBIT_POSITION, 75.0 + pulse * 5.0, 0.0, TAU, 48, Color(1.0, 0.88, 0.48, 0.58), 4.0)
+		var finale_tag := Rect2(Q012_RABBIT_POSITION + Vector2(-82, -107), Vector2(164, 30))
+		_draw_panel(finale_tag, Color("fff5d9"), Color("d5a45f"), 12)
+		draw_string(font, finale_tag.position + Vector2(10, 20), "主线最后一步 · 庆祝", HORIZONTAL_ALIGNMENT_CENTER, finale_tag.size.x - 20, 14, VISUAL_PALETTE["ink"])
 	_draw_rabbit(Q012_RABBIT_POSITION)
 	if game_state.can_start_q012():
 		draw_circle(Q012_RABBIT_POSITION + Vector2(0, -67), 13.0, Color("e8bd62"))
@@ -1857,6 +2016,8 @@ func _draw_pond_area(font: Font) -> void:
 	draw_string(font, POND_RECT.position + Vector2(54, -12), "池塘", HORIZONTAL_ALIGNMENT_LEFT, -1, 22, VISUAL_PALETTE["ink"])
 	if game_state.is_pond_complete():
 		draw_string(font, POND_RECT.position + Vector2(34, 118), "池塘已开放", HORIZONTAL_ALIGNMENT_LEFT, -1, 18, Color("fff1a8"))
+		if player_position.distance_to(POND_RECT.get_center()) <= POND_INTERACTION_RADIUS:
+			draw_string(font, POND_RECT.position + Vector2(28, 144), "点互动看水纹", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color("f4fff0"))
 		return
 
 	for slot_id in range(GameState.POND_STONE_TOTAL):
@@ -1927,50 +2088,37 @@ func _draw_q005_area(font: Font) -> void:
 	var garden_border := Color("d5a45f") if not game_state.is_q005_complete() else Color("6cae87")
 	_draw_panel(Q005_GARDEN_RECT, garden_fill, garden_border, 18)
 	draw_string(font, Q005_GARDEN_RECT.position + Vector2(18, -12), "乌龟的花园", HORIZONTAL_ALIGNMENT_LEFT, -1, 20, VISUAL_PALETTE["ink"])
-	for slot_id in range(GameState.Q005_PLANT_TOTAL):
-		var slot: Rect2 = Q005_PLANT_SLOTS[slot_id]
-		var is_drag_target := _q005_plant_slot_is_drop_target(slot_id)
-		var is_pointer_over_target := _q005_plant_slot_is_hovered(slot_id)
-		var is_highlighted: bool = game_state.q005_plant_slots[slot_id] or is_drag_target
-		var slot_color: Color = VISUAL_PALETTE["target_valid"] if is_highlighted else VISUAL_PALETTE["target_idle"]
-		var slot_fill: Color = VISUAL_PALETTE["target_valid_fill"] if is_highlighted else VISUAL_PALETTE["target_idle_fill"]
-		draw_rect(slot, slot_fill, true)
-		if is_pointer_over_target:
-			draw_rect(slot.grow(8), Color(0.20, 0.90, 0.40, 0.36), true)
-			draw_rect(slot.grow(8), Color("16883f"), false, 5.0)
-			draw_rect(slot, Color(0.58, 1.0, 0.56, 0.48), true)
-		draw_rect(slot, Color("16883f") if is_drag_target else slot_color, false, 5.0 if is_drag_target else 3.0)
-		if game_state.q005_plant_slots[slot_id]:
-			_draw_q005_plant_at(slot.position + slot.size / 2.0, true, game_state.is_q010_complete())
-		else:
-			draw_string(font, slot.position + Vector2(5, 19), "空槽", HORIZONTAL_ALIGNMENT_LEFT, -1, 12, VISUAL_PALETTE["ink"])
 	for plant_id in range(GameState.Q005_PLANT_TOTAL):
-		if game_state.q005_plants_collected[plant_id]:
-			continue
 		var plant_position: Vector2 = Q005_PLANT_POSITIONS[plant_id]
 		var plant_scale := 1.0
-		if game_state.q005_watered and q005_growth_remaining > 0.0:
+		if game_state.q005_watered and not game_state.q005_plants_collected[plant_id] and q005_growth_remaining > 0.0:
 			var growth_progress := clampf(1.0 - q005_growth_remaining / Q005_GROWTH_DURATION, 0.0, 1.0)
 			var eased_growth := growth_progress * growth_progress * (3.0 - 2.0 * growth_progress)
 			plant_scale = lerpf(0.35, 1.0, eased_growth)
 			plant_position.y -= eased_growth * 9.0
-		_draw_q005_plant_at(plant_position, false, false, not game_state.q005_watered, plant_scale)
-		draw_string(font, Q005_PLANT_POSITIONS[plant_id] + Vector2(-26, 30), "待浇水" if not game_state.q005_watered else "植物", HORIZONTAL_ALIGNMENT_LEFT, -1, 13, VISUAL_PALETTE["ink"])
+		var harvested: bool = game_state.q005_plants_collected[plant_id]
+		_draw_ellipse_custom(Q005_PLANT_POSITIONS[plant_id] + Vector2(0, 14), Vector2(21, 6), Color(0.20, 0.39, 0.19, 0.18))
+		_draw_q005_plant_at(plant_position, harvested, game_state.is_q010_complete(), not game_state.q005_watered and not harvested, plant_scale)
+		if not game_state.is_q005_complete():
+			var plant_label := "已采" if harvested else ("待浇水" if not game_state.q005_watered else "待采收")
+			draw_string(font, Q005_PLANT_POSITIONS[plant_id] + Vector2(-23, 31), plant_label, HORIZONTAL_ALIGNMENT_LEFT, -1, 13, VISUAL_PALETTE["ink"])
 
-	var watering_color := Color("5bbbd0") if not game_state.q005_watered else Color("78c977")
-	if not game_state.q005_watered:
-		draw_circle(Q005_WATERING_POINT_POSITION, 23.0, Color(1.0, 0.90, 0.46, 0.18))
-		draw_arc(Q005_WATERING_POINT_POSITION, 20.0, 0.0, TAU, 28, Color("fff1a8"), 3.0)
-	draw_circle(Q005_WATERING_POINT_POSITION + Vector2(0, 7), 15.0, Color(0.19, 0.13, 0.10, 0.16))
-	draw_circle(Q005_WATERING_POINT_POSITION, 13.0, watering_color)
-	draw_arc(Q005_WATERING_POINT_POSITION, 13.0, 0.0, TAU, 20, Color("3d7f7b"), 3.0)
-	draw_line(Q005_WATERING_POINT_POSITION + Vector2(-4, -4), Q005_WATERING_POINT_POSITION + Vector2(5, 4), Color("e5fbf2"), 3.0)
-	draw_string(font, Q005_WATERING_POINT_POSITION + Vector2(-25, 32), "已浇水" if game_state.q005_watered else "先浇水", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, VISUAL_PALETTE["ink"])
+	if not game_state.is_q005_complete():
+		var watering_color := Color("5bbbd0") if not game_state.q005_watered else Color("78c977")
+		if not game_state.q005_watered:
+			draw_circle(Q005_WATERING_POINT_POSITION, 23.0, Color(1.0, 0.90, 0.46, 0.18))
+			draw_arc(Q005_WATERING_POINT_POSITION, 20.0, 0.0, TAU, 28, Color("fff1a8"), 3.0)
+		draw_circle(Q005_WATERING_POINT_POSITION + Vector2(0, 7), 15.0, Color(0.19, 0.13, 0.10, 0.16))
+		draw_circle(Q005_WATERING_POINT_POSITION, 13.0, watering_color)
+		draw_arc(Q005_WATERING_POINT_POSITION, 13.0, 0.0, TAU, 20, Color("3d7f7b"), 3.0)
+		draw_line(Q005_WATERING_POINT_POSITION + Vector2(-4, -4), Q005_WATERING_POINT_POSITION + Vector2(5, 4), Color("e5fbf2"), 3.0)
+		draw_string(font, Q005_WATERING_POINT_POSITION + Vector2(-25, 32), "已浇水" if game_state.q005_watered else "先浇水", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, VISUAL_PALETTE["ink"])
 	_draw_turtle(Q005_TURTLE_POSITION)
 	draw_string(font, Q005_TURTLE_POSITION + Vector2(-24, 55), "乌龟", HORIZONTAL_ALIGNMENT_LEFT, -1, 17, VISUAL_PALETTE["ink"])
-	if dragging_q005_plant >= 0:
-		var drag_hint := "绿色槽位可以松开" if _q005_plant_drag_target_at(q005_plant_drag_position) >= 0 else "把幼苗移到绿色槽位再松开"
-		draw_string(font, Vector2(930, 540), drag_hint, HORIZONTAL_ALIGNMENT_LEFT, -1, 16, VISUAL_PALETTE["ink"])
+	if game_state.q005_plant_count() == GameState.Q005_PLANT_TOTAL and not game_state.q005_harvest_delivered:
+		var callout := Rect2(Q005_TURTLE_POSITION + Vector2(-88, -80), Vector2(176, 34))
+		_draw_panel(callout, Color("fff5d9"), Color("d5a45f"), 12)
+		draw_string(font, callout.position + Vector2(12, 22), "花束交给乌龟 →", HORIZONTAL_ALIGNMENT_CENTER, callout.size.x - 24, 15, VISUAL_PALETTE["ink"])
 
 
 func _draw_q006_area(font: Font) -> void:
@@ -1979,25 +2127,20 @@ func _draw_q006_area(font: Font) -> void:
 	var placed_count: int = game_state.q006_placed_count()
 	if not build_mode and placed_count == 0:
 		return
-	_draw_panel(Q006_DECOR_PLOT_RECT, Color("c7df9b"), Color("6cae87"), 14)
-	draw_string(font, Vector2(Q006_DECOR_PLOT_RECT.position.x + 8, Q006_DECOR_PLOT_RECT.position.y - 6), "花园装饰区", HORIZONTAL_ALIGNMENT_LEFT, -1, 16, VISUAL_PALETTE["ink"])
-	for slot_id in range(GameState.Q006_SLOT_TOTAL):
-		var slot: Rect2 = Q006_DECOR_SLOTS[slot_id]
-		var decor_id: int = game_state.q006_slot_occupants[slot_id]
-		if decor_id >= 0 and not (dragging_q006_decor == decor_id and q006_decor_drag_from_slot == slot_id):
-			_draw_q006_decor_at(slot.position + slot.size / 2.0, decor_id, false)
-		elif _should_show_q006_slots():
-			var is_drop_target := _q006_decor_slot_is_drop_target(slot_id)
-			var is_hovered_target := _q006_decor_slot_is_hovered(slot_id)
-			var slot_color: Color = VISUAL_PALETTE["target_valid"] if is_drop_target else VISUAL_PALETTE["target_idle"]
-			var slot_fill: Color = VISUAL_PALETTE["target_valid_fill"] if is_drop_target else VISUAL_PALETTE["target_idle_fill"]
-			draw_rect(slot, slot_fill, true)
-			if is_hovered_target:
-				draw_rect(slot.grow(8), Color(0.20, 0.90, 0.40, 0.36), true)
-				draw_rect(slot.grow(8), Color("16883f"), false, 5.0)
-				draw_rect(slot, Color(0.58, 1.0, 0.56, 0.48), true)
-			draw_rect(slot, Color("16883f") if is_drop_target else slot_color, false, 5.0 if is_drop_target else 3.0)
-			draw_string(font, slot.position + Vector2(17, 23), "装饰位", HORIZONTAL_ALIGNMENT_LEFT, -1, 12, VISUAL_PALETTE["ink"])
+	if build_mode:
+		var placement_outline := PackedVector2Array(Q006_DECOR_ISLAND_POLYGON)
+		placement_outline.append(placement_outline[0])
+		draw_polyline(placement_outline, Color("d5efb0"), 3.0, true)
+		draw_string(font, Vector2(944, 171), "右侧草地可自由摆放", HORIZONTAL_ALIGNMENT_LEFT, -1, 15, VISUAL_PALETTE["ink"])
+	for decor_id in range(GameState.Q006_DECOR_TOTAL):
+		if not game_state.q006_decor_placed[decor_id] or dragging_q006_decor == decor_id:
+			continue
+		_draw_q006_decor_at(game_state.q006_decor_positions[decor_id], decor_id, false)
+	if dragging_q006_decor >= 0:
+		var valid_drop := _q006_decor_drop_is_valid(dragging_q006_decor, q006_decor_drag_position)
+		var target_color := Color("64d887") if valid_drop else Color("e8a65e")
+		draw_circle(q006_decor_drag_position, 31.0, Color(target_color.r, target_color.g, target_color.b, 0.20))
+		draw_arc(q006_decor_drag_position, 31.0, 0.0, TAU, 32, target_color, 3.0)
 
 
 func _should_show_q006_slots() -> bool:
@@ -2072,6 +2215,9 @@ func _draw_q009_area(font: Font) -> void:
 			var material_position: Vector2 = Q009_MATERIAL_POSITIONS[material_id]
 			_draw_q009_material_at(material_position, material_id)
 			draw_string(font, material_position + Vector2(-24, 34), Q009_MATERIAL_LABELS[material_id], HORIZONTAL_ALIGNMENT_LEFT, -1, 15, VISUAL_PALETTE["ink"])
+		if game_state.q009_material_count() == GameState.Q009_MATERIAL_TOTAL:
+			_draw_q009_birdhouse_frame(Q009_BIRDHOUSE_POSITION, game_state.q009_material_delivery_count())
+			draw_string(font, Q009_BIRDHOUSE_POSITION + Vector2(-46, 68), "鸟屋施工 %d/3" % game_state.q009_material_delivery_count(), HORIZONTAL_ALIGNMENT_LEFT, -1, 15, VISUAL_PALETTE["ink"])
 	else:
 		_draw_q009_birdhouse(Q009_BIRDHOUSE_POSITION)
 		_draw_q009_bird(Q009_BIRD_POSITION)
@@ -2082,13 +2228,36 @@ func _draw_q009_area(font: Font) -> void:
 func _q009_prompt_text() -> String:
 	if game_state.is_q009_complete():
 		return "鸟屋计划完成！小鸟互动已开放。"
+	if game_state.q009_material_count() == GameState.Q009_MATERIAL_TOTAL:
+		return "材料已收集 3/3，鸟屋交付 %d/3。" % game_state.q009_material_delivery_count()
 	return "鸟屋计划：已收集 %d/3 份材料。" % game_state.q009_material_count()
 
 
 func _q009_action_hint_text() -> String:
 	if game_state.is_q009_complete():
 		return "可选：靠近小鸟按互动键打招呼。"
+	if game_state.q009_material_count() == GameState.Q009_MATERIAL_TOTAL:
+		return "到鸟屋旁点互动，逐份交材料并看着它搭起来。"
 	return "找到树枝、羽毛和草绳，靠近后按互动键收集。"
+
+
+func _draw_q009_birdhouse_frame(position: Vector2, delivered_count: int) -> void:
+	var base := Color("bd9562")
+	var accent := Color("d5a468")
+	_draw_ellipse_custom(position + Vector2(0, 34), Vector2(38, 8), Color(0.19, 0.13, 0.10, 0.16))
+	draw_line(position + Vector2(-30, 18), position + Vector2(30, 18), base, 6.0)
+	if delivered_count >= 1:
+		draw_line(position + Vector2(-26, 14), position + Vector2(-26, -18), accent, 5.0)
+		draw_line(position + Vector2(26, 14), position + Vector2(26, -18), accent, 5.0)
+	if delivered_count >= 2:
+		draw_line(position + Vector2(-31, -16), position + Vector2(0, -43), Color("d96f58"), 6.0)
+		draw_line(position + Vector2(0, -43), position + Vector2(31, -16), Color("d96f58"), 6.0)
+	if delivered_count >= 3:
+		draw_line(position + Vector2(-29, -14), position + Vector2(29, -14), accent, 5.0)
+		draw_line(position + Vector2(-28, 13), position + Vector2(28, 13), accent, 5.0)
+	for material_id in range(GameState.Q009_MATERIAL_TOTAL):
+		var dot_color := Color("90ca75") if material_id < delivered_count else Color("e4d2ad")
+		draw_circle(position + Vector2(-18 + material_id * 18, 31), 4.0, dot_color)
 
 
 func _draw_q010_area(font: Font) -> void:
@@ -2111,7 +2280,7 @@ func _draw_q010_area(font: Font) -> void:
 
 
 func _draw_q011_area(font: Font) -> void:
-	if not _can_show_q011_area():
+	if not _should_show_q011_area_contents():
 		return
 	var complete: bool = game_state.is_q011_complete()
 	var fill := Color("bfe4a0") if complete else Color("c7ad79")
@@ -2542,33 +2711,23 @@ func _draw_pond_stone_at(position: Vector2, color: Color, lifted: bool) -> void:
 
 
 func _draw_hud(font: Font) -> void:
-	_draw_panel(Rect2(26, 22, 760, 104), VISUAL_PALETTE["panel"], VISUAL_PALETTE["panel_border"], 20)
+	var ending_focus: bool = game_state.can_start_q012() or (game_state.is_q012_complete() and celebration_remaining > 0.0)
+	var hud_rect := Rect2(26, 22, 900, 112) if ending_focus else Rect2(26, 22, 760, 104)
+	_draw_panel(hud_rect, VISUAL_PALETTE["panel"], VISUAL_PALETTE["panel_border"], 20)
 	draw_string(font, Vector2(48, 58), _hud_title_text(), HORIZONTAL_ALIGNMENT_LEFT, -1, 30, Color("fff7cf"))
 	_draw_panel(Rect2(46, 72, 88, 26), Color("426b51"), Color("8fc47d"), 9)
 	draw_string(font, Vector2(56, 91), _task_stage_label(), HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color("fff7cf"))
-	draw_string(font, Vector2(148, 90), _task_prompt_text(), HORIZONTAL_ALIGNMENT_LEFT, 620, 18, Color("fff7cf"))
+	draw_string(font, Vector2(148, 90), _task_prompt_text(), HORIZONTAL_ALIGNMENT_LEFT, 750 if ending_focus else 620, 18, Color("fff7cf"))
 	if _should_show_hud_message():
-		draw_string(font, Vector2(48, 112), message, HORIZONTAL_ALIGNMENT_LEFT, 720, 16, message_color)
-	var show_inventory: bool = q011_mode or _can_use_q011_mode() or build_mode or _can_start_q005_stage() or game_state.can_start_q004() or not game_state.is_complete() or (_can_use_q008_side_task() and not game_state.is_q008_complete())
+		draw_string(font, Vector2(48, 112), message, HORIZONTAL_ALIGNMENT_LEFT, 850 if ending_focus else 720, 16, message_color)
+	var show_inventory: bool = q011_mode or build_mode or game_state.can_start_q004() or not game_state.is_complete() or (_can_use_q008_side_task() and not game_state.is_q008_complete())
 	if not show_inventory:
 		return
 	_draw_panel(INVENTORY_PANEL_RECT, VISUAL_PALETTE["panel"], VISUAL_PALETTE["panel_border"], 18)
 	if q011_mode:
 		_draw_q011_inventory(font)
-	elif _can_use_q011_mode() and not build_mode:
-		_draw_q011_inventory(font, true)
 	elif build_mode:
 		_draw_q006_inventory(font)
-	elif _can_start_q005_stage():
-		draw_string(font, Vector2(914, 602), "植物（拖到花园）", HORIZONTAL_ALIGNMENT_LEFT, 230, 17, Color("fff7cf"))
-		for plant_id in range(GameState.Q005_PLANT_TOTAL):
-			var plant_rect := _q005_plant_inventory_rect(plant_id)
-			if game_state.q005_plants_collected[plant_id] and not game_state.q005_plant_slots[plant_id] and dragging_q005_plant != plant_id:
-				_draw_q005_plant_at(plant_rect.position + plant_rect.size / 2.0, false)
-			else:
-				draw_rect(plant_rect, Color("d5e4cb"), false, 2.0)
-			if game_state.q005_plant_slots[plant_id]:
-				draw_string(font, plant_rect.position + Vector2(29, 29), "✓", HORIZONTAL_ALIGNMENT_LEFT, -1, 22, Color("d9ffd0"))
 	elif game_state.can_start_q004():
 		_draw_q004_inventory(font)
 	elif _can_use_q008_side_task() and not game_state.is_q008_complete():
@@ -2609,8 +2768,8 @@ func _draw_q008_inventory(font: Font) -> void:
 			draw_string(font, rect.position + Vector2(29, 29), "✓", HORIZONTAL_ALIGNMENT_LEFT, -1, 22, Color("d9ffd0"))
 
 
-func _draw_q011_inventory(font: Font, preview := false) -> void:
-	var title := "整理物品（先点右上角）" if preview else "整理物品（拖到左侧空槽）"
+func _draw_q011_inventory(font: Font) -> void:
+	var title := "整理托盘（拖到左侧任意空位）"
 	draw_string(font, Vector2(914, 602), title, HORIZONTAL_ALIGNMENT_LEFT, 230, 16, Color("fff7cf"))
 	for item_id in range(GameState.Q011_ITEM_TOTAL):
 		var rect := _q011_item_inventory_rect(item_id)
@@ -2623,7 +2782,7 @@ func _draw_q011_inventory(font: Font, preview := false) -> void:
 
 
 func _draw_q006_inventory(font: Font) -> void:
-	draw_string(font, Vector2(914, 602), "装饰（拖到上方槽位）", HORIZONTAL_ALIGNMENT_LEFT, 230, 17, Color("fff7cf"))
+	draw_string(font, Vector2(914, 602), "装饰（拖到右侧草地）", HORIZONTAL_ALIGNMENT_LEFT, 230, 16, Color("fff7cf"))
 	for decor_id in range(GameState.Q006_DECOR_TOTAL):
 		var rect := _q006_decor_inventory_rect(decor_id)
 		if game_state.q006_decor_is_available(decor_id) and dragging_q006_decor != decor_id:
@@ -2673,9 +2832,11 @@ func _task_prompt_text() -> String:
 	if q011_mode:
 		return "额外地块整理：已放置 %d/3 件物品。" % game_state.q011_placed_count()
 	if _can_use_q011_mode() and not build_mode:
-		return "额外地块整理：先点“开始整理”，再放置 3 件物品（%d/3）。" % game_state.q011_placed_count()
+		return "额外地块整理：先点右上角“开始整理”，再放置 3 件物品（%d/3）。" % game_state.q011_placed_count()
 	if game_state.can_start_q012():
-		return "花园装饰已完成！回到兔子身边参加小岛庆祝。"
+		return "最后一步：走到兔子身边，点右下角“庆祝”。"
+	if game_state.is_q012_complete() and celebration_remaining > 0.0:
+		return "主线故事完成！和兔子一起庆祝吧。"
 	if build_mode and _can_use_q006_build_mode():
 		if game_state.is_q006_complete():
 			return "花园装饰已完成，可拖动已摆放的装饰调整位置。"
@@ -2709,12 +2870,13 @@ func _task_prompt_text() -> String:
 		return "狐狸入住了！池塘石头已摆放 %d/3。" % game_state.pond_stones_placed.count(true)
 	if not game_state.is_q005_complete():
 		var collected_count: int = game_state.q005_plant_count()
-		var placed_count: int = game_state.q005_plant_slot_count()
-		if not game_state.q005_watered and placed_count == GameState.Q005_PLANT_TOTAL:
-			return "植物已摆好，请给乌龟的花园浇水。"
+		if game_state.q005_harvest_delivered:
+			return "乌龟收到花束了！"
+		if collected_count == GameState.Q005_PLANT_TOTAL:
+			return "花束已采齐，回到乌龟身边交给它。"
 		if not game_state.q005_watered:
-			return "先给花园浇水，再收集并摆好 3 株植物（已收集 %d/3）。" % collected_count
-		return "花园已浇水，植物已收集 %d/3，已摆放 %d/3。" % [collected_count, placed_count]
+			return "乌龟花园：先浇水，再采收 3 朵花（%d/3）。" % collected_count
+		return "花苗长好了：采收 3 朵花（%d/3）。" % collected_count
 	if not game_state.is_q006_complete():
 		return "下一步：布置花园装饰（%d/3）。" % game_state.q006_placed_count()
 	if not game_state.is_q007_complete():
@@ -2739,6 +2901,8 @@ func _task_stage_label() -> String:
 		return "可选 5/5"
 	if game_state.can_start_q012():
 		return "主线 7/7"
+	if game_state.is_q012_complete() and celebration_remaining > 0.0:
+		return "庆祝中"
 	if build_mode and _can_use_q006_build_mode():
 		return "主线 6/7" if not game_state.is_q006_complete() else "建造"
 	if game_state.is_q011_complete():
@@ -2772,15 +2936,17 @@ func _task_action_hint_text() -> String:
 	if q011_mode:
 		return "把右下角托盘的物品拖到左侧空槽，放满 3 件即可完成。"
 	if _can_use_q011_mode() and not build_mode:
-		return "右下角已显示 3 件物品；先点右上角绿色“开始整理”，再拖到左侧空槽。"
+		return "先点右上角绿色“开始整理”；点下后物品托盘才会出现。"
 	if game_state.can_start_q012():
-		return "走到兔子身边，按 E 或点右下角按钮参加庆祝。"
+		return "找到头顶有庆祝标记的兔子，靠近后点右下角“庆祝”；这是主线最后一步。"
+	if game_state.is_q012_complete() and celebration_remaining > 0.0:
+		return "小岛庆典开始了！稍后可以选择池塘边的可选任务。"
 	if build_mode and _can_use_q006_build_mode():
 		if remove_decor_mode:
 			return "点击已放置的装饰移除；再次点击移除按钮可取消。"
 		if game_state.is_q006_complete():
-			return "拖动已摆放的装饰换位，或点“移除装饰”后收回。"
-		return "拖动木栅栏、花盆和庭院路灯到对应槽位。"
+			return "在右侧草地拖动装饰即可自由调整位置；点“移除装饰”可收回托盘。"
+		return "拖动木栅栏、花盆和路灯，在右侧草地任意空地摆放。"
 	if game_state.is_q011_complete():
 		return "没有必做任务：自由探索，或点右上角“建造”调整花园。"
 	if not game_state.is_complete():
@@ -2799,13 +2965,13 @@ func _task_action_hint_text() -> String:
 		return "下一步：把池塘边剩余的石头拖进对应轮廓。"
 	if not game_state.is_q005_complete():
 		if not game_state.q005_watered:
-			return "下一步：靠近“浇水点”，先浇水；浇水前不能采花。"
+			return "先到花圃旁的浇水点，按 E 或点右下角“浇水”。"
 		if game_state.q005_plant_count() < GameState.Q005_PLANT_TOTAL:
-			return "下一步：靠近长好的植物，按 E 或点右下角按钮采集 3 株。"
-		return "下一步：把右下角的植物逐个拖到绿色空槽。"
+			return "逐株走近花苗，按 E 或点右下角“采花”采收 3 朵花（%d/3）；花圃会保留植株。" % game_state.q005_plant_count()
+		return "三朵花已采齐：回到乌龟身边，按 E 或点“送花”交给它。"
 	if not game_state.is_q006_complete():
 		var remaining_decorations: int = GameState.Q006_DECOR_TOTAL - game_state.q006_placed_count()
-		return "点击绿色“开始布置”，把剩余 %d 件装饰拖到空槽。" % remaining_decorations
+		return "点右上角“开始布置”，再把剩余 %d 件装饰拖到右侧自由摆放区。" % remaining_decorations
 	if not game_state.is_q007_complete():
 		return "支线可以跳过：到池塘边找隐藏贝壳，靠近后按互动键。"
 	if not game_state.is_q009_complete():
@@ -2822,6 +2988,8 @@ func _task_action_hint_text() -> String:
 func _hud_title_text() -> String:
 	if game_state.can_start_q012():
 		return "奇趣小岛 · 小岛庆祝日"
+	if game_state.is_q012_complete() and celebration_remaining > 0.0:
+		return "奇趣小岛 · 主线完成庆祝中"
 	if q011_mode:
 		return "奇趣小岛 · 帮忙整理"
 	if build_mode and _can_use_q006_build_mode():

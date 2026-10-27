@@ -25,6 +25,7 @@ func _init() -> void:
 	for plant_id in range(GameState.Q005_PLANT_TOTAL):
 		state.collect_q005_plant(plant_id)
 		state.place_q005_plant(plant_id, plant_id)
+	state.deliver_q005_harvest()
 	for decor_id in range(GameState.Q006_DECOR_TOTAL):
 		state.place_q006_decoration(decor_id, decor_id)
 	state.complete_q012()

@@ -41,6 +41,9 @@ func _run() -> void:
 	_expect(main.game_state.collect_q007_shell(), "Q007 must complete before Q009")
 	for material_id in range(3):
 		_expect(main.game_state.collect_q009_material(material_id), "Q009 materials must complete before Q010")
+	_expect(not main.game_state.is_q009_complete(), "Q009 must wait for delivery after collecting materials")
+	for delivery_id in range(3):
+		_expect(main.game_state.deliver_next_q009_material(), "Q009 materials must be delivered before Q010")
 	main._save_game()
 	_expect(main._can_use_q010_side_task(), "Q009 completion must unlock Q010")
 	_expect(main._task_stage_label() == "可选 3/5", "the seed collection task must be marked as optional task three of five")
@@ -93,6 +96,7 @@ func _complete_q005_runtime() -> void:
 	for plant_id in range(3):
 		main.game_state.collect_q005_plant(plant_id)
 		main.game_state.place_q005_plant(plant_id, plant_id)
+	main.game_state.deliver_q005_harvest()
 	main._save_game()
 
 

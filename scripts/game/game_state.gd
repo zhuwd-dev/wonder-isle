@@ -1,7 +1,7 @@
 class_name IslandGameState
 extends RefCounted
 
-const SCHEMA_VERSION := 12
+const SCHEMA_VERSION := 13
 const LEGACY_SCHEMA_VERSION := 1
 const SEED_SCHEMA_VERSION := 2
 const POND_SCHEMA_VERSION := 3
@@ -14,12 +14,14 @@ const Q009_SCHEMA_VERSION := 9
 const Q010_SCHEMA_VERSION := 10
 const Q011_SCHEMA_VERSION := 11
 const Q012_SCHEMA_VERSION := 12
+const Q013_SCHEMA_VERSION := 13
 const BOARD_TOTAL := 3
 const POND_STONE_TOTAL := 3
 const Q004_WOOD_TOTAL := 3
 const Q005_PLANT_TOTAL := 3
 const Q006_DECOR_TOTAL := 3
 const Q006_SLOT_TOTAL := 3
+const Q006_DEFAULT_POSITIONS := [Vector2(978, 559), Vector2(1072, 559), Vector2(1166, 559)]
 const Q006_DECOR_IDS := ["wood_fence", "flower_pot", "yard_lamp"]
 const Q006_WINDMILL_ID := "windmill"
 const Q007_REWARD_DECOR_ID := "pearl_shell_decor"
@@ -47,10 +49,12 @@ var fox_moved_in := false
 var q005_watered := false
 var q005_plants_collected: Array[bool] = [false, false, false]
 var q005_plant_slots: Array[bool] = [false, false, false]
+var q005_harvest_delivered := false
 var q005_completed := false
 var q006_decor_inventory: Array[bool] = [false, false, false]
 var q006_decor_placed: Array[bool] = [false, false, false]
 var q006_slot_occupants: Array[int] = [-1, -1, -1]
+var q006_decor_positions: Array[Vector2] = [Vector2.ZERO, Vector2.ZERO, Vector2.ZERO]
 var q006_completion_proof: Array[bool] = [false, false, false]
 var q006_completed := false
 var q006_windmill_unlocked := false
@@ -60,6 +64,7 @@ var q007_reward_unlocked := false
 var q008_path_slot_occupants: Array[int] = [-1, -1, -1]
 var q008_completed := false
 var q009_materials_collected: Array[bool] = [false, false, false]
+var q009_materials_delivered: Array[bool] = [false, false, false]
 var q009_completed := false
 var q010_seeds_collected: Array[bool] = [false, false, false]
 var q011_slot_occupants: Array[int] = [-1, -1, -1]
@@ -83,10 +88,12 @@ func reset() -> void:
 	q005_watered = false
 	q005_plants_collected = [false, false, false]
 	q005_plant_slots = [false, false, false]
+	q005_harvest_delivered = false
 	q005_completed = false
 	q006_decor_inventory = [false, false, false]
 	q006_decor_placed = [false, false, false]
 	q006_slot_occupants = [-1, -1, -1]
+	q006_decor_positions = [Vector2.ZERO, Vector2.ZERO, Vector2.ZERO]
 	q006_completion_proof = [false, false, false]
 	q006_completed = false
 	q006_windmill_unlocked = false
@@ -96,6 +103,7 @@ func reset() -> void:
 	q008_path_slot_occupants = [-1, -1, -1]
 	q008_completed = false
 	q009_materials_collected = [false, false, false]
+	q009_materials_delivered = [false, false, false]
 	q009_completed = false
 	q010_seeds_collected = [false, false, false]
 	q011_slot_occupants = [-1, -1, -1]
@@ -234,6 +242,23 @@ func collect_q005_plant(plant_id: int) -> bool:
 	if not can_collect_q005_plant(plant_id):
 		return false
 	q005_plants_collected[plant_id] = true
+	# Harvesting a ripe flower also leaves the seedling replanted in its bed.
+	# The player should not have to pick a plant up and drop it back in the
+	# same spot just to finish this short garden task.
+	q005_plant_slots[plant_id] = true
+	_update_q005_completion()
+	return true
+
+
+func can_deliver_q005_harvest() -> bool:
+	return can_start_q005() and q005_watered and _all_flags_true(q005_plants_collected) and not q005_harvest_delivered
+
+
+func deliver_q005_harvest() -> bool:
+	if not can_deliver_q005_harvest():
+		return false
+	q005_harvest_delivered = true
+	_update_q005_completion()
 	return true
 
 
@@ -250,11 +275,11 @@ func place_q005_plant(plant_id: int, slot_id: int) -> bool:
 
 
 func is_q005_complete() -> bool:
-	return q005_completed and is_pond_complete() and q005_watered and q005_plant_count() == Q005_PLANT_TOTAL and q005_plant_slot_count() == Q005_PLANT_TOTAL
+	return q005_completed and is_pond_complete() and q005_watered and _all_flags_true(q005_plants_collected) and _all_flags_true(q005_plant_slots) and q005_harvest_delivered
 
 
 func _update_q005_completion() -> void:
-	if q005_watered and q005_plant_count() == Q005_PLANT_TOTAL and q005_plant_slot_count() == Q005_PLANT_TOTAL and is_pond_complete():
+	if q005_watered and _all_flags_true(q005_plants_collected) and _all_flags_true(q005_plant_slots) and q005_harvest_delivered and is_pond_complete():
 		q005_completed = true
 
 
@@ -346,6 +371,24 @@ func place_q006_decoration(decor_id: int, slot_id: int) -> bool:
 	q006_decor_inventory[decor_id] = false
 	q006_decor_placed[decor_id] = true
 	q006_slot_occupants[slot_id] = decor_id
+	q006_decor_positions[decor_id] = Q006_DEFAULT_POSITIONS[slot_id]
+	q006_completion_proof[decor_id] = true
+	_update_q006_completion()
+	return true
+
+
+func place_q006_decoration_at(decor_id: int, position: Vector2) -> bool:
+	if not can_edit_q006() or decor_id < 0 or decor_id >= Q006_DECOR_TOTAL or not q006_decor_inventory[decor_id]:
+		return false
+	var tracking_slot := decor_id
+	if q006_slot_occupants[tracking_slot] >= 0:
+		tracking_slot = q006_slot_occupants.find(-1)
+	if tracking_slot < 0:
+		return false
+	q006_decor_inventory[decor_id] = false
+	q006_decor_placed[decor_id] = true
+	q006_slot_occupants[tracking_slot] = decor_id
+	q006_decor_positions[decor_id] = position
 	q006_completion_proof[decor_id] = true
 	_update_q006_completion()
 	return true
@@ -360,6 +403,14 @@ func move_q006_decoration(decor_id: int, from_slot: int, to_slot: int) -> bool:
 		return false
 	q006_slot_occupants[from_slot] = -1
 	q006_slot_occupants[to_slot] = decor_id
+	q006_decor_positions[decor_id] = Q006_DEFAULT_POSITIONS[to_slot]
+	return true
+
+
+func move_q006_decoration_to(decor_id: int, from_slot: int, position: Vector2) -> bool:
+	if not can_edit_q006() or decor_id < 0 or decor_id >= Q006_DECOR_TOTAL or from_slot < 0 or from_slot >= Q006_SLOT_TOTAL or q006_slot_occupants[from_slot] != decor_id:
+		return false
+	q006_decor_positions[decor_id] = position
 	return true
 
 
@@ -373,7 +424,12 @@ func remove_q006_decoration(decor_id: int, slot_id: int) -> bool:
 	q006_slot_occupants[slot_id] = -1
 	q006_decor_placed[decor_id] = false
 	q006_decor_inventory[decor_id] = true
+	q006_decor_positions[decor_id] = Vector2.ZERO
 	return true
+
+
+func q006_slot_for_decoration(decor_id: int) -> int:
+	return q006_slot_occupants.find(decor_id)
 
 
 func is_q006_complete() -> bool:
@@ -471,13 +527,31 @@ func collect_q009_material(material_id: int) -> bool:
 	if not can_collect_q009_material(material_id):
 		return false
 	q009_materials_collected[material_id] = true
-	if _all_flags_true(q009_materials_collected):
-		q009_completed = true
 	return true
 
 
+func q009_material_delivery_count() -> int:
+	return _count_true(q009_materials_delivered)
+
+
+func can_deliver_next_q009_material() -> bool:
+	return can_start_q009() and _all_flags_true(q009_materials_collected) and q009_material_delivery_count() < Q009_MATERIAL_TOTAL
+
+
+func deliver_next_q009_material() -> bool:
+	if not can_deliver_next_q009_material():
+		return false
+	for material_id in range(Q009_MATERIAL_TOTAL):
+		if q009_materials_collected[material_id] and not q009_materials_delivered[material_id]:
+			q009_materials_delivered[material_id] = true
+			if _all_flags_true(q009_materials_delivered):
+				q009_completed = true
+			return true
+	return false
+
+
 func is_q009_complete() -> bool:
-	return q009_completed and is_q004_complete() and _all_flags_true(q009_materials_collected)
+	return q009_completed and is_q004_complete() and _all_flags_true(q009_materials_collected) and _all_flags_true(q009_materials_delivered)
 
 
 func q009_bird_interaction_unlocked() -> bool:
@@ -581,6 +655,13 @@ func _count_true(values: Array[bool]) -> int:
 	return total
 
 
+func _q006_positions_for_save() -> Array:
+	var positions: Array = []
+	for position in q006_decor_positions:
+		positions.append([position.x, position.y])
+	return positions
+
+
 func to_save_data() -> Dictionary:
 	_ensure_q006_unlock()
 	return {
@@ -601,10 +682,12 @@ func to_save_data() -> Dictionary:
 		"q005_watered": q005_watered,
 		"q005_plants_collected": q005_plants_collected.duplicate(),
 		"q005_plant_slots": q005_plant_slots.duplicate(),
+		"q005_harvest_delivered": q005_harvest_delivered,
 		"q005_completed": q005_completed,
 		"q006_decor_inventory": q006_decor_inventory.duplicate(),
 		"q006_decor_placed": q006_decor_placed.duplicate(),
 		"q006_slot_occupants": q006_slot_occupants.duplicate(),
+		"q006_decor_positions": _q006_positions_for_save(),
 		"q006_completion_proof": q006_completion_proof.duplicate(),
 		"q006_completed": q006_completed,
 		"q006_windmill_unlocked": q006_windmill_unlocked,
@@ -614,6 +697,7 @@ func to_save_data() -> Dictionary:
 		"q008_path_slot_occupants": q008_path_slot_occupants.duplicate(),
 		"q008_completed": q008_completed,
 		"q009_materials_collected": q009_materials_collected.duplicate(),
+		"q009_materials_delivered": q009_materials_delivered.duplicate(),
 		"q009_completed": q009_completed,
 		"q010_seeds_collected": q010_seeds_collected.duplicate(),
 		"q011_slot_occupants": q011_slot_occupants.duplicate(),
@@ -637,7 +721,8 @@ func load_save_data(data: Dictionary) -> bool:
 	var is_q010_schema := is_equal_approx(float(schema_version), float(Q010_SCHEMA_VERSION))
 	var is_q011_schema := is_equal_approx(float(schema_version), float(Q011_SCHEMA_VERSION))
 	var is_q012_schema := is_equal_approx(float(schema_version), float(Q012_SCHEMA_VERSION))
-	if not is_legacy_schema and not is_seed_schema and not is_pond_schema and not is_q004_schema and not is_q005_schema and not is_q006_schema and not is_q007_schema and not is_q008_schema and not is_q009_schema and not is_q010_schema and not is_q011_schema and not is_q012_schema:
+	var is_q013_schema := is_equal_approx(float(schema_version), float(Q013_SCHEMA_VERSION))
+	if not is_legacy_schema and not is_seed_schema and not is_pond_schema and not is_q004_schema and not is_q005_schema and not is_q006_schema and not is_q007_schema and not is_q008_schema and not is_q009_schema and not is_q010_schema and not is_q011_schema and not is_q012_schema and not is_q013_schema:
 		return false
 	var collected_data = data.get("collected")
 	var placed_data = data.get("placed")
@@ -675,7 +760,7 @@ func load_save_data(data: Dictionary) -> bool:
 
 	var validated_seed_collected := false
 	var validated_seed_planted := false
-	if is_seed_schema or is_pond_schema or is_q004_schema or is_q005_schema or is_q006_schema or is_q007_schema or is_q008_schema or is_q009_schema or is_q010_schema or is_q011_schema or is_q012_schema:
+	if is_seed_schema or is_pond_schema or is_q004_schema or is_q005_schema or is_q006_schema or is_q007_schema or is_q008_schema or is_q009_schema or is_q010_schema or is_q011_schema or is_q012_schema or is_q013_schema:
 		if typeof(data.get("seed_collected")) != TYPE_BOOL:
 			return false
 		if typeof(data.get("seed_planted")) != TYPE_BOOL:
@@ -689,7 +774,7 @@ func load_save_data(data: Dictionary) -> bool:
 
 	var validated_pond_stones: Array[bool] = [false, false, false]
 	var validated_pond_opened := false
-	if is_pond_schema or is_q004_schema or is_q005_schema or is_q006_schema or is_q007_schema or is_q008_schema or is_q009_schema or is_q010_schema or is_q011_schema or is_q012_schema:
+	if is_pond_schema or is_q004_schema or is_q005_schema or is_q006_schema or is_q007_schema or is_q008_schema or is_q009_schema or is_q010_schema or is_q011_schema or is_q012_schema or is_q013_schema:
 		var pond_stones_data = data.get("pond_stones_placed")
 		if not pond_stones_data is Array or pond_stones_data.size() != POND_STONE_TOTAL:
 			return false
@@ -716,7 +801,7 @@ func load_save_data(data: Dictionary) -> bool:
 	var validated_wood_delivered: Array[bool] = [false, false, false]
 	var validated_q004_completed := false
 	var validated_fox_moved_in := false
-	if is_q004_schema or is_q005_schema or is_q006_schema or is_q007_schema or is_q008_schema or is_q009_schema or is_q010_schema or is_q011_schema or is_q012_schema:
+	if is_q004_schema or is_q005_schema or is_q006_schema or is_q007_schema or is_q008_schema or is_q009_schema or is_q010_schema or is_q011_schema or is_q012_schema or is_q013_schema:
 		var wood_collected_data = data.get("wood_collected")
 		var wood_delivered_data = data.get("wood_delivered")
 		if not wood_collected_data is Array or wood_collected_data.size() != Q004_WOOD_TOTAL:
@@ -747,8 +832,9 @@ func load_save_data(data: Dictionary) -> bool:
 	var validated_q005_watered := false
 	var validated_q005_plants_collected: Array[bool] = [false, false, false]
 	var validated_q005_plant_slots: Array[bool] = [false, false, false]
+	var validated_q005_harvest_delivered := false
 	var validated_q005_completed := false
-	if is_q005_schema or is_q006_schema or is_q007_schema or is_q008_schema or is_q009_schema or is_q010_schema or is_q011_schema or is_q012_schema:
+	if is_q005_schema or is_q006_schema or is_q007_schema or is_q008_schema or is_q009_schema or is_q010_schema or is_q011_schema or is_q012_schema or is_q013_schema:
 		if typeof(data.get("q005_watered")) != TYPE_BOOL:
 			return false
 		var q005_plants_collected_data = data.get("q005_plants_collected")
@@ -763,24 +849,37 @@ func load_save_data(data: Dictionary) -> bool:
 			if q005_plant_slots_data[i] and not q005_plants_collected_data[i]:
 				return false
 			validated_q005_plants_collected[i] = q005_plants_collected_data[i]
-			validated_q005_plant_slots[i] = q005_plant_slots_data[i]
+			validated_q005_plant_slots[i] = q005_plant_slots_data[i] or q005_plants_collected_data[i]
+			if is_q013_schema and q005_plants_collected_data[i] and not q005_plant_slots_data[i]:
+				return false
 		if typeof(data.get("q005_completed")) != TYPE_BOOL:
 			return false
 		validated_q005_watered = data["q005_watered"]
 		validated_q005_completed = data["q005_completed"]
+		if is_q013_schema:
+			if typeof(data.get("q005_harvest_delivered")) != TYPE_BOOL:
+				return false
+			validated_q005_harvest_delivered = data["q005_harvest_delivered"]
+		else:
+			# Older builds completed this task by dragging each flower back onto
+			# the same bed. Preserve completed saves as already delivered.
+			validated_q005_harvest_delivered = validated_q005_completed
 		if (validated_q005_watered or validated_q005_plants_collected.has(true) or validated_q005_plant_slots.has(true) or validated_q005_completed) and not expected_pond_complete:
 			return false
-	var expected_q005_complete := expected_pond_complete and validated_q005_watered and _all_flags_true(validated_q005_plants_collected) and _all_flags_true(validated_q005_plant_slots)
+	if validated_q005_harvest_delivered and (not expected_pond_complete or not validated_q005_watered or not _all_flags_true(validated_q005_plants_collected)):
+		return false
+	var expected_q005_complete := expected_pond_complete and validated_q005_watered and _all_flags_true(validated_q005_plants_collected) and _all_flags_true(validated_q005_plant_slots) and validated_q005_harvest_delivered
 	if validated_q005_completed != expected_q005_complete:
 		return false
 
 	var validated_q006_decor_inventory: Array[bool] = [false, false, false]
 	var validated_q006_decor_placed: Array[bool] = [false, false, false]
 	var validated_q006_slot_occupants: Array[int] = [-1, -1, -1]
+	var validated_q006_decor_positions: Array[Vector2] = [Vector2.ZERO, Vector2.ZERO, Vector2.ZERO]
 	var validated_q006_completion_proof: Array[bool] = [false, false, false]
 	var validated_q006_completed := false
 	var validated_q006_windmill_unlocked := false
-	if is_q006_schema or is_q007_schema or is_q008_schema or is_q009_schema or is_q010_schema or is_q011_schema or is_q012_schema:
+	if is_q006_schema or is_q007_schema or is_q008_schema or is_q009_schema or is_q010_schema or is_q011_schema or is_q012_schema or is_q013_schema:
 		var q006_inventory_data = data.get("q006_decor_inventory")
 		var q006_placed_data = data.get("q006_decor_placed")
 		var q006_slots_data = data.get("q006_slot_occupants")
@@ -803,6 +902,27 @@ func load_save_data(data: Dictionary) -> bool:
 			if (typeof(q006_slots_data[i]) != TYPE_INT and typeof(q006_slots_data[i]) != TYPE_FLOAT) or not is_equal_approx(float(q006_slots_data[i]), round(float(q006_slots_data[i]))) or q006_slots_data[i] < -1 or q006_slots_data[i] >= Q006_DECOR_TOTAL:
 				return false
 			validated_q006_slot_occupants[i] = int(q006_slots_data[i])
+		if is_q013_schema:
+			var q006_positions_data = data.get("q006_decor_positions")
+			if not q006_positions_data is Array or q006_positions_data.size() != Q006_DECOR_TOTAL:
+				return false
+			for decor_id in range(Q006_DECOR_TOTAL):
+				var position_data = q006_positions_data[decor_id]
+				if not position_data is Array or position_data.size() != 2:
+					return false
+				if (typeof(position_data[0]) != TYPE_INT and typeof(position_data[0]) != TYPE_FLOAT) or (typeof(position_data[1]) != TYPE_INT and typeof(position_data[1]) != TYPE_FLOAT):
+					return false
+				var decor_position := Vector2(float(position_data[0]), float(position_data[1]))
+				if absf(decor_position.x) > 2000.0 or absf(decor_position.y) > 2000.0:
+					return false
+				validated_q006_decor_positions[decor_id] = decor_position
+		else:
+			# Convert fixed-slot positions saved by earlier builds to the new
+			# free-placement coordinates without moving the user's decorations.
+			for slot_id in range(Q006_SLOT_TOTAL):
+				var decor_id: int = validated_q006_slot_occupants[slot_id]
+				if decor_id >= 0:
+					validated_q006_decor_positions[decor_id] = Q006_DEFAULT_POSITIONS[slot_id]
 		if typeof(data.get("q006_completed")) != TYPE_BOOL or typeof(data.get("q006_windmill_unlocked")) != TYPE_BOOL:
 			return false
 		validated_q006_completed = data["q006_completed"]
@@ -829,6 +949,8 @@ func load_save_data(data: Dictionary) -> bool:
 		for decor_id in range(Q006_DECOR_TOTAL):
 			if validated_q006_decor_placed[decor_id] and not seen_decorations.has(decor_id):
 				return false
+			if validated_q006_decor_placed[decor_id] and validated_q006_decor_positions[decor_id] == Vector2.ZERO:
+				return false
 		if validated_q006_completed:
 			if not _all_flags_true(validated_q006_completion_proof) or not validated_q006_windmill_unlocked:
 				return false
@@ -838,7 +960,7 @@ func load_save_data(data: Dictionary) -> bool:
 	var validated_q007_shell_collected := false
 	var validated_q007_completed := false
 	var validated_q007_reward_unlocked := false
-	if is_q007_schema or is_q008_schema or is_q009_schema or is_q010_schema or is_q011_schema or is_q012_schema:
+	if is_q007_schema or is_q008_schema or is_q009_schema or is_q010_schema or is_q011_schema or is_q012_schema or is_q013_schema:
 		if typeof(data.get("q007_shell_collected")) != TYPE_BOOL:
 			return false
 		if typeof(data.get("q007_completed")) != TYPE_BOOL:
@@ -858,7 +980,7 @@ func load_save_data(data: Dictionary) -> bool:
 
 	var validated_q008_path_slot_occupants: Array[int] = [-1, -1, -1]
 	var validated_q008_completed := false
-	if is_q008_schema or is_q009_schema or is_q010_schema or is_q011_schema or is_q012_schema:
+	if is_q008_schema or is_q009_schema or is_q010_schema or is_q011_schema or is_q012_schema or is_q013_schema:
 		var q008_slots_data = data.get("q008_path_slot_occupants")
 		if not q008_slots_data is Array or q008_slots_data.size() != Q008_PATH_SLOT_TOTAL:
 			return false
@@ -883,8 +1005,9 @@ func load_save_data(data: Dictionary) -> bool:
 		return false
 
 	var validated_q009_materials_collected: Array[bool] = [false, false, false]
+	var validated_q009_materials_delivered: Array[bool] = [false, false, false]
 	var validated_q009_completed := false
-	if is_q009_schema or is_q010_schema or is_q011_schema or is_q012_schema:
+	if is_q009_schema or is_q010_schema or is_q011_schema or is_q012_schema or is_q013_schema:
 		var q009_materials_data = data.get("q009_materials_collected")
 		if not q009_materials_data is Array or q009_materials_data.size() != Q009_MATERIAL_TOTAL:
 			return false
@@ -895,16 +1018,31 @@ func load_save_data(data: Dictionary) -> bool:
 		if typeof(data.get("q009_completed")) != TYPE_BOOL:
 			return false
 		validated_q009_completed = data["q009_completed"]
+		if is_q013_schema:
+			var q009_delivered_data = data.get("q009_materials_delivered")
+			if not q009_delivered_data is Array or q009_delivered_data.size() != Q009_MATERIAL_TOTAL:
+				return false
+			for material_id in range(Q009_MATERIAL_TOTAL):
+				if typeof(q009_delivered_data[material_id]) != TYPE_BOOL:
+					return false
+				if q009_delivered_data[material_id] and not validated_q009_materials_collected[material_id]:
+					return false
+				validated_q009_materials_delivered[material_id] = q009_delivered_data[material_id]
+		else:
+			# In earlier builds, collecting the final material also completed the
+			# birdhouse. Preserve those saves as fully delivered.
+			if validated_q009_completed:
+				validated_q009_materials_delivered = [true, true, true]
 	if _all_flags_true(validated_q009_materials_collected) and not validated_q004_completed:
 		return false
 	if validated_q009_materials_collected.has(true) and not validated_q004_completed:
 		return false
-	var expected_q009_complete := _all_flags_true(validated_q009_materials_collected)
+	var expected_q009_complete := _all_flags_true(validated_q009_materials_delivered)
 	if validated_q009_completed != expected_q009_complete:
 		return false
 
 	var validated_q010_seeds_collected: Array[bool] = [false, false, false]
-	if is_q010_schema or is_q011_schema or is_q012_schema:
+	if is_q010_schema or is_q011_schema or is_q012_schema or is_q013_schema:
 		var q010_seeds_data = data.get("q010_seeds_collected")
 		if not q010_seeds_data is Array or q010_seeds_data.size() != Q010_SEED_TOTAL:
 			return false
@@ -916,7 +1054,7 @@ func load_save_data(data: Dictionary) -> bool:
 		return false
 
 	var validated_q011_slot_occupants: Array[int] = [-1, -1, -1]
-	if is_q011_schema or is_q012_schema:
+	if is_q011_schema or is_q012_schema or is_q013_schema:
 		var q011_slots_data = data.get("q011_slot_occupants")
 		if not q011_slots_data is Array or q011_slots_data.size() != Q011_ITEM_TOTAL:
 			return false
@@ -956,7 +1094,7 @@ func load_save_data(data: Dictionary) -> bool:
 			return false
 
 	var validated_q012_completed := false
-	if is_q012_schema:
+	if is_q012_schema or is_q013_schema:
 		if typeof(data.get("q012_completed")) != TYPE_BOOL:
 			return false
 		validated_q012_completed = data["q012_completed"]
@@ -979,10 +1117,12 @@ func load_save_data(data: Dictionary) -> bool:
 	q005_watered = validated_q005_watered
 	q005_plants_collected = validated_q005_plants_collected
 	q005_plant_slots = validated_q005_plant_slots
+	q005_harvest_delivered = validated_q005_harvest_delivered
 	q005_completed = validated_q005_completed
 	q006_decor_inventory = validated_q006_decor_inventory
 	q006_decor_placed = validated_q006_decor_placed
 	q006_slot_occupants = validated_q006_slot_occupants
+	q006_decor_positions = validated_q006_decor_positions
 	q006_completion_proof = validated_q006_completion_proof
 	q006_completed = validated_q006_completed
 	q006_windmill_unlocked = validated_q006_windmill_unlocked
@@ -992,6 +1132,7 @@ func load_save_data(data: Dictionary) -> bool:
 	q008_path_slot_occupants = validated_q008_path_slot_occupants
 	q008_completed = validated_q008_completed
 	q009_materials_collected = validated_q009_materials_collected
+	q009_materials_delivered = validated_q009_materials_delivered
 	q009_completed = validated_q009_completed
 	q010_seeds_collected = validated_q010_seeds_collected
 	q011_slot_occupants = validated_q011_slot_occupants

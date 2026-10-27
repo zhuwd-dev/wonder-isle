@@ -60,7 +60,7 @@ func _write_watered() -> void:
 	_expect(main.game_state.water_q005(), "watered progress must be writable")
 	main._save_game()
 	var saved = _read_save()
-	_expect(saved.get("schema_version") == 12, "watered progress must use Schema 12")
+	_expect(saved.get("schema_version") == 13, "watered progress must use Schema 13")
 	_expect(saved.get("q005_watered") == true, "watered progress must be saved")
 	_expect(saved.get("q005_plants_collected") == [false, false, false], "watered progress must not invent plants")
 	_expect(saved.get("q005_plant_slots") == [false, false, false], "watered progress must not invent slots")
@@ -89,9 +89,7 @@ func _write_partial() -> void:
 	main._restart_game()
 	_complete_q003(main)
 	_expect(main.game_state.water_q005(), "partial save watering must succeed before plants are collected")
-	for plant_id in range(3):
-		_expect(main.game_state.collect_q005_plant(plant_id), "partial save plant collection must succeed")
-	_expect(main.game_state.place_q005_plant(0, 0), "partial save first slot must succeed")
+	_expect(main.game_state.collect_q005_plant(0), "partial save first flower collection must succeed")
 	main._save_game()
 	main.queue_free()
 
@@ -99,8 +97,9 @@ func _write_partial() -> void:
 func _read_partial() -> void:
 	var main = await _spawn_main()
 	_expect(main.game_state.q005_watered, "partial restart must preserve watering")
-	_expect(main.game_state.q005_plants_collected == [true, true, true], "partial restart must preserve collected plants")
-	_expect(main.game_state.q005_plant_slots == [true, false, false], "partial restart must preserve one slot")
+	_expect(main.game_state.q005_plants_collected == [true, false, false], "partial restart must preserve one collected flower")
+	_expect(main.game_state.q005_plant_slots == [true, false, false], "a collected flower must remain in its bed without a placement step")
+	_expect(not main.game_state.q005_harvest_delivered, "partial restart must preserve the undelivered bouquet state")
 	_expect(not main.game_state.is_q005_complete(), "partial restart must remain incomplete")
 	main.queue_free()
 
@@ -112,8 +111,7 @@ func _write_complete() -> void:
 	_expect(main.game_state.water_q005(), "complete save watering must succeed before plants are collected")
 	for plant_id in range(3):
 		_expect(main.game_state.collect_q005_plant(plant_id), "complete save plant collection must succeed")
-	for plant_id in range(3):
-		_expect(main.game_state.place_q005_plant(plant_id, plant_id), "complete save plant placement must succeed")
+	_expect(main.game_state.deliver_q005_harvest(), "complete save bouquet delivery must succeed")
 	_expect(main.game_state.is_q005_complete(), "complete save must complete Q005")
 	main._save_game()
 	main.queue_free()
@@ -129,8 +127,7 @@ func _write_complete_with_q004() -> void:
 	_expect(main.game_state.water_q005(), "Q005 completion setup watering must succeed before plants are collected")
 	for plant_id in range(3):
 		_expect(main.game_state.collect_q005_plant(plant_id), "Q005 completion setup plant collection must succeed")
-	for plant_id in range(3):
-		_expect(main.game_state.place_q005_plant(plant_id, plant_id), "Q005 completion setup placement must succeed")
+	_expect(main.game_state.deliver_q005_harvest(), "Q005 completion setup bouquet delivery must succeed")
 	_expect(main.game_state.is_q005_complete(), "Q005 completion setup must complete Q005")
 	main._save_game()
 	main.queue_free()

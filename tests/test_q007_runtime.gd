@@ -46,10 +46,16 @@ func _run() -> void:
 		_expect(main.game_state.place_q006_decoration(decor_id, decor_id), "completing Q006 must enable each decoration")
 	main._save_game()
 	_expect(not main._can_use_q007_side_task(), "the shell task must stay hidden until the main ending")
-	_expect(main._task_prompt_text() == "花园装饰已完成！回到兔子身边参加小岛庆祝。", "Q006 completion must guide the player to the ending")
+	_expect(main._task_prompt_text() == "最后一步：走到兔子身边，点右下角“庆祝”。", "Q006 completion must guide the player to the ending")
+	main._update_interact_button()
+	_expect(main.interact_button.text == "庆祝", "the ending control must name the celebration interaction")
 	main.player_position = main.Q012_RABBIT_POSITION
 	main._try_collect_nearby()
 	_expect(main.game_state.is_q012_complete(), "the rabbit interaction must finish the main story")
+	_expect(main.celebration_remaining > 0.0, "the final step must show a short celebration before optional tasks")
+	main.celebration_remaining = 0.0
+	main._update_interact_button()
+	main._refresh_build_controls()
 	_expect(main._can_use_q007_side_task(), "the main ending must unlock optional shell exploration")
 	_expect(main._task_stage_label() == "可选 1/5", "the first post-ending task must start the separate optional-task track")
 	_expect(main._task_prompt_text() == "主线故事完成！可选支线：到池塘边寻找隐藏贝壳。", "Q007 must be labeled optional after the ending")
@@ -92,6 +98,7 @@ func _complete_q003_runtime() -> void:
 	for plant_id in range(3):
 		main.game_state.collect_q005_plant(plant_id)
 		main.game_state.place_q005_plant(plant_id, plant_id)
+	main.game_state.deliver_q005_harvest()
 	main._save_game()
 
 

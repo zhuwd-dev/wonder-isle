@@ -61,7 +61,7 @@ func _init() -> void:
 	_expect(not seed_state.place_pond_stone(2), "已放置池塘石头不能重复触发")
 
 	var seed_saved: Dictionary = seed_state.to_save_data()
-	_expect(seed_saved.get("schema_version") == 12, "新增 Q010 后存档应使用 Schema 12")
+	_expect(seed_saved.get("schema_version") == 13, "新增 Q010 后存档应使用 Schema 13")
 	_expect(seed_saved.get("seed_collected") == true, "新存档应保存种子收集状态")
 	_expect(seed_saved.get("seed_planted") == true, "新存档应保存种植状态")
 	_expect(seed_saved.get("pond_stones_placed") == [true, true, true], "新存档应保存池塘石头状态")
@@ -84,7 +84,7 @@ func _init() -> void:
 	_expect(migrated.is_complete(), "旧存档桥梁完成状态应保留")
 	_expect(not migrated.seed_collected and not migrated.seed_planted, "旧存档的新任务状态应默认为未完成")
 	_expect(not migrated.is_pond_complete(), "旧存档的池塘任务应默认为未完成")
-	_expect(migrated.to_save_data().get("schema_version") == 12, "迁移后再次保存应升级到 Schema 12")
+	_expect(migrated.to_save_data().get("schema_version") == 13, "迁移后再次保存应升级到 Schema 13")
 	var schema2_save := {
 		"schema_version": 2,
 		"collected": [true, true, true],

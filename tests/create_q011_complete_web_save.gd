@@ -25,12 +25,15 @@ func _init() -> void:
 	for plant_id in range(GameState.Q005_PLANT_TOTAL):
 		state.collect_q005_plant(plant_id)
 		state.place_q005_plant(plant_id, plant_id)
+	state.deliver_q005_harvest()
 	for decor_id in range(GameState.Q006_DECOR_TOTAL):
 		state.place_q006_decoration(decor_id, decor_id)
 	state.complete_q012()
 	state.collect_q007_shell()
 	for material_id in range(GameState.Q009_MATERIAL_TOTAL):
 		state.collect_q009_material(material_id)
+	for delivery_id in range(GameState.Q009_MATERIAL_TOTAL):
+		state.deliver_next_q009_material()
 	for seed_id in range(GameState.Q010_SEED_TOTAL):
 		state.collect_q010_seed(seed_id)
 	for path_id in range(GameState.Q008_PATH_SLOT_TOTAL):

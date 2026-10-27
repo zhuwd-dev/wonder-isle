@@ -190,20 +190,47 @@ def main() -> int:
                 move("w", 1_077)
                 move("d", 230)
                 interact()
-                verify(lambda save: save.get("q009_materials_collected") == [True, True, True] and save.get("q009_completed") is True, "Q009 collect all birdhouse materials")
+                collected_materials = verify(
+                    lambda save: save.get("q009_materials_collected") == [True, True, True]
+                    and save.get("q009_completed") is False,
+                    "Q009 collect all birdhouse materials and keep delivery pending",
+                )
+                if collected_materials.get("q009_materials_delivered") != [False, False, False]:
+                    raise AssertionError("Collected birdhouse materials must remain undelivered")
+                snap("web-q009-awaiting-delivery.png")
+
+                # Take the materials to the birdhouse and hand them over one by
+                # one so each interaction visibly advances construction.
+                move("d", 1_360)
+                move("s", 860)
+                snap("web-q009-at-birdhouse.png")
+                for delivery_id in range(3):
+                    interact()
+                    expected_deliveries = [delivery_id >= 0, delivery_id >= 1, delivery_id >= 2]
+                    delivery_save = verify(
+                        lambda save, expected=expected_deliveries: save.get("q009_materials_delivered") == expected,
+                        f"Q009 deliver birdhouse material {delivery_id + 1}/3",
+                    )
+                    if delivery_id < 2 and delivery_save.get("q009_completed") is not False:
+                        raise AssertionError("The birdhouse must remain under construction until all deliveries")
+                    if delivery_id == 0:
+                        snap("web-q009-birdhouse-under-construction.png")
+                verify(lambda save: save.get("q009_completed") is True, "Q009 finish birdhouse after three deliveries")
                 snap("web-q009-birdhouse-complete.png")
 
                 # The greeting is optional, but it should work once materials are gathered.
-                move("d", 1_346)
-                move("s", 635)
+                move("w", 135)
                 interact()
                 snap("web-q009-bird-greeting.png")
 
                 # Collect the three visible seeds across the west island.
-                move("a", 1_808)
+                # Move above the fox house before crossing west so the red seed
+                # is approached on its own horizontal line, away from the gold.
+                move("w", 200)
+                move("a", 1_800)
                 interact()
                 verify(lambda save: save.get("q010_seeds_collected") == [True, False, False], "Q010 collect red seed")
-                move("d", 160)
+                move("d", 240)
                 snap("web-q010-before-gold-seed.png")
                 interact()
                 verify(lambda save: save.get("q010_seeds_collected") == [True, False, True], "Q010 collect gold seed")
@@ -225,9 +252,12 @@ def main() -> int:
                 verify(lambda save: save.get("q008_completed") is True, "Q008 connect the path and unlock extra plot")
                 snap("web-q008-path-complete.png")
 
-                # Enter the extra-plot mode and place each item in an empty slot.
+                # The extra-plot area remains closed until the player starts it;
+                # the tray appears only after the explicit button press.
+                snap("web-q011-before-start.png")
                 page.mouse.click(950, 112)
                 page.wait_for_timeout(500)
+                snap("web-q011-after-start.png")
                 for item_id, (source_x, target_x) in enumerate(((942, 230), (1022, 290), (1102, 350))):
                     drag((source_x, 642), (target_x, 588), "web-q011-green-drop-target.png" if item_id == 0 else None)
                     verify(lambda save, i=item_id: isinstance(save.get("q011_slot_occupants"), list) and save["q011_slot_occupants"][i] == i, f"Q011 place item {item_id + 1}/3")
@@ -239,6 +269,30 @@ def main() -> int:
                 page.wait_for_timeout(2_500)
                 verify(lambda save: save.get("q011_slot_occupants") == [0, 1, 2], "Q007–Q011 progress survives browser refresh")
                 snap("web-q011-after-refresh.png")
+
+                # Re-enter decoration mode after the story and move a placed
+                # garden item to an arbitrary open coordinate inside the plot.
+                # This guards against the old fixed-slot-only behavior in the
+                # real browser input path, not just the runtime unit tests.
+                page.mouse.click(950, 50)
+                page.wait_for_timeout(500)
+                snap("web-q006-free-placement-before.png")
+                page.mouse.move(978, 559)
+                page.mouse.down()
+                page.wait_for_timeout(100)
+                page.mouse.move(1030, 210, steps=12)
+                page.wait_for_timeout(350)
+                snap("web-q006-free-placement-preview.png")
+                page.mouse.up()
+                page.wait_for_timeout(700)
+                moved_decor = verify(
+                    lambda save: isinstance(save.get("q006_decor_positions"), list)
+                    and save["q006_decor_positions"][0] == [1030, 210],
+                    "Q006 move decoration to an arbitrary free position",
+                )
+                if moved_decor.get("q006_decor_positions", [None])[0] != [1030, 210]:
+                    raise AssertionError("The browser did not persist the free decoration coordinate")
+                snap("web-q006-free-placement-after.png")
                 if errors:
                     raise AssertionError(f"Browser errors or failed requests: {errors}")
                 print(json.dumps({"result": "passed", "checks": checks, "browser_errors": errors}, ensure_ascii=False, indent=2))

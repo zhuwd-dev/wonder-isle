@@ -46,14 +46,14 @@ func _init() -> void:
 	_expect(not state.q011_item_is_available(0), "placed Q011 items must disappear from availability")
 
 	var saved: Dictionary = state.to_save_data()
-	_expect(saved.get("schema_version") == 12, "Q011 saves must use Schema 12")
-	_expect(saved.get("q011_slot_occupants") == [2, 1, 0], "Schema 12 must save Q011 slot occupants")
-	_expect(saved.get("q012_completed") == false, "Schema 12 must save the main ending state")
+	_expect(saved.get("schema_version") == 13, "Q011 saves must use Schema 13")
+	_expect(saved.get("q011_slot_occupants") == [2, 1, 0], "Schema 13 must save Q011 slot occupants")
+	_expect(saved.get("q012_completed") == false, "Schema 13 must save the main ending state")
 	_expect(not saved.has("q011_completed") and not saved.has("q011_area_unlocked"), "Q011 completion and area unlock must remain derived")
 	var restored = state_script.new()
-	_expect(restored.load_save_data(saved), "a valid Schema 12 save must load")
-	_expect(restored.q011_slot_occupants == [2, 1, 0], "Schema 12 must restore Q011 occupants")
-	_expect(restored.is_q011_complete(), "Schema 12 must derive Q011 completion after load")
+	_expect(restored.load_save_data(saved), "a valid Schema 13 save must load")
+	_expect(restored.q011_slot_occupants == [2, 1, 0], "Schema 13 must restore Q011 occupants")
+	_expect(restored.is_q011_complete(), "Schema 13 must derive Q011 completion after load")
 	_expect(not restored.is_q012_complete(), "an unfinished ending must remain unfinished after load")
 
 	var invalid: Dictionary = saved.duplicate(true)
@@ -96,7 +96,7 @@ func _init() -> void:
 	_expect(all_prior.q011_completed_task_count() == 10, "Q001 through Q010 must count each task exactly once")
 
 	var migration_source: Dictionary = all_prior.to_save_data()
-	for schema_version in range(1, 12):
+	for schema_version in range(1, 13):
 		var old_save := migration_source.duplicate(true)
 		old_save["schema_version"] = schema_version
 		if schema_version < 11:
@@ -139,9 +139,9 @@ func _init() -> void:
 		if schema_version < 10:
 			old_save.erase("q010_seeds_collected")
 		var migrated = state_script.new()
-		_expect(migrated.load_save_data(old_save), "Schema %d must migrate to Schema 12" % schema_version)
+		_expect(migrated.load_save_data(old_save), "Schema %d must migrate to Schema 13" % schema_version)
 		_expect(migrated.q011_slot_occupants == [-1, -1, -1], "Schema %d must start Q011 empty and ignore Q011 data" % schema_version)
-		_expect(migrated.to_save_data().get("schema_version") == 12, "Schema %d must save as Schema 12 after migration" % schema_version)
+		_expect(migrated.to_save_data().get("schema_version") == 13, "Schema %d must save as Schema 13 after migration" % schema_version)
 		_expect(not migrated.is_q012_complete(), "Schema %d migration must leave the new ending uncompleted" % schema_version)
 		_expect(migrated.is_complete(), "Schema %d migration must preserve Q001" % schema_version)
 		if schema_version >= 4:
@@ -211,6 +211,7 @@ func _complete_q005(state) -> void:
 			state.place_q005_plant(plant_id, plant_id)
 
 
+	state.deliver_q005_harvest()
 func _complete_all_prior_tasks(state) -> void:
 	_complete_q005(state)
 	for wood_id in range(3):
@@ -228,6 +229,9 @@ func _complete_all_prior_tasks(state) -> void:
 	for material_id in range(3):
 		if not state.q009_materials_collected[material_id]:
 			state.collect_q009_material(material_id)
+	for delivery_id in range(3):
+		if state.q009_material_delivery_count() < 3:
+			state.deliver_next_q009_material()
 
 
 func _complete_q010(state) -> void:
