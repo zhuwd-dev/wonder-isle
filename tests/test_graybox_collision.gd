@@ -76,7 +76,7 @@ func _run() -> void:
 	_expect(main._drag_target_slot_at(slot_center_2) == -1, "placed board must no longer have an active target")
 	_expect(main.game_state.is_complete(), "placing the third board must complete the bridge")
 	_expect(main._task_prompt_text() == "下一步：过桥到右侧寻找发光的种子。", "完成修桥后应明确指出唯一的下一步")
-	_expect(main._task_action_hint_text() == "过桥到右侧，靠近发光种子后按“互动 / 收集”。", "完成修桥后应显示种子互动提示")
+	_expect(main._task_action_hint_text() == "过桥到右侧靠近发光种子，按 E 或点右上角按钮收集。", "完成修桥后应显示种子互动提示")
 	_expect(main._should_show_rabbit_dialog(), "修桥后兔子应继续提供当前阶段的引导")
 	_expect(main._rabbit_feedback_text() == "兔子：谢谢你！过桥找发光种子吧！", "修桥后的兔子对白应转成种子任务提示")
 	main.player_position = main.SEED_POSITION
@@ -98,7 +98,7 @@ func _run() -> void:
 	_expect(main._should_show_rabbit_dialog(), "种下种子后兔子应接着提示狐狸任务")
 	_expect(main._rabbit_feedback_text().contains("狐狸") and main._rabbit_feedback_text().contains("木材"), "种下种子后兔子应告诉玩家去收集木材")
 	_expect(main._task_prompt_text() == "任务：帮狐狸建小屋。先收集 3 份木材。", "种植完成后应引导狐狸小屋任务")
-	_expect(main._task_action_hint_text() == "靠近木材后按 E 或点击互动 / 收集来拾取。", "种植完成后应显示木材收集提示")
+	_expect(main._task_action_hint_text() == "靠近木材，按 E 或点右上角“互动 / 收集”拾取。", "种植完成后应显示木材收集提示")
 	main._try_collect_nearby()
 	_expect(main.game_state.seed_planted, "重复互动不能重复改变种植状态")
 	main._pointer_down(main.POND_STONE_POSITIONS[0])

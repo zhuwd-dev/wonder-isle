@@ -121,6 +121,27 @@ def main() -> int:
                 )
                 page.screenshot(path=str(screenshot_path), full_page=True)
 
+                # Exercise touch-first layout on its own page so resizing cannot affect
+                # keyboard and drag timings in the end-to-end story flow below.
+                touch_page = browser.new_page(viewport={"width": 1280, "height": 720}, device_scale_factor=1)
+                touch_page.goto(f"http://127.0.0.1:{server.server_port}/index.html", wait_until="load", timeout=60_000)
+                touch_page.wait_for_selector("canvas", timeout=60_000)
+                touch_page.wait_for_timeout(2_000)
+                touch_page.mouse.move(96, 622)
+                touch_page.mouse.down()
+                touch_page.mouse.move(138, 622, steps=5)
+                touch_page.wait_for_timeout(250)
+                touch_page.screenshot(path=str(artifact_dir / "web-virtual-joystick-active.png"), full_page=True)
+                touch_page.mouse.up()
+                touch_page.set_viewport_size({"width": 844, "height": 390})
+                touch_page.wait_for_timeout(750)
+                touch_canvas_box = touch_page.locator("canvas").first.bounding_box()
+                if touch_canvas_box is None or touch_canvas_box["width"] < 640 or touch_canvas_box["height"] < 360:
+                    raise AssertionError(f"Unexpected landscape touch canvas bounds: {touch_canvas_box}")
+                touch_page.screenshot(path=str(artifact_dir / "web-touch-landscape.png"), full_page=True)
+                result["touch_landscape_canvas_box"] = touch_canvas_box
+                touch_page.close()
+
                 with tempfile.TemporaryDirectory(prefix="wonder-isle-seed-planted-") as temp_dir:
                     fixture_path = Path(temp_dir) / "seed-planted-save.json"
                     subprocess.run(

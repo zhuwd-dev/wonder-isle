@@ -61,15 +61,19 @@ const Q009_BIRD_POSITION := Vector2(650, 465)
 const Q009_BIRD_INTERACTION_RADIUS := 72.0
 const Q010_SEED_POSITIONS := [Vector2(180, 430), Vector2(580, 200), Vector2(260, 430)]
 const Q010_SEED_LABELS := ["红花种子", "蓝花种子", "金色种子"]
-const Q011_AREA_RECT := Rect2(392, 568, 188, 56)
+const Q011_AREA_RECT := Rect2(196, 568, 188, 56)
 const Q011_SLOT_RECTS := [
-	Rect2(406, 576, 48, 24),
-	Rect2(466, 576, 48, 24),
-	Rect2(526, 576, 48, 24),
+	Rect2(210, 576, 48, 24),
+	Rect2(270, 576, 48, 24),
+	Rect2(330, 576, 48, 24),
 ]
 const Q011_ITEM_NAMES := ["木箱", "布包", "竹篮"]
 const Q011_INVENTORY_ORIGIN := Vector2(932, 620)
 const Q011_INVENTORY_STEP := 96.0
+const JOYSTICK_CENTER := Vector2(96, 622)
+const JOYSTICK_RADIUS := 54.0
+const JOYSTICK_DEADZONE := 0.14
+const JOYSTICK_HIT_RADIUS := 88.0
 const BRIDGE_SLOTS := [
 	Rect2(772, 356, 34, 38),
 	Rect2(813, 356, 34, 38),
@@ -114,6 +118,10 @@ var save_path := SAVE_PATH
 var player_position := Vector2(250, 500)
 var player_facing := Vector2.RIGHT
 var touch_direction := Vector2.ZERO
+var virtual_joystick_active := false
+var virtual_joystick_mouse_active := false
+var virtual_joystick_touch_index := -1
+var virtual_joystick_offset := Vector2.ZERO
 var dragging_board := -1
 var drag_position := Vector2.ZERO
 var dragging_pond_stone := -1
@@ -153,6 +161,8 @@ func _ready() -> void:
 	_configure_save_path()
 	_load_game()
 	_create_controls()
+	get_viewport().size_changed.connect(_layout_controls)
+	_layout_controls()
 	if message_remaining_seconds <= 0.0 and not message.is_empty():
 		message_remaining_seconds = 4.0
 	queue_redraw()
@@ -189,11 +199,24 @@ func _tick_transient_message(delta: float) -> void:
 func _input(event: InputEvent) -> void:
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
 		if event.pressed:
+			if _is_virtual_joystick_hit(event.position) and _begin_virtual_joystick(event.position, -1, true):
+				get_viewport().set_input_as_handled()
+				return
+			if _is_button_control_position(event.position):
+				return
 			_pointer_down(event.position)
 		else:
+			if virtual_joystick_mouse_active:
+				_end_virtual_joystick()
+				get_viewport().set_input_as_handled()
+				return
+			if _is_button_control_position(event.position):
+				return
 			_pointer_up(event.position)
 	elif event is InputEventMouseMotion:
-		if dragging_board >= 0:
+		if virtual_joystick_mouse_active:
+			_update_virtual_joystick(event.position)
+		elif dragging_board >= 0:
 			drag_position = event.position
 			queue_redraw()
 		elif dragging_pond_stone >= 0:
@@ -213,11 +236,25 @@ func _input(event: InputEvent) -> void:
 			queue_redraw()
 	elif event is InputEventScreenTouch:
 		if event.pressed:
+			if not virtual_joystick_active and _is_virtual_joystick_hit(event.position) and _begin_virtual_joystick(event.position, event.index, false):
+				get_viewport().set_input_as_handled()
+				return
+			if _is_button_control_position(event.position):
+				return
 			_pointer_down(event.position)
 		else:
+			if virtual_joystick_active and not virtual_joystick_mouse_active and virtual_joystick_touch_index == event.index:
+				_end_virtual_joystick()
+				get_viewport().set_input_as_handled()
+				return
+			if _is_button_control_position(event.position):
+				return
 			_pointer_up(event.position)
 	elif event is InputEventScreenDrag:
-		if dragging_board >= 0:
+		if virtual_joystick_active and not virtual_joystick_mouse_active and virtual_joystick_touch_index == event.index:
+			_update_virtual_joystick(event.position)
+			get_viewport().set_input_as_handled()
+		elif dragging_board >= 0:
 			drag_position = event.position
 			queue_redraw()
 		elif dragging_pond_stone >= 0:
@@ -237,8 +274,50 @@ func _input(event: InputEvent) -> void:
 			queue_redraw()
 
 
+func _is_virtual_joystick_hit(position: Vector2) -> bool:
+	return position.distance_to(JOYSTICK_CENTER) <= JOYSTICK_HIT_RADIUS
+
+
+func _is_button_control_position(position: Vector2) -> bool:
+	for control in [restart_button, build_button, remove_decor_button, q011_button, interact_button]:
+		if control != null and control.visible and control.get_global_rect().has_point(position):
+			return true
+	return false
+
+
+func _begin_virtual_joystick(position: Vector2, touch_index: int, is_mouse: bool) -> bool:
+	if virtual_joystick_active:
+		return false
+	virtual_joystick_active = true
+	virtual_joystick_mouse_active = is_mouse
+	virtual_joystick_touch_index = touch_index
+	_update_virtual_joystick(position)
+	return true
+
+
+func _update_virtual_joystick(position: Vector2) -> void:
+	virtual_joystick_offset = (position - JOYSTICK_CENTER).limit_length(JOYSTICK_RADIUS)
+	var strength := virtual_joystick_offset.length() / JOYSTICK_RADIUS
+	if strength <= JOYSTICK_DEADZONE:
+		touch_direction = Vector2.ZERO
+	else:
+		var adjusted_strength := inverse_lerp(JOYSTICK_DEADZONE, 1.0, strength)
+		touch_direction = virtual_joystick_offset.normalized() * adjusted_strength
+	queue_redraw()
+
+
+func _end_virtual_joystick() -> void:
+	virtual_joystick_active = false
+	virtual_joystick_mouse_active = false
+	virtual_joystick_touch_index = -1
+	virtual_joystick_offset = Vector2.ZERO
+	touch_direction = Vector2.ZERO
+	queue_redraw()
+
+
 func _notification(what: int) -> void:
-	if what == NOTIFICATION_WM_WINDOW_FOCUS_OUT and (dragging_board >= 0 or dragging_pond_stone >= 0 or dragging_q005_plant >= 0 or dragging_q006_decor >= 0 or dragging_q008_path >= 0 or dragging_q011_item >= 0):
+	if what == NOTIFICATION_WM_WINDOW_FOCUS_OUT and (virtual_joystick_active or dragging_board >= 0 or dragging_pond_stone >= 0 or dragging_q005_plant >= 0 or dragging_q006_decor >= 0 or dragging_q008_path >= 0 or dragging_q011_item >= 0):
+		_end_virtual_joystick()
 		dragging_board = -1
 		drag_position = Vector2.ZERO
 		dragging_pond_stone = -1
@@ -305,6 +384,7 @@ func _create_controls() -> void:
 	restart_button.tooltip_text = "清除本关进度并重新开始"
 	restart_button.pressed.connect(_restart_game)
 	add_child(restart_button)
+	_apply_button_style(restart_button, false)
 
 	build_button = Button.new()
 	build_button.name = "BuildButton"
@@ -328,6 +408,7 @@ func _create_controls() -> void:
 	remove_decor_button.pressed.connect(_toggle_remove_mode)
 	remove_decor_button.visible = false
 	add_child(remove_decor_button)
+	_apply_button_style(remove_decor_button, false)
 
 	q011_button = Button.new()
 	q011_button.name = "Q011Button"
@@ -340,44 +421,32 @@ func _create_controls() -> void:
 	q011_button.pressed.connect(_toggle_q011_mode)
 	q011_button.visible = false
 	add_child(q011_button)
+	_apply_button_style(q011_button, false)
 
 	interact_button = Button.new()
 	interact_button.name = "InteractButton"
 	interact_button.text = "互动 / 收集"
-	interact_button.position = Vector2(176, 638)
-	interact_button.size = Vector2(150, 56)
+	interact_button.position = Vector2(1060, 88)
+	interact_button.size = Vector2(180, 48)
 	interact_button.add_theme_font_size_override("font_size", 18)
 	interact_button.add_theme_color_override("font_color", Color("253b32"))
+	interact_button.tooltip_text = "拾取物品、交付材料或与伙伴互动"
 	interact_button.pressed.connect(_try_collect_nearby)
 	add_child(interact_button)
-
-	_add_direction_button("▲", Vector2(72, 598), Vector2.UP)
-	_add_direction_button("◀", Vector2(8, 662), Vector2.LEFT)
-	_add_direction_button("▼", Vector2(72, 662), Vector2.DOWN)
-	_add_direction_button("▶", Vector2(136, 662), Vector2.RIGHT)
+	_apply_button_style(interact_button, true)
 	_refresh_build_controls()
+	_layout_controls()
 
 
-func _add_direction_button(label: String, position: Vector2, direction: Vector2) -> void:
-	var button := Button.new()
-	button.text = label
-	button.position = position
-	button.size = Vector2(60, 54)
-	button.add_theme_font_size_override("font_size", 25)
-	button.add_theme_color_override("font_color", Color("253b32"))
-	button.tooltip_text = "移动"
-	button.button_down.connect(_on_touch_button_down.bind(direction))
-	button.button_up.connect(_on_touch_button_up.bind(direction))
-	button.mouse_exited.connect(_on_touch_button_up.bind(direction))
-	add_child(button)
-
-
-func _on_touch_button_down(direction: Vector2) -> void:
-	touch_direction = direction
-
-
-func _on_touch_button_up(_direction: Vector2) -> void:
-	touch_direction = Vector2.ZERO
+func _layout_controls() -> void:
+	if restart_button == null:
+		return
+	var layout_width := maxf(WORLD_SIZE.x, get_viewport_rect().size.x)
+	restart_button.position = Vector2(layout_width - 220.0, 24.0)
+	build_button.position = Vector2(layout_width - 420.0, 24.0)
+	remove_decor_button.position = Vector2(layout_width - 420.0, 88.0)
+	q011_button.position = Vector2(layout_width - 420.0, 88.0)
+	interact_button.position = Vector2(layout_width - 220.0, 88.0)
 
 
 func _toggle_build_mode() -> void:
@@ -460,6 +529,14 @@ func _refresh_build_controls() -> void:
 
 
 func _apply_build_button_style(highlighted: bool) -> void:
+	_apply_button_style(build_button, highlighted)
+	build_button.add_theme_color_override("font_color", Color("173d2d") if highlighted else Color("253b32"))
+	build_button.add_theme_color_override("font_hover_color", Color("123927"))
+	build_button.add_theme_color_override("font_pressed_color", Color("102f23"))
+	build_button.add_theme_font_size_override("font_size", 20 if highlighted else 22)
+
+
+func _apply_button_style(button: Button, highlighted: bool) -> void:
 	var normal := StyleBoxFlat.new()
 	normal.bg_color = Color("68bd72") if highlighted else Color("e6eee2")
 	normal.border_color = Color("3d8d58") if highlighted else Color("9ab5a0")
@@ -471,13 +548,12 @@ func _apply_build_button_style(highlighted: bool) -> void:
 	hover.bg_color = Color("82d789") if highlighted else Color("f2f7ef")
 	var pressed := normal.duplicate() as StyleBoxFlat
 	pressed.bg_color = Color("54a966") if highlighted else Color("d7e4d4")
-	build_button.add_theme_stylebox_override("normal", normal)
-	build_button.add_theme_stylebox_override("hover", hover)
-	build_button.add_theme_stylebox_override("pressed", pressed)
-	build_button.add_theme_color_override("font_color", Color("173d2d"))
-	build_button.add_theme_color_override("font_hover_color", Color("123927"))
-	build_button.add_theme_color_override("font_pressed_color", Color("102f23"))
-	build_button.add_theme_font_size_override("font_size", 20 if highlighted else 22)
+	button.add_theme_stylebox_override("normal", normal)
+	button.add_theme_stylebox_override("hover", hover)
+	button.add_theme_stylebox_override("pressed", pressed)
+	button.add_theme_color_override("font_color", Color("253b32"))
+	button.add_theme_color_override("font_hover_color", Color("173d2b"))
+	button.add_theme_color_override("font_pressed_color", Color("173d2b"))
 
 
 func _are_core_tasks_complete() -> bool:
@@ -1251,8 +1327,10 @@ func _draw() -> void:
 
 
 func _draw_background() -> void:
-	draw_rect(Rect2(Vector2.ZERO, WORLD_SIZE), VISUAL_PALETTE["sky"])
-	draw_rect(Rect2(0, 96, WORLD_SIZE.x, 54), VISUAL_PALETTE["sky_band"])
+	var viewport_size := get_viewport_rect().size
+	var background_size := Vector2(maxf(WORLD_SIZE.x, viewport_size.x), maxf(WORLD_SIZE.y, viewport_size.y))
+	draw_rect(Rect2(Vector2.ZERO, background_size), VISUAL_PALETTE["sky"])
+	draw_rect(Rect2(0, 96, background_size.x, 54), VISUAL_PALETTE["sky_band"])
 	draw_circle(Vector2(1135, 82), 42, VISUAL_PALETTE["sun"])
 	for cloud_x in [180.0, 540.0, 1010.0]:
 		draw_circle(Vector2(cloud_x, 78), 22, VISUAL_PALETTE["cloud"])
@@ -1674,18 +1752,18 @@ func _draw_q011_area(font: Font) -> void:
 	var border := Color("478b5b") if complete else Color("8a6846")
 	_draw_panel(Q011_AREA_RECT, fill, border, 12)
 	if complete:
-		for stone_position in [Vector2(403, 608), Vector2(434, 608), Vector2(465, 608), Vector2(496, 608), Vector2(527, 608), Vector2(559, 608)]:
+		for stone_position in [Vector2(207, 608), Vector2(238, 608), Vector2(269, 608), Vector2(300, 608), Vector2(331, 608), Vector2(363, 608)]:
 			_draw_ellipse_custom(stone_position, Vector2(9, 4), Color("d8c49a"))
 			_draw_ellipse_custom(stone_position + Vector2(0, -1), Vector2(6, 2), Color("f0dfba"))
-		for flower_position in [Vector2(398, 574), Vector2(573, 574)]:
+		for flower_position in [Vector2(202, 574), Vector2(377, 574)]:
 			draw_circle(flower_position, 4.0, Color("e96b70"))
 			draw_circle(flower_position + Vector2(-4, -2), 3.0, Color("fff1a8"))
 			draw_circle(flower_position + Vector2(4, -2), 3.0, Color("fff1a8"))
-		draw_string(font, Vector2(410, 567), "额外地块 · 已整理", HORIZONTAL_ALIGNMENT_LEFT, -1, 15, Color("214232"))
+		draw_string(font, Vector2(222, 567), "额外地块 · 已整理", HORIZONTAL_ALIGNMENT_LEFT, -1, 15, Color("214232"))
 	else:
-		draw_line(Vector2(397, 569), Vector2(402, 562), Color("668949"), 3.0)
-		draw_line(Vector2(574, 569), Vector2(579, 562), Color("668949"), 3.0)
-		draw_string(font, Vector2(407, 567), "帮忙整理 · %d/3" % game_state.q011_placed_count(), HORIZONTAL_ALIGNMENT_LEFT, -1, 15, Color("3e392b"))
+		draw_line(Vector2(201, 569), Vector2(206, 562), Color("668949"), 3.0)
+		draw_line(Vector2(378, 569), Vector2(383, 562), Color("668949"), 3.0)
+		draw_string(font, Vector2(216, 567), "整理物品 · %d/3" % game_state.q011_placed_count(), HORIZONTAL_ALIGNMENT_LEFT, -1, 15, Color("3e392b"))
 	for slot_id in range(GameState.Q011_ITEM_TOTAL):
 		var slot: Rect2 = Q011_SLOT_RECTS[slot_id]
 		var item_id: int = game_state.q011_slot_occupants[slot_id]
@@ -1704,7 +1782,7 @@ func _draw_q011_area(font: Font) -> void:
 			draw_rect(slot.grow(5), VISUAL_PALETTE["target_valid"], false, 3.0)
 	if dragging_q011_item >= 0:
 		var hint := "空槽可以松开" if _q011_slot_at(q011_drag_position) >= 0 else "把物品移到空槽再松开"
-		draw_string(font, Vector2(397, 638), hint, HORIZONTAL_ALIGNMENT_LEFT, -1, 14, VISUAL_PALETTE["ink"])
+		draw_string(font, Vector2(202, 638), hint, HORIZONTAL_ALIGNMENT_LEFT, -1, 14, VISUAL_PALETTE["ink"])
 
 
 func _draw_q011_item_at(position: Vector2, item_id: int, lifted: bool) -> void:
@@ -2116,9 +2194,25 @@ func _draw_q006_inventory(font: Font) -> void:
 
 
 func _draw_touch_hint(font: Font) -> void:
-	_draw_panel(Rect2(390, 646, 520, 42), Color(0.91, 0.98, 0.88, 0.86), VISUAL_PALETTE["island_highlight"], 14)
-	draw_string(font, Vector2(420, 675), _task_action_hint_text(), HORIZONTAL_ALIGNMENT_LEFT, -1, 18, VISUAL_PALETTE["ink"])
-	draw_string(font, Vector2(20, 580), "方向按钮 / WASD 移动", HORIZONTAL_ALIGNMENT_LEFT, -1, 16, VISUAL_PALETTE["ink"])
+	_draw_panel(Rect2(184, 644, 742, 52), Color(0.91, 0.98, 0.88, 0.94), VISUAL_PALETTE["island_highlight"], 14)
+	_draw_panel(Rect2(196, 656, 72, 28), Color("d7edcb"), Color("86b877"), 10)
+	draw_string(font, Vector2(204, 675), "现在做什么", HORIZONTAL_ALIGNMENT_LEFT, -1, 13, VISUAL_PALETTE["ink"])
+	draw_string(font, Vector2(280, 676), _task_action_hint_text(), HORIZONTAL_ALIGNMENT_LEFT, 620, 16, VISUAL_PALETTE["ink"])
+	draw_string(font, Vector2(28, 547), "拖动摇杆移动", HORIZONTAL_ALIGNMENT_LEFT, -1, 15, VISUAL_PALETTE["ink"])
+	_draw_virtual_joystick()
+
+
+func _draw_virtual_joystick() -> void:
+	var base_color := Color(0.09, 0.18, 0.16, 0.42)
+	var outline_color := Color("e4f7d6")
+	draw_circle(JOYSTICK_CENTER, JOYSTICK_RADIUS + 8.0, Color(0.08, 0.16, 0.14, 0.18))
+	draw_circle(JOYSTICK_CENTER, JOYSTICK_RADIUS, base_color)
+	draw_arc(JOYSTICK_CENTER, JOYSTICK_RADIUS, 0.0, TAU, 40, outline_color, 3.0)
+	draw_circle(JOYSTICK_CENTER, 6.0, Color(0.87, 0.96, 0.78, 0.78))
+	var knob_center := JOYSTICK_CENTER + virtual_joystick_offset
+	var knob_color := Color("80c987") if virtual_joystick_active else Color(0.88, 0.96, 0.81, 0.92)
+	draw_circle(knob_center, 23.0, knob_color)
+	draw_arc(knob_center, 23.0, 0.0, TAU, 32, Color("f4ffec"), 3.0)
 
 
 func _task_prompt_text() -> String:
@@ -2220,9 +2314,9 @@ func _task_stage_label() -> String:
 
 func _task_action_hint_text() -> String:
 	if q011_mode:
-		return "从右下角托盘拖动木箱、布包和竹篮到三个空槽。"
+		return "从右下角托盘拖动物品到左侧整理区的空槽。"
 	if game_state.can_start_q012():
-		return "走到兔子身边按 E 或点击“互动 / 收集”，和伙伴们一起庆祝。"
+		return "走到兔子身边，按 E 或点右上角“互动 / 收集”参加庆祝。"
 	if build_mode and _can_use_q006_build_mode():
 		if remove_decor_mode:
 			return "点击已放置的装饰移除；再次点击移除按钮可取消。"
@@ -2230,19 +2324,19 @@ func _task_action_hint_text() -> String:
 			return "拖动已摆放的装饰换位，或点“移除装饰”后收回。"
 		return "拖动木栅栏、花盆和庭院路灯到对应槽位。"
 	if game_state.is_q011_complete():
-		return "没有必做任务：自由探索，或点“建造”调整花园。"
+		return "没有必做任务：自由探索，或点右上角“建造”调整花园。"
 	if not game_state.is_complete():
 		if game_state.board_count() < GameState.BOARD_TOTAL:
-			return "靠近木板后按 E 或点击木板收集。"
+			return "靠近木板，按 E、点右上角按钮，或直接点击木板收集。"
 		return "拖动右下角已收集木板到桥上高亮位置。"
 	if not game_state.seed_collected:
-		return "过桥到右侧，靠近发光种子后按“互动 / 收集”。"
+		return "过桥到右侧靠近发光种子，按 E 或点右上角按钮收集。"
 	if not game_state.seed_planted:
-		return "到右侧花圃附近按“互动 / 收集”种下种子。"
+		return "走到右侧花圃旁，按 E 或点右上角按钮种下种子。"
 	if not game_state.is_q004_complete():
 		if game_state.wood_count() < GameState.Q004_WOOD_TOTAL:
-			return "靠近木材后按 E 或点击互动 / 收集来拾取。"
-		return "带着木材到小屋旁按互动 / 收集交付。"
+			return "靠近木材，按 E 或点右上角“互动 / 收集”拾取。"
+		return "带着木材走到小屋旁，按 E 或点右上角按钮交付。"
 	if not game_state.is_pond_complete():
 		return "下一步：把池塘边剩余的石头拖进对应轮廓。"
 	if not game_state.is_q005_complete():

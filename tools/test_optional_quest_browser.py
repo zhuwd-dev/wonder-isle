@@ -145,7 +145,7 @@ def main() -> int:
                     page.wait_for_timeout(180)
 
                 def interact() -> None:
-                    page.mouse.click(251, 666)
+                    page.mouse.click(1_150, 112)
                     page.wait_for_timeout(650)
 
                 def drag(source: tuple[int, int], target: tuple[int, int], screenshot: str | None = None) -> None:
@@ -222,7 +222,7 @@ def main() -> int:
                 # Enter the extra-plot mode and place each item in an empty slot.
                 page.mouse.click(950, 112)
                 page.wait_for_timeout(500)
-                for item_id, (source_x, target_x) in enumerate(((971, 430), (1067, 490), (1163, 550))):
+                for item_id, (source_x, target_x) in enumerate(((971, 230), (1067, 290), (1163, 350))):
                     drag((source_x, 642), (target_x, 588), "web-q011-green-drop-target.png" if item_id == 0 else None)
                     verify(lambda save, i=item_id: isinstance(save.get("q011_slot_occupants"), list) and save["q011_slot_occupants"][i] == i, f"Q011 place item {item_id + 1}/3")
                 verify(lambda save: save.get("q011_slot_occupants") == [0, 1, 2], "Q011 finish extra-plot arrangement")

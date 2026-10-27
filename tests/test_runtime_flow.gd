@@ -32,6 +32,37 @@ func _run() -> void:
 	_expect(not main.game_state.can_start_pond_task(), "pond task must be locked at the start")
 	_expect(main._task_stage_label() == "主线 1/7", "the HUD must identify the first of seven connected main-story steps")
 	_expect(main._should_show_rabbit_area(), "the rabbit must be visible while it introduces the first task")
+	_expect(main.interact_button.position == Vector2(1060, 88), "the interaction control must sit on the right for a two-thumb layout")
+	_expect(main._is_button_control_position(main.interact_button.position + main.interact_button.size / 2.0), "the moved interaction button must not leak clicks into world dragging")
+	_expect(main.Q011_AREA_RECT.end.x < main.HOUSE_RECT.position.x, "the extra-plot area must not overlap the fox house")
+	_mouse_button(main.JOYSTICK_CENTER, true)
+	_expect(main.virtual_joystick_active, "pressing the round joystick must capture the mouse pointer")
+	_mouse_motion(main.JOYSTICK_CENTER + Vector2(0, -100))
+	_expect(main.touch_direction.y < -0.99 and absf(main.touch_direction.x) < 0.01, "dragging the joystick upward must produce upward movement")
+	_expect(is_equal_approx(main.virtual_joystick_offset.length(), main.JOYSTICK_RADIUS), "the joystick knob must stay inside its circular travel range")
+	_mouse_button(main.JOYSTICK_CENTER + Vector2(0, -100), false)
+	_expect(not main.virtual_joystick_active and main.touch_direction == Vector2.ZERO, "releasing the joystick must stop movement")
+	var touch_down := InputEventScreenTouch.new()
+	touch_down.index = 3
+	touch_down.position = main.JOYSTICK_CENTER
+	touch_down.pressed = true
+	main._input(touch_down)
+	var other_finger := InputEventScreenDrag.new()
+	other_finger.index = 4
+	other_finger.position = main.JOYSTICK_CENTER + Vector2.RIGHT * main.JOYSTICK_RADIUS
+	main._input(other_finger)
+	_expect(main.touch_direction == Vector2.ZERO, "a second finger must not steer the active joystick")
+	var touch_drag := InputEventScreenDrag.new()
+	touch_drag.index = 3
+	touch_drag.position = main.JOYSTICK_CENTER + Vector2.RIGHT * main.JOYSTICK_RADIUS
+	main._input(touch_drag)
+	_expect(main.touch_direction.x > 0.99 and absf(main.touch_direction.y) < 0.01, "the captured finger must steer the joystick in any direction")
+	var touch_up := InputEventScreenTouch.new()
+	touch_up.index = 3
+	touch_up.position = touch_drag.position
+	touch_up.pressed = false
+	main._input(touch_up)
+	_expect(not main.virtual_joystick_active and main.touch_direction == Vector2.ZERO, "lifting the steering finger must release the joystick")
 
 	# Q001: collect all boards through the proximity interaction path.
 	main.player_position = main.SEED_POSITION
@@ -184,7 +215,7 @@ func _run() -> void:
 	_expect(main._should_show_rabbit_area(), "the rabbit must return for the final celebration objective")
 	_expect(main._task_stage_label() == "主线 7/7", "finishing decorations must identify the final main-story step")
 	_expect(main._task_prompt_text() == "花园装饰已完成！回到兔子身边参加小岛庆祝。", "the garden must direct the player to the rabbit")
-	_expect(main._task_action_hint_text() == "走到兔子身边按 E 或点击“互动 / 收集”，和伙伴们一起庆祝。", "the ending prompt must explain how to finish the story")
+	_expect(main._task_action_hint_text() == "走到兔子身边，按 E 或点右上角“互动 / 收集”参加庆祝。", "the ending prompt must explain how to finish the story")
 	_expect(not main._can_use_q007_side_task(), "optional exploration must remain locked before the ending interaction")
 	main.player_position = main.Q012_RABBIT_POSITION
 	main._try_collect_nearby()
