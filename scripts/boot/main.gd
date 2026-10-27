@@ -1474,6 +1474,7 @@ func _draw_islands() -> void:
 	var right_color: Color = VISUAL_PALETTE["right_open"] if game_state.area_unlocked else VISUAL_PALETTE["right_locked"]
 	_draw_island_shape(right_island, right_color)
 	_draw_grass_details()
+	_draw_ground_flowers()
 
 
 func _draw_island_shape(points: PackedVector2Array, fill: Color) -> void:
@@ -1481,9 +1482,11 @@ func _draw_island_shape(points: PackedVector2Array, fill: Color) -> void:
 	for point in points:
 		shadow.append(point + Vector2(0, 8))
 	draw_colored_polygon(shadow, VISUAL_PALETTE["island_shadow"])
-	draw_colored_polygon(points, fill)
 	var outline := points.duplicate()
 	outline.append(points[0])
+	draw_polyline(outline, Color("d6c98c"), 13.0, true)
+	draw_colored_polygon(points, fill)
+	draw_polyline(outline, Color("67af70"), 7.0, true)
 	draw_polyline(outline, VISUAL_PALETTE["island_highlight"], 5.0, true)
 
 
@@ -1494,6 +1497,30 @@ func _draw_grass_details() -> void:
 		var sway := sin(animation_time * 1.7 + float(grass_id) * 1.4) * 2.0
 		draw_line(position, position + Vector2(5 + sway, -10), VISUAL_PALETTE["island_highlight"], 3.0)
 		draw_line(position + Vector2(4, 0), position + Vector2(13 + sway, -6), VISUAL_PALETTE["island_highlight"], 3.0)
+
+
+func _draw_ground_flowers() -> void:
+	var flower_positions := [Vector2(112, 264), Vector2(108, 438), Vector2(670, 264), Vector2(666, 502)]
+	if game_state.area_unlocked:
+		flower_positions.append(Vector2(1182, 205))
+		flower_positions.append(Vector2(1182, 584))
+	var flower_colors := [Color("f2a08e"), Color("fff0bd"), Color("c4e8ee"), Color("f2c879")]
+	for cluster_id in range(flower_positions.size()):
+		var cluster_position: Vector2 = flower_positions[cluster_id]
+		var flower_color: Color = flower_colors[cluster_id % flower_colors.size()]
+		_draw_ellipse_custom(cluster_position + Vector2(0, 8), Vector2(18, 5), Color(0.19, 0.29, 0.24, 0.10))
+		for flower_id in range(3):
+			var flower_offset := Vector2(float(flower_id - 1) * 10.0, -4.0 if flower_id != 1 else -12.0)
+			var bob := sin(animation_time * 1.35 + float(cluster_id) * 0.8 + float(flower_id)) * 1.0
+			var flower_center := cluster_position + flower_offset + Vector2(0, bob)
+			draw_line(cluster_position + Vector2(0, 8), flower_center + Vector2(0, 3), Color("5d9e59"), 2.0)
+			draw_circle(flower_center + Vector2(-3, 0), 3.0, flower_color)
+			draw_circle(flower_center + Vector2(3, 0), 3.0, flower_color)
+			draw_circle(flower_center + Vector2(0, -3), 3.0, flower_color)
+			draw_circle(flower_center, 2.0, Color("ffe59a"))
+		if cluster_id % 2 == 0:
+			draw_circle(cluster_position + Vector2(-6, 3), 3.0, Color("8fcf78"))
+			draw_circle(cluster_position + Vector2(6, 2), 3.0, Color("9bdc7f"))
 
 
 func _draw_river() -> void:
@@ -1676,6 +1703,16 @@ func _draw_q004_area(font: Font) -> void:
 	])
 	draw_colored_polygon(roof, Color("d7865d") if not game_state.is_q004_complete() else Color("d96f58"))
 	draw_polyline(PackedVector2Array([roof[0], roof[1], roof[2]]), Color("704d35"), 4.0, true)
+	draw_line(Vector2(HOUSE_RECT.position.x + 24, HOUSE_RECT.position.y + 30), Vector2(HOUSE_POSITION.x, HOUSE_RECT.position.y - 4), Color("efab76"), 2.0)
+	draw_line(Vector2(HOUSE_POSITION.x, HOUSE_RECT.position.y - 4), Vector2(HOUSE_RECT.end.x - 24, HOUSE_RECT.position.y + 30), Color("efab76"), 2.0)
+	var wall_rect := Rect2(HOUSE_RECT.position + Vector2(7, 34), Vector2(HOUSE_RECT.size.x - 14, HOUSE_RECT.size.y - 42))
+	draw_rect(wall_rect, Color("fff1cb"), false, 2.0)
+	for window_x in [HOUSE_RECT.position.x + 20.0, HOUSE_RECT.end.x - 36.0]:
+		var window_rect := Rect2(window_x, HOUSE_POSITION.y - 5, 16, 20)
+		draw_rect(window_rect.grow(2), Color("8b6346"), true)
+		draw_rect(window_rect, Color("b5d7c3"), true)
+		draw_rect(window_rect, Color("fff2c7"), false, 2.0)
+		draw_line(Vector2(window_rect.position.x + 8, window_rect.position.y + 2), Vector2(window_rect.position.x + 8, window_rect.end.y - 2), Color("fff2c7"), 1.5)
 	draw_rect(Rect2(HOUSE_POSITION.x - 24, HOUSE_POSITION.y - 4, 48, 58), Color("c58b55"))
 	draw_rect(Rect2(HOUSE_POSITION.x - 24, HOUSE_POSITION.y - 4, 48, 58), Color("704d35"), false, 3.0)
 	draw_circle(HOUSE_POSITION + Vector2(14, 22), 4.0, Color("ffe59a"))
@@ -2118,17 +2155,23 @@ func _draw_q005_plant_at(position: Vector2, grown: bool, appearance_unlocked := 
 func _draw_turtle(position: Vector2) -> void:
 	position.y += _character_bob(2.1, 1.0)
 	_draw_ellipse_custom(position + Vector2(0, 27), Vector2(28, 8), Color(0.19, 0.29, 0.24, 0.18))
-	draw_circle(position, 25.0, Color("4f8f68"))
-	draw_circle(position, 19.0, Color("8fcf78"))
-	draw_line(position + Vector2(-12, -6), position + Vector2(12, 7), Color("4f8f68"), 3.0)
-	draw_line(position + Vector2(12, -6), position + Vector2(-12, 7), Color("4f8f68"), 3.0)
+	for leg_offset in [Vector2(-14, 12), Vector2(14, 12), Vector2(-14, -10), Vector2(14, -10)]:
+		_draw_ellipse_custom(position + leg_offset, Vector2(8, 6), Color("73b779"))
+	draw_circle(position, 24.0, Color("4f8f68"))
+	draw_circle(position, 19.0, Color("a8bb72"))
+	draw_arc(position, 17.0, PI * 0.1, PI * 0.9, 12, Color("d0d69a"), 2.0)
+	draw_line(position + Vector2(0, -17), position + Vector2(0, 17), Color("4f8f68"), 2.0)
+	draw_line(position + Vector2(-15, -8), position + Vector2(15, 8), Color("4f8f68"), 2.0)
+	draw_line(position + Vector2(-15, 8), position + Vector2(15, -8), Color("4f8f68"), 2.0)
+	draw_colored_polygon(PackedVector2Array([
+		position + Vector2(-22, 2), position + Vector2(-30, -2), position + Vector2(-22, -7),
+	]), Color("4f8f68"))
 	draw_circle(position + Vector2(27, 0), 10.0, Color("8fcf78"))
 	if _character_is_blinking(1.7):
 		draw_line(position + Vector2(25, -3), position + Vector2(31, -3), Color("2f4b3a"), 2.5)
 	else:
 		draw_circle(position + Vector2(29, -3), 2.5, Color("2f4b3a"))
-	draw_circle(position + Vector2(-20, -20), 7.0, Color("8fcf78"))
-	draw_circle(position + Vector2(20, -20), 7.0, Color("8fcf78"))
+	draw_circle(position + Vector2(24, 3), 2.5, Color("f0a39a"))
 
 
 func _draw_wood_at(position: Vector2) -> void:
@@ -2143,12 +2186,24 @@ func _draw_wood_at(position: Vector2) -> void:
 func _draw_fox(position: Vector2) -> void:
 	position.y += _character_bob(0.8, 1.5)
 	_draw_ellipse_custom(position + Vector2(0, 25), Vector2(27, 7), Color(0.19, 0.13, 0.10, 0.16))
+	_draw_ellipse_custom(position + Vector2(-22, 16), Vector2(10, 7), Color("d96f58"))
+	_draw_ellipse_custom(position + Vector2(-29, 16), Vector2(4, 5), Color("fff0d1"))
+	_draw_ellipse_custom(position + Vector2(0, 19), Vector2(19, 12), Color("d96f58"))
+	_draw_ellipse_custom(position + Vector2(0, 20), Vector2(10, 8), Color("fff0d1"))
+	_draw_ellipse_custom(position + Vector2(-10, 27), Vector2(8, 4), Color("b85b49"))
+	_draw_ellipse_custom(position + Vector2(10, 27), Vector2(8, 4), Color("b85b49"))
 	draw_colored_polygon(PackedVector2Array([
 		position + Vector2(-22, -13), position + Vector2(-13, -42), position + Vector2(-2, -18),
 	]), Color("d96f58"))
 	draw_colored_polygon(PackedVector2Array([
+		position + Vector2(-16, -20), position + Vector2(-13, -35), position + Vector2(-7, -19),
+	]), Color("f2b1a0"))
+	draw_colored_polygon(PackedVector2Array([
 		position + Vector2(22, -13), position + Vector2(13, -42), position + Vector2(2, -18),
 	]), Color("d96f58"))
+	draw_colored_polygon(PackedVector2Array([
+		position + Vector2(16, -20), position + Vector2(13, -35), position + Vector2(7, -19),
+	]), Color("f2b1a0"))
 	draw_circle(position, 24.0, Color("d96f58"))
 	draw_circle(position + Vector2(0, 8), 15.0, Color("fff0d1"))
 	if _character_is_blinking(0.8):
@@ -2157,6 +2212,8 @@ func _draw_fox(position: Vector2) -> void:
 	else:
 		draw_circle(position + Vector2(-8, -3), 3.0, Color("3b302c"))
 		draw_circle(position + Vector2(8, -3), 3.0, Color("3b302c"))
+	draw_circle(position + Vector2(-7, -4), 1.1, Color("ffffff"))
+	draw_circle(position + Vector2(9, -4), 1.1, Color("ffffff"))
 	draw_circle(position + Vector2(-16, 8), 3.0, Color("f2a094"))
 	draw_circle(position + Vector2(16, 8), 3.0, Color("f2a094"))
 	draw_circle(position + Vector2(0, 8), 4.0, Color("3b302c"))
@@ -2176,11 +2233,28 @@ func _draw_player() -> void:
 	var squash := 0.06 * sin(player_walk_phase * 2.0) if player_is_moving else 0.0
 	var body_center := player_position + Vector2(0, -bounce)
 	var body_radius := Vector2(PLAYER_RADIUS * (1.0 + squash), PLAYER_RADIUS * (1.0 - squash))
+	var facing := player_facing.normalized()
+	var side := Vector2(-facing.y, facing.x)
+	var foot_phase := sin(player_walk_phase) * 1.5 if player_is_moving else 0.0
+	_draw_ellipse_custom(body_center + Vector2(-7, 14 + foot_phase), Vector2(6, 4), Color("bd814e"))
+	_draw_ellipse_custom(body_center + Vector2(7, 14 - foot_phase), Vector2(6, 4), Color("bd814e"))
+	var backpack_center := body_center - facing * 12.0 + Vector2(0, 5)
+	_draw_ellipse_custom(backpack_center, Vector2(7, 8), Color("9d6b4c"))
+	_draw_ellipse_custom(backpack_center + facing * 1.5, Vector2(4, 5), Color("d5a468"))
 	_draw_ellipse_custom(body_center, body_radius + Vector2(5, 5), Color("fff3bc"))
 	_draw_ellipse_custom(body_center, body_radius, VISUAL_PALETTE["player"])
-	draw_circle(body_center + Vector2(-6, -4), 3.0, Color("ffffff"))
-	draw_circle(body_center + Vector2(6, -4), 3.0, Color("ffffff"))
-	draw_line(body_center, body_center + player_facing.normalized() * 22.0, VISUAL_PALETTE["player_outline"], 4.0)
+	var muzzle_center := body_center + facing * 6.0 + Vector2(0, 3)
+	_draw_ellipse_custom(muzzle_center, Vector2(9, 7), Color("fff0d1"))
+	for eye_side in [-1.0, 1.0]:
+		var eye_center: Vector2 = body_center + facing * 2.0 + side * 5.0 * eye_side - Vector2(0, 4)
+		draw_circle(eye_center, 3.6, Color("ffffff"))
+		draw_circle(eye_center + facing * 1.8, 2.0, Color("3b302c"))
+		draw_circle(eye_center + facing * 1.5 - Vector2(0, 1.2), 0.8, Color("ffffff"))
+	draw_circle(muzzle_center + facing * 5.0, 2.2, Color("7d4441"))
+	draw_arc(muzzle_center + facing * 2.0 + Vector2(0, 1), 4.0, facing.angle() + 0.4, facing.angle() + 2.5, 10, Color("7d4441"), 1.6)
+	draw_colored_polygon(PackedVector2Array([
+		body_center + Vector2(-5, -16), body_center + Vector2(0, -23), body_center + Vector2(5, -16),
+	]), Color("83ae62"))
 
 
 func _draw_panel(rect: Rect2, fill: Color, border: Color, radius: int) -> void:
@@ -2204,23 +2278,31 @@ func _draw_rabbit(position: Vector2) -> void:
 	var rabbit_color: Color = VISUAL_PALETTE["rabbit_complete"] if game_state.is_complete() else VISUAL_PALETTE["rabbit_request"]
 	var rabbit_outline := Color("5f9c70") if game_state.is_complete() else Color("c99564")
 	_draw_ellipse_custom(position + Vector2(0, 31), Vector2(34, 8), Color(0.19, 0.29, 0.24, 0.18))
+	_draw_ellipse_custom(position + Vector2(0, 22), Vector2(19, 14), rabbit_outline)
+	_draw_ellipse_custom(position + Vector2(0, 21), Vector2(16, 12), rabbit_color)
+	_draw_ellipse_custom(position + Vector2(-11, 32), Vector2(8, 4), rabbit_color)
+	_draw_ellipse_custom(position + Vector2(11, 32), Vector2(8, 4), rabbit_color)
 	_draw_ellipse_custom(position + Vector2(-17, -33), Vector2(12, 30), rabbit_outline)
 	_draw_ellipse_custom(position + Vector2(17, -33), Vector2(12, 30), rabbit_outline)
 	_draw_ellipse_custom(position + Vector2(-17, -33), Vector2(10, 28), rabbit_color)
 	_draw_ellipse_custom(position + Vector2(17, -33), Vector2(10, 28), rabbit_color)
+	_draw_ellipse_custom(position + Vector2(-17, -34), Vector2(5, 20), Color("efb5b0"))
+	_draw_ellipse_custom(position + Vector2(17, -34), Vector2(5, 20), Color("efb5b0"))
 	draw_circle(position, 31.0, rabbit_outline)
 	draw_circle(position, 28.0, rabbit_color)
+	_draw_ellipse_custom(position + Vector2(0, 9), Vector2(12, 8), Color("fffdf5"))
 	if _character_is_blinking(0.0):
 		draw_line(position + Vector2(-13, -3), position + Vector2(-5, -3), Color("3c3030"), 3.0)
 		draw_line(position + Vector2(5, -3), position + Vector2(13, -3), Color("3c3030"), 3.0)
 	else:
 		draw_circle(position + Vector2(-9, -3), 4.0, Color("3c3030"))
 		draw_circle(position + Vector2(9, -3), 4.0, Color("3c3030"))
+	draw_circle(position + Vector2(-10, -5), 1.4, Color("ffffff"))
+	draw_circle(position + Vector2(8, -5), 1.4, Color("ffffff"))
 	draw_circle(position + Vector2(-16, 7), 5.0, Color("f5b1a8"))
 	draw_circle(position + Vector2(16, 7), 5.0, Color("f5b1a8"))
 	draw_circle(position + Vector2(0, 9), 5.0, Color("f28a9b"))
-	if game_state.is_complete():
-		draw_arc(position + Vector2(0, 8), 12.0, 0.0, PI, 16, Color("4b9d63"), 4.0)
+	draw_arc(position + Vector2(0, 9), 10.0, 0.0, PI, 16, Color("4b9d63") if game_state.is_complete() else Color("a86767"), 3.0)
 
 
 func _bridge_status_text() -> String:
