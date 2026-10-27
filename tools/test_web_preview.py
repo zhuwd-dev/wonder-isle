@@ -129,6 +129,13 @@ def main() -> int:
                 page.wait_for_timeout(250)
                 page.screenshot(path=str(artifact_dir / "web-virtual-joystick-active.png"), full_page=True)
                 page.mouse.up()
+                page.set_viewport_size({"width": 1630, "height": 870})
+                page.wait_for_timeout(750)
+                wide_canvas_box = page.locator("canvas").first.bounding_box()
+                if wide_canvas_box is None or wide_canvas_box["width"] < 1_500 or wide_canvas_box["height"] < 800:
+                    raise AssertionError(f"Unexpected wide-screen canvas bounds: {wide_canvas_box}")
+                page.screenshot(path=str(artifact_dir / "web-wide-1630x870.png"), full_page=True)
+                result["wide_canvas_box"] = wide_canvas_box
                 page.set_viewport_size({"width": 844, "height": 390})
                 page.wait_for_timeout(750)
                 touch_canvas_box = page.locator("canvas").first.bounding_box()

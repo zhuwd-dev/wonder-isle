@@ -227,7 +227,7 @@ func water_q005() -> bool:
 
 
 func can_collect_q005_plant(plant_id: int) -> bool:
-	return can_start_q005() and plant_id >= 0 and plant_id < Q005_PLANT_TOTAL and not q005_plants_collected[plant_id]
+	return can_start_q005() and q005_watered and plant_id >= 0 and plant_id < Q005_PLANT_TOTAL and not q005_plants_collected[plant_id]
 
 
 func collect_q005_plant(plant_id: int) -> bool:
@@ -238,7 +238,7 @@ func collect_q005_plant(plant_id: int) -> bool:
 
 
 func can_place_q005_plant(plant_id: int, slot_id: int) -> bool:
-	return can_start_q005() and plant_id >= 0 and plant_id < Q005_PLANT_TOTAL and slot_id >= 0 and slot_id < Q005_PLANT_TOTAL and plant_id == slot_id and q005_plants_collected[plant_id] and not q005_plant_slots[slot_id]
+	return can_start_q005() and q005_watered and plant_id >= 0 and plant_id < Q005_PLANT_TOTAL and slot_id >= 0 and slot_id < Q005_PLANT_TOTAL and plant_id == slot_id and q005_plants_collected[plant_id] and not q005_plant_slots[slot_id]
 
 
 func place_q005_plant(plant_id: int, slot_id: int) -> bool:

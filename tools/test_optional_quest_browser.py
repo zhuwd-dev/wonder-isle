@@ -145,7 +145,7 @@ def main() -> int:
                     page.wait_for_timeout(180)
 
                 def interact() -> None:
-                    page.mouse.click(1_150, 112)
+                    page.mouse.click(1_240, 681)
                     page.wait_for_timeout(650)
 
                 def drag(source: tuple[int, int], target: tuple[int, int], screenshot: str | None = None) -> None:
@@ -202,8 +202,8 @@ def main() -> int:
                 move("d", 308)
                 interact()
                 verify(lambda save: save.get("q010_seeds_collected") == [True, False, True], "Q010 collect gold seed")
-                move("w", 885)
-                move("d", 1_230)
+                move("w", 500)
+                move("d", 1_115)
                 interact()
                 verify(lambda save: save.get("q010_seeds_collected") == [True, True, True], "Q010 collect all three seeds")
                 snap("web-q010-seeds-complete.png")

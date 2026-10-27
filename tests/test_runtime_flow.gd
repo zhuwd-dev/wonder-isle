@@ -32,7 +32,8 @@ func _run() -> void:
 	_expect(not main.game_state.can_start_pond_task(), "pond task must be locked at the start")
 	_expect(main._task_stage_label() == "主线 1/7", "the HUD must identify the first of seven connected main-story steps")
 	_expect(main._should_show_rabbit_area(), "the rabbit must be visible while it introduces the first task")
-	_expect(main.interact_button.position == Vector2(1060, 88), "the interaction control must sit on the right for a two-thumb layout")
+	_expect(main.interact_button.position == Vector2(1208, 652), "the collection control must sit in the bottom-right thumb zone")
+	_expect(main.interact_button.size == Vector2(64, 58), "the bottom-right collection control must stay compact beside the inventory")
 	_expect(main._is_button_control_position(main.interact_button.position + main.interact_button.size / 2.0), "the moved interaction button must not leak clicks into world dragging")
 	_expect(main.Q011_AREA_RECT.end.x < main.HOUSE_RECT.position.x, "the extra-plot area must not overlap the fox house")
 	_mouse_button(main.JOYSTICK_CENTER, true)
@@ -169,7 +170,7 @@ func _run() -> void:
 	_expect(main.game_state.pond_stones_placed == [true, true, true], "pond completion must record all three stones")
 	_expect(main._task_prompt_text() == "先给花园浇水，再收集并摆好 3 株植物（已收集 0/3）。", "pond completion must unlock the Q005 task prompt")
 	_expect(main._task_stage_label() == "主线 5/7", "pond completion must advance to the turtle-garden step")
-	_expect(main._task_action_hint_text() == "下一步：靠近“浇水点”，按 E 或点“互动 / 收集”浇水。", "pond completion must identify watering as the one current action")
+	_expect(main._task_action_hint_text() == "下一步：靠近“浇水点”，先浇水；浇水前不能采花。", "pond completion must identify watering as the one current action")
 	_expect(main._hud_title_text() == "奇趣小岛 · 乌龟花园任务", "pond completion must update the HUD title for Q005")
 
 	_mouse_button(stone_0, true)
@@ -178,13 +179,13 @@ func _run() -> void:
 	main.player_position = main.Q005_WATERING_POINT_POSITION
 	main._try_collect_nearby()
 	_expect(main.game_state.q005_watered, "the connected flow must water the turtle garden")
-	_expect(main._task_action_hint_text() == "下一步：靠近花园里未采的植物，按互动键收集。", "watering must advance the guidance to plant collection")
+	_expect(main._task_action_hint_text() == "下一步：靠近长好的植物，按 E 或点右下角“收集 / 互动”采集 3 株。", "watering must advance the guidance to plant collection")
 	for plant_id in range(3):
 		main.player_position = main.Q005_PLANT_POSITIONS[plant_id]
 		main._try_collect_nearby()
 		_expect(main.game_state.q005_plants_collected[plant_id], "the connected flow must collect every garden plant")
 		if plant_id == 0:
-			_expect(main._task_action_hint_text() == "下一步：靠近花园里未采的植物，按互动键收集。", "partial plant collection must keep collection as the current action")
+			_expect(main._task_action_hint_text() == "下一步：靠近长好的植物，按 E 或点右下角“收集 / 互动”采集 3 株。", "partial plant collection must keep collection as the current action")
 	_expect(main._task_action_hint_text() == "下一步：把右下角的植物逐个拖到绿色空槽。", "collecting all plants must advance the guidance to placement")
 	for plant_id in range(3):
 		_mouse_button(_center(main._q005_plant_inventory_rect(plant_id)), true)
@@ -215,7 +216,7 @@ func _run() -> void:
 	_expect(main._should_show_rabbit_area(), "the rabbit must return for the final celebration objective")
 	_expect(main._task_stage_label() == "主线 7/7", "finishing decorations must identify the final main-story step")
 	_expect(main._task_prompt_text() == "花园装饰已完成！回到兔子身边参加小岛庆祝。", "the garden must direct the player to the rabbit")
-	_expect(main._task_action_hint_text() == "走到兔子身边，按 E 或点右上角“互动 / 收集”参加庆祝。", "the ending prompt must explain how to finish the story")
+	_expect(main._task_action_hint_text() == "走到兔子身边，按 E 或点右下角“收集 / 互动”参加庆祝。", "the ending prompt must explain how to finish the story")
 	_expect(not main._can_use_q007_side_task(), "optional exploration must remain locked before the ending interaction")
 	main.player_position = main.Q012_RABBIT_POSITION
 	main._try_collect_nearby()

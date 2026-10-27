@@ -35,15 +35,22 @@ func _run() -> void:
 	for plant_id in range(3):
 		main.player_position = main.Q005_PLANT_POSITIONS[plant_id]
 		main._try_collect_nearby()
-		_expect(main.game_state.q005_plants_collected[plant_id], "each Q005 plant must collect through runtime interaction")
-		main._try_collect_nearby()
-		_expect(main.q005_plant_count() == plant_id + 1, "repeated plant interaction must not duplicate collection")
+		_expect(not main.game_state.q005_plants_collected[plant_id], "Q005 plants must stay unavailable until watering")
+		_expect(main.message == "先给花园浇水，植物长好后才能采集。", "early plant interaction must explain the required order")
+	_expect(main._task_action_hint_text().contains("浇水前不能采花"), "the next-step hint must state that watering comes first")
 
 	main.player_position = main.Q005_WATERING_POINT_POSITION
 	main._try_collect_nearby()
 	_expect(main.game_state.q005_watered, "watering point interaction must update runtime state")
+	_expect(main._task_action_hint_text().contains("采集 3 株"), "watering must advance the hint to plant collection")
 	main._try_collect_nearby()
 	_expect(main.game_state.q005_watered, "repeated watering must remain idempotent")
+	for plant_id in range(3):
+		main.player_position = main.Q005_PLANT_POSITIONS[plant_id]
+		main._try_collect_nearby()
+		_expect(main.game_state.q005_plants_collected[plant_id], "watered Q005 plants must collect through runtime interaction")
+		main._try_collect_nearby()
+		_expect(main.q005_plant_count() == plant_id + 1, "repeated plant interaction must not duplicate collection")
 
 	var first_inventory := _center(main._q005_plant_inventory_rect(0))
 	var first_slot := _center(main.Q005_PLANT_SLOTS[0])

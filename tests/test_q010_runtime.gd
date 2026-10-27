@@ -46,6 +46,7 @@ func _run() -> void:
 	_expect(main._task_stage_label() == "可选 3/5", "the seed collection task must be marked as optional task three of five")
 	_expect(main._should_show_q009_task_card(), "the optional bird greeting may stay visible while seed collection is active")
 	_expect(main._should_show_q010_task_card(), "the active seed collection card must be visible")
+	_expect(main.Q010_SEED_POSITIONS[1].distance_to(main.Q012_RABBIT_POSITION) > 80.0, "the blue seed must stay visually separated from the rabbit")
 	_expect(not main._can_use_q008_side_task(), "Q008 must stay hidden until Q010 is complete")
 	_expect(not main._can_use_q011_mode(), "Q011 must stay hidden until Q008 is complete")
 	_expect(main._q010_prompt_text() == "种子收藏：已收集 0/3 个指定种子。", "Q010 must show its progress prompt")

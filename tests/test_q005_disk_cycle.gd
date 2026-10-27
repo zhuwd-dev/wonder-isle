@@ -88,9 +88,9 @@ func _write_partial() -> void:
 	var main = await _spawn_main()
 	main._restart_game()
 	_complete_q003(main)
+	_expect(main.game_state.water_q005(), "partial save watering must succeed before plants are collected")
 	for plant_id in range(3):
 		_expect(main.game_state.collect_q005_plant(plant_id), "partial save plant collection must succeed")
-	_expect(main.game_state.water_q005(), "partial save watering must succeed")
 	_expect(main.game_state.place_q005_plant(0, 0), "partial save first slot must succeed")
 	main._save_game()
 	main.queue_free()
@@ -109,9 +109,9 @@ func _write_complete() -> void:
 	var main = await _spawn_main()
 	main._restart_game()
 	_complete_q003(main)
+	_expect(main.game_state.water_q005(), "complete save watering must succeed before plants are collected")
 	for plant_id in range(3):
 		_expect(main.game_state.collect_q005_plant(plant_id), "complete save plant collection must succeed")
-	_expect(main.game_state.water_q005(), "complete save watering must succeed")
 	for plant_id in range(3):
 		_expect(main.game_state.place_q005_plant(plant_id, plant_id), "complete save plant placement must succeed")
 	_expect(main.game_state.is_q005_complete(), "complete save must complete Q005")
@@ -126,9 +126,9 @@ func _write_complete_with_q004() -> void:
 	for wood_id in range(3):
 		_expect(main.game_state.collect_wood(wood_id), "Q004 completion setup collection must succeed")
 		_expect(main.game_state.deliver_wood(wood_id), "Q004 completion setup delivery must succeed")
+	_expect(main.game_state.water_q005(), "Q005 completion setup watering must succeed before plants are collected")
 	for plant_id in range(3):
 		_expect(main.game_state.collect_q005_plant(plant_id), "Q005 completion setup plant collection must succeed")
-	_expect(main.game_state.water_q005(), "Q005 completion setup watering must succeed")
 	for plant_id in range(3):
 		_expect(main.game_state.place_q005_plant(plant_id, plant_id), "Q005 completion setup placement must succeed")
 	_expect(main.game_state.is_q005_complete(), "Q005 completion setup must complete Q005")
