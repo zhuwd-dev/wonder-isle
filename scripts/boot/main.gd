@@ -1425,11 +1425,17 @@ func _draw_background() -> void:
 	var background_size := Vector2(maxf(WORLD_SIZE.x, viewport_size.x), maxf(WORLD_SIZE.y, viewport_size.y))
 	draw_rect(Rect2(Vector2.ZERO, background_size), VISUAL_PALETTE["sky"])
 	draw_rect(Rect2(0, 96, background_size.x, 54), VISUAL_PALETTE["sky_band"])
+	var sun_pulse := sin(animation_time * 0.65)
+	draw_circle(Vector2(1135, 82), 50.0 + sun_pulse * 2.0, Color(1.0, 0.91, 0.63, 0.18))
 	draw_circle(Vector2(1135, 82), 42, VISUAL_PALETTE["sun"])
-	for cloud_x in [180.0, 540.0, 1010.0]:
-		draw_circle(Vector2(cloud_x, 78), 22, VISUAL_PALETTE["cloud"])
-		draw_circle(Vector2(cloud_x + 26, 82), 30, VISUAL_PALETTE["cloud"])
-		draw_circle(Vector2(cloud_x + 58, 78), 20, VISUAL_PALETTE["cloud"])
+	var cloud_bases := [180.0, 540.0, 1010.0]
+	for cloud_id in range(cloud_bases.size()):
+		var cloud_phase := animation_time * 0.38 + float(cloud_id) * 1.9
+		var cloud_x: float = cloud_bases[cloud_id] + sin(cloud_phase) * 7.0
+		var cloud_y := 78.0 + sin(cloud_phase * 0.8) * 2.0
+		draw_circle(Vector2(cloud_x, cloud_y), 22, VISUAL_PALETTE["cloud"])
+		draw_circle(Vector2(cloud_x + 26, cloud_y + 4), 30, VISUAL_PALETTE["cloud"])
+		draw_circle(Vector2(cloud_x + 58, cloud_y), 20, VISUAL_PALETTE["cloud"])
 
 
 func _draw_world(font: Font) -> void:
@@ -1482,9 +1488,12 @@ func _draw_island_shape(points: PackedVector2Array, fill: Color) -> void:
 
 
 func _draw_grass_details() -> void:
-	for position in [Vector2(126, 194), Vector2(176, 580), Vector2(652, 196), Vector2(1018, 556), Vector2(1160, 510)]:
-		draw_line(position, position + Vector2(5, -10), VISUAL_PALETTE["island_highlight"], 3.0)
-		draw_line(position + Vector2(4, 0), position + Vector2(13, -6), VISUAL_PALETTE["island_highlight"], 3.0)
+	var grass_positions := [Vector2(126, 194), Vector2(176, 580), Vector2(652, 196), Vector2(1018, 556), Vector2(1160, 510)]
+	for grass_id in range(grass_positions.size()):
+		var position: Vector2 = grass_positions[grass_id]
+		var sway := sin(animation_time * 1.7 + float(grass_id) * 1.4) * 2.0
+		draw_line(position, position + Vector2(5 + sway, -10), VISUAL_PALETTE["island_highlight"], 3.0)
+		draw_line(position + Vector2(4, 0), position + Vector2(13 + sway, -6), VISUAL_PALETTE["island_highlight"], 3.0)
 
 
 func _draw_river() -> void:
@@ -1493,10 +1502,21 @@ func _draw_river() -> void:
 	draw_line(Vector2(RIVER_RECT.position.x + 2, RIVER_RECT.position.y), Vector2(RIVER_RECT.position.x + 2, RIVER_RECT.end.y), VISUAL_PALETTE["river_edge"], 5.0)
 	draw_line(Vector2(RIVER_RECT.end.x - 2, RIVER_RECT.position.y), Vector2(RIVER_RECT.end.x - 2, RIVER_RECT.end.y), VISUAL_PALETTE["river_edge"], 5.0)
 	for y in range(150, 620, 58):
+		var current_phase := animation_time * 1.15 + float(y) * 0.025
 		var wave := PackedVector2Array([
-			Vector2(744, y), Vector2(778, y - 5), Vector2(812, y + 5), Vector2(846, y - 4), Vector2(875, y),
+			Vector2(744 + sin(current_phase) * 4.0, y),
+			Vector2(778 + sin(current_phase + 0.9) * 4.0, y - 5 + sin(current_phase + 0.4) * 1.8),
+			Vector2(812 + sin(current_phase + 1.8) * 4.0, y + 5 + sin(current_phase + 1.2) * 1.8),
+			Vector2(846 + sin(current_phase + 2.7) * 4.0, y - 4 + sin(current_phase + 2.0) * 1.8),
+			Vector2(875 + sin(current_phase + 3.6) * 4.0, y),
 		])
 		draw_polyline(wave, VISUAL_PALETTE["river_light"], 3.0, true)
+	for glint_id in range(3):
+		var glint_phase := animation_time * 1.8 + float(glint_id) * 1.7
+		var glint_x := 730.0 + fposmod(animation_time * 15.0 + float(glint_id) * 48.0, 150.0)
+		var glint_y := 190.0 + float(glint_id) * 145.0 + sin(glint_phase) * 5.0
+		var glint_color := Color(0.91, 0.98, 0.86, 0.30 + (sin(glint_phase) + 1.0) * 0.12)
+		draw_line(Vector2(glint_x, glint_y), Vector2(glint_x + 14.0, glint_y - 1.0), glint_color, 2.0)
 
 
 func _draw_bridge(font: Font) -> void:
@@ -1585,9 +1605,14 @@ func _draw_seed_area(font: Font) -> void:
 	for row_y in [18.0, 34.0, 50.0]:
 		draw_line(bed_rect.position + Vector2(10, row_y), bed_rect.position + Vector2(86, row_y), Color("d09a62"), 2.0)
 	if game_state.seed_planted:
-		draw_line(FLOWERBED_POSITION + Vector2(0, 18), FLOWERBED_POSITION + Vector2(0, -14), Color("4f9e55"), 5.0)
-		draw_circle(FLOWERBED_POSITION + Vector2(-10, -14), 9.0, Color("78c977"))
-		draw_circle(FLOWERBED_POSITION + Vector2(10, -14), 9.0, Color("9be087"))
+		var seedling_sway := sin(animation_time * 1.45 + 0.7) * 2.2
+		var stem_base := FLOWERBED_POSITION + Vector2(0, 18)
+		var stem_joint := FLOWERBED_POSITION + Vector2(seedling_sway * 0.35, 2)
+		var stem_top := FLOWERBED_POSITION + Vector2(seedling_sway, -14)
+		draw_line(stem_base, stem_joint, Color("4f9e55"), 5.0)
+		draw_line(stem_joint, stem_top, Color("4f9e55"), 5.0)
+		draw_circle(stem_top + Vector2(-10, 0), 9.0, Color("78c977"))
+		draw_circle(stem_top + Vector2(10, 0), 9.0, Color("9be087"))
 		draw_string(font, FLOWERBED_POSITION + Vector2(-30, 48), "幼苗", HORIZONTAL_ALIGNMENT_LEFT, -1, 16, VISUAL_PALETTE["ink"])
 	else:
 		draw_string(font, FLOWERBED_POSITION + Vector2(-30, 48), "空花圃", HORIZONTAL_ALIGNMENT_LEFT, -1, 16, VISUAL_PALETTE["ink"])
@@ -1605,9 +1630,15 @@ func _draw_pond_area(font: Font) -> void:
 	var pond_fill := Color("78cbd5") if not game_state.is_pond_complete() else Color("5bbbd0")
 	_draw_panel(POND_RECT, pond_fill, VISUAL_PALETTE["river_edge"], 24)
 	var pond_line_offsets := [34.0, 62.0, 90.0] if game_state.is_pond_complete() else [34.0, 66.0, 98.0]
-	for y_offset in pond_line_offsets:
-		var y: float = POND_RECT.position.y + y_offset
-		draw_line(Vector2(POND_RECT.position.x + 18, y), Vector2(POND_RECT.end.x - 18, y), Color("a9e3e6"), 3.0)
+	for line_id in range(pond_line_offsets.size()):
+		var y: float = POND_RECT.position.y + pond_line_offsets[line_id]
+		var wave_phase := animation_time * 0.9 + float(line_id) * 1.2
+		var wave := PackedVector2Array([
+			Vector2(POND_RECT.position.x + 18, y + sin(wave_phase) * 1.2),
+			Vector2(POND_RECT.get_center().x, y + sin(wave_phase + 1.1) * 2.0),
+			Vector2(POND_RECT.end.x - 18, y + sin(wave_phase + 2.2) * 1.2),
+		])
+		draw_polyline(wave, Color("a9e3e6"), 3.0, true)
 	draw_string(font, POND_RECT.position + Vector2(54, -12), "池塘", HORIZONTAL_ALIGNMENT_LEFT, -1, 22, VISUAL_PALETTE["ink"])
 	if game_state.is_pond_complete():
 		draw_string(font, POND_RECT.position + Vector2(34, 118), "池塘已开放", HORIZONTAL_ALIGNMENT_LEFT, -1, 18, Color("fff1a8"))
@@ -2062,21 +2093,26 @@ func _draw_q005_plant_at(position: Vector2, grown: bool, appearance_unlocked := 
 		draw_line(position + Vector2(0, 3) * growth_scale, position + Vector2(-9, 7) * growth_scale, Color("a2ae70"), 4.0 * growth_scale)
 		draw_line(position + Vector2(0, 1) * growth_scale, position + Vector2(8, 6) * growth_scale, Color("b0b879"), 4.0 * growth_scale)
 		return
-	draw_line(position + Vector2(0, 12) * growth_scale, position + Vector2(0, -10) * growth_scale, stem_color, 4.0 * growth_scale)
+	var plant_sway := sin(animation_time * 1.45 + position.x * 0.017) * 2.4 * growth_scale
+	var stem_base := position + Vector2(0, 12) * growth_scale
+	var stem_joint := position + Vector2(plant_sway * 0.35, 2) * growth_scale
+	var stem_top := position + Vector2(plant_sway, -10) * growth_scale
+	draw_line(stem_base, stem_joint, stem_color, 4.0 * growth_scale)
+	draw_line(stem_joint, stem_top, stem_color, 4.0 * growth_scale)
 	if grown:
 		if appearance_unlocked:
-			draw_circle(position + Vector2(-10, -10) * growth_scale, 8.0 * growth_scale, Color("e96b70"))
-			draw_circle(position + Vector2(10, -10) * growth_scale, 8.0 * growth_scale, Color("67a9dc"))
-			draw_circle(position + Vector2(0, -20) * growth_scale, 7.0 * growth_scale, Color("f0c85e"))
-			draw_circle(position + Vector2(0, -10) * growth_scale, 5.0 * growth_scale, Color("fff3ad"))
-			draw_line(position + Vector2(-3, -10) * growth_scale, position + Vector2(3, -10) * growth_scale, Color("fff8df"), 2.0 * growth_scale)
+			draw_circle(stem_top + Vector2(-10, 0) * growth_scale, 8.0 * growth_scale, Color("e96b70"))
+			draw_circle(stem_top + Vector2(10, 0) * growth_scale, 8.0 * growth_scale, Color("67a9dc"))
+			draw_circle(stem_top + Vector2(0, -10) * growth_scale, 7.0 * growth_scale, Color("f0c85e"))
+			draw_circle(stem_top, 5.0 * growth_scale, Color("fff3ad"))
+			draw_line(stem_top + Vector2(-3, 0) * growth_scale, stem_top + Vector2(3, 0) * growth_scale, Color("fff8df"), 2.0 * growth_scale)
 		else:
-			draw_circle(position + Vector2(-9, -10) * growth_scale, 8.0 * growth_scale, Color("78c977"))
-			draw_circle(position + Vector2(9, -10) * growth_scale, 8.0 * growth_scale, Color("9be087"))
-			draw_circle(position + Vector2(0, -18) * growth_scale, 6.0 * growth_scale, Color("ffe38a"))
+			draw_circle(stem_top + Vector2(-9, 0) * growth_scale, 8.0 * growth_scale, Color("78c977"))
+			draw_circle(stem_top + Vector2(9, 0) * growth_scale, 8.0 * growth_scale, Color("9be087"))
+			draw_circle(stem_top + Vector2(0, -8) * growth_scale, 6.0 * growth_scale, Color("ffe38a"))
 	else:
-		draw_circle(position + Vector2(-7, -5) * growth_scale, 7.0 * growth_scale, Color("75b85e"))
-		draw_circle(position + Vector2(7, -5) * growth_scale, 7.0 * growth_scale, Color("a0cf6b"))
+		draw_circle(stem_top + Vector2(-7, 5) * growth_scale, 7.0 * growth_scale, Color("75b85e"))
+		draw_circle(stem_top + Vector2(7, 5) * growth_scale, 7.0 * growth_scale, Color("a0cf6b"))
 
 
 func _draw_turtle(position: Vector2) -> void:
