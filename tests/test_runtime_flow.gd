@@ -27,6 +27,9 @@ func _run() -> void:
 	_expect(main.get("save_path") == save_path, "runtime flow must use the isolated save path")
 
 	main._restart_game()
+	var animation_time_before: float = main.animation_time
+	main._physics_process(0.1)
+	_expect(main.animation_time > animation_time_before, "character animation time must advance with the game loop")
 	_expect(not main.game_state.is_complete(), "a new runtime flow must start before bridge completion")
 	_expect(not main.game_state.seed_collected, "a new runtime flow must not have the seed")
 	_expect(not main.game_state.can_start_pond_task(), "pond task must be locked at the start")
@@ -64,6 +67,11 @@ func _run() -> void:
 	touch_up.pressed = false
 	main._input(touch_up)
 	_expect(not main.virtual_joystick_active and main.touch_direction == Vector2.ZERO, "lifting the steering finger must release the joystick")
+	main.touch_direction = Vector2.RIGHT
+	main._physics_process(0.1)
+	_expect(main.player_is_moving and main.player_walk_phase > 0.0, "moving with the virtual stick must advance the walk cycle")
+	main.touch_direction = Vector2.ZERO
+	main.player_position = Vector2(250, 500)
 
 	# Q001: collect all boards through the proximity interaction path.
 	main.player_position = main.SEED_POSITION
@@ -76,6 +84,7 @@ func _run() -> void:
 		main.player_position = main.BOARD_POSITIONS[board_id]
 		main._try_collect_nearby()
 		_expect(main.game_state.collected[board_id], "runtime proximity interaction must collect each board")
+		_expect(main.collect_sparkle_remaining > 0.0, "collecting a board must show the short sparkle feedback")
 
 	_expect(main.game_state.board_count() == 3, "runtime flow must collect all three boards")
 
@@ -98,6 +107,7 @@ func _run() -> void:
 		_expect(main.game_state.placed[board_id], "a valid mouse board drop must place each remaining board")
 
 	_expect(main.game_state.is_complete(), "the bridge must repair after three runtime board drops")
+	_expect(main.bridge_repair_remaining > 0.0, "repairing the bridge must trigger its finishing shimmer")
 	_expect(main._task_stage_label() == "主线 2/7", "repairing the bridge must advance the visible main-story step")
 	_expect(main._is_walkable(Vector2(800, 375)), "the repaired bridge must be walkable")
 	_expect(main.game_state.area_unlocked, "bridge completion must unlock the right area")
@@ -221,6 +231,7 @@ func _run() -> void:
 	main.player_position = main.Q012_RABBIT_POSITION
 	main._try_collect_nearby()
 	_expect(main.game_state.is_q012_complete(), "the rabbit interaction must finish the connected main story")
+	_expect(main.celebration_remaining > 0.0, "finishing the story must trigger the celebration animation")
 	_expect(main._should_show_rabbit_area(), "the rabbit must remain as a companion after the celebration")
 	_expect(_read_save().get("q012_completed") == true, "the connected main-story ending must save immediately")
 	_expect(main._can_use_q007_side_task(), "finishing the story must unlock optional exploration")

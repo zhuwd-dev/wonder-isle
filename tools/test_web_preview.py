@@ -52,6 +52,8 @@ def main() -> int:
     screenshot_path = artifact_dir / "web-preview.png"
     seed_planted_screenshot_path = artifact_dir / "web-q002-seed-planted.png"
     turtle_garden_screenshot_path = artifact_dir / "web-q005-turtle-garden.png"
+    turtle_growth_screenshot_path = artifact_dir / "web-q005-watered-growth.png"
+    turtle_collection_screenshot_path = artifact_dir / "web-q005-plant-collected.png"
     ending_screenshot_path = artifact_dir / "web-q012-ending.png"
     completed_screenshot_path = artifact_dir / "web-q012-complete.png"
     final_island_screenshot_path = artifact_dir / "web-q011-all-tasks-complete.png"
@@ -304,6 +306,70 @@ def main() -> int:
                             raise AssertionError("The browser did not load the Q005 turtle-garden fixture")
                         page.screenshot(path=str(turtle_garden_screenshot_path), full_page=True)
                         result["q005_turtle_garden_screenshot"] = str(turtle_garden_screenshot_path)
+
+                        # Play the ordered Q005 interaction in the browser: reach the
+                        # watering point, use the bottom-right control, then collect a
+                        # grown plant and confirm the save reflects that sequence.
+                        page.mouse.click(800, 600)
+                        for key, duration_ms in (("w", 500), ("d", 2_750), ("s", 570)):
+                            page.keyboard.down(key)
+                            page.wait_for_timeout(duration_ms)
+                            page.keyboard.up(key)
+                        page.screenshot(path=str(artifact_dir / "web-q005-at-watering-point.png"), full_page=True)
+                        page.mouse.click(1_240, 681)
+                        page.wait_for_timeout(180)
+                        page.screenshot(path=str(turtle_growth_screenshot_path), full_page=True)
+                        # Godot WebFS commits writes to IndexedDB asynchronously.
+                        watered_save = {}
+                        for _ in range(12):
+                            watered_save = page.evaluate(
+                                """async key => new Promise((resolve, reject) => {
+                                    const opening = indexedDB.open('/userfs');
+                                    opening.onerror = () => reject(opening.error);
+                                    opening.onsuccess = () => {
+                                        const transaction = opening.result.transaction('FILE_DATA', 'readonly');
+                                        const request = transaction.objectStore('FILE_DATA').get(key);
+                                        request.onsuccess = () => resolve(JSON.parse(new TextDecoder().decode(new Uint8Array(request.result.contents))));
+                                        request.onerror = () => reject(request.error);
+                                    };
+                                })""",
+                                save_key,
+                            )
+                            if watered_save.get("q005_watered") is True:
+                                break
+                            page.wait_for_timeout(500)
+                        if watered_save.get("q005_watered") is not True:
+                            raise AssertionError("The bottom-right control did not water the Q005 garden")
+                        for key, duration_ms in (("d", 200), ("w", 200)):
+                            page.keyboard.down(key)
+                            page.wait_for_timeout(duration_ms)
+                            page.keyboard.up(key)
+                        page.mouse.click(1_240, 681)
+                        page.wait_for_timeout(180)
+                        page.screenshot(path=str(turtle_collection_screenshot_path), full_page=True)
+                        collected_save = {}
+                        for _ in range(12):
+                            collected_save = page.evaluate(
+                                """async key => new Promise((resolve, reject) => {
+                                    const opening = indexedDB.open('/userfs');
+                                    opening.onerror = () => reject(opening.error);
+                                    opening.onsuccess = () => {
+                                        const transaction = opening.result.transaction('FILE_DATA', 'readonly');
+                                        const request = transaction.objectStore('FILE_DATA').get(key);
+                                        request.onsuccess = () => resolve(JSON.parse(new TextDecoder().decode(new Uint8Array(request.result.contents))));
+                                        request.onerror = () => reject(request.error);
+                                    };
+                                })""",
+                                save_key,
+                            )
+                            if collected_save.get("q005_plants_collected") == [True, False, False]:
+                                break
+                            page.wait_for_timeout(500)
+                        if collected_save.get("q005_plants_collected") != [True, False, False]:
+                            raise AssertionError("The Q005 plant was not collected after watering through the browser")
+                        result["q005_watered_browser_flow"] = "passed"
+                        result["q005_growth_screenshot"] = str(turtle_growth_screenshot_path)
+                        result["q005_collection_screenshot"] = str(turtle_collection_screenshot_path)
 
                     page.mouse.click(1150, 50)
                     page.wait_for_timeout(1_000)

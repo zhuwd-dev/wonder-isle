@@ -42,6 +42,7 @@ func _run() -> void:
 	main.player_position = main.Q005_WATERING_POINT_POSITION
 	main._try_collect_nearby()
 	_expect(main.game_state.q005_watered, "watering point interaction must update runtime state")
+	_expect(main.q005_growth_remaining > 0.0, "watering must trigger a visible seedling growth animation")
 	_expect(main._task_action_hint_text().contains("采集 3 株"), "watering must advance the hint to plant collection")
 	main._try_collect_nearby()
 	_expect(main.game_state.q005_watered, "repeated watering must remain idempotent")

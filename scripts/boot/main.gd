@@ -75,6 +75,10 @@ const JOYSTICK_RADIUS := 54.0
 const JOYSTICK_DEADZONE := 0.14
 const JOYSTICK_HIT_RADIUS := 88.0
 const INTERACT_BUTTON_SIZE := Vector2(64, 58)
+const COLLECT_SPARKLE_DURATION := 0.72
+const Q005_GROWTH_DURATION := 1.4
+const BRIDGE_REPAIR_DURATION := 1.05
+const CELEBRATION_DURATION := 2.4
 const BRIDGE_SLOTS := [
 	Rect2(772, 356, 34, 38),
 	Rect2(813, 356, 34, 38),
@@ -118,6 +122,15 @@ var game_state
 var save_path := SAVE_PATH
 var player_position := Vector2(250, 500)
 var player_facing := Vector2.RIGHT
+var animation_time := 0.0
+var player_walk_phase := 0.0
+var player_is_moving := false
+var collect_sparkle_remaining := 0.0
+var collect_sparkle_position := Vector2.ZERO
+var collect_sparkle_color := Color("fff1a8")
+var q005_growth_remaining := 0.0
+var bridge_repair_remaining := 0.0
+var celebration_remaining := 0.0
 var touch_direction := Vector2.ZERO
 var virtual_joystick_active := false
 var virtual_joystick_mouse_active := false
@@ -172,6 +185,12 @@ func _ready() -> void:
 
 
 func _physics_process(delta: float) -> void:
+	animation_time += delta
+	collect_sparkle_remaining = maxf(collect_sparkle_remaining - delta, 0.0)
+	q005_growth_remaining = maxf(q005_growth_remaining - delta, 0.0)
+	bridge_repair_remaining = maxf(bridge_repair_remaining - delta, 0.0)
+	celebration_remaining = maxf(celebration_remaining - delta, 0.0)
+	player_is_moving = false
 	_tick_transient_message(delta)
 	if Input.is_action_just_pressed("interact"):
 		_try_collect_nearby()
@@ -186,7 +205,25 @@ func _physics_process(delta: float) -> void:
 		var candidate := player_position + direction * PLAYER_SPEED * delta
 		if _is_walkable(candidate):
 			player_position = candidate
+			player_is_moving = true
+			player_walk_phase = fposmod(player_walk_phase + delta * TAU * 2.3, TAU)
 	queue_redraw()
+
+
+func _start_collect_sparkles(position: Vector2, color := Color("fff1a8")) -> void:
+	collect_sparkle_position = position
+	collect_sparkle_color = color
+	collect_sparkle_remaining = COLLECT_SPARKLE_DURATION
+	queue_redraw()
+
+
+func _character_bob(phase: float, amplitude := 1.8) -> float:
+	return sin(animation_time * 2.2 + phase) * amplitude
+
+
+func _character_is_blinking(phase: float) -> bool:
+	var blink_cycle := fposmod(animation_time + phase, 4.2)
+	return blink_cycle > 4.02 and blink_cycle < 4.16
 
 
 func _tick_transient_message(delta: float) -> void:
@@ -796,6 +833,7 @@ func _pointer_up(position: Vector2) -> void:
 		dragging_q005_plant = -1
 		q005_plant_drag_position = Vector2.ZERO
 		if target_slot >= 0 and game_state.place_q005_plant(plant_id, target_slot):
+			_start_collect_sparkles(Q005_PLANT_SLOTS[target_slot].get_center(), Color("a9e98b"))
 			message = "植物摆放正确！继续照料花园。"
 			message_color = Color("d9ffd0")
 			_save_game()
@@ -832,10 +870,12 @@ func _pointer_up(position: Vector2) -> void:
 	var target_slot := _drag_target_slot_at(position)
 	dragging_board = -1
 	if target_slot >= 0 and game_state.place_board(board_id, target_slot):
+		_start_collect_sparkles(BRIDGE_SLOTS[target_slot].get_center(), Color("fff1a8"))
 		message = "木板放置正确！继续修好桥。"
 		message_color = Color("d9ffd0")
 		_save_game()
 		if game_state.is_complete():
+			bridge_repair_remaining = BRIDGE_REPAIR_DURATION
 			message = "太棒了！小桥修好了，右侧区域已经开放！"
 			message_color = Color("fff1a8")
 	else:
@@ -848,6 +888,8 @@ func _try_collect_nearby() -> void:
 	if game_state.can_start_q012():
 		if player_position.distance_to(Q012_RABBIT_POSITION) <= COLLECTION_RADIUS:
 			if game_state.complete_q012():
+				celebration_remaining = CELEBRATION_DURATION
+				_start_collect_sparkles(Q012_RABBIT_POSITION, Color("fff1a8"))
 				_save_game()
 				message = "小岛庆祝日开始！主线故事完成，接下来可以自由探索。"
 				message_color = Color("fff1a8")
@@ -885,6 +927,7 @@ func _try_collect_nearby() -> void:
 	if game_state.can_collect_seed():
 		if player_position.distance_to(SEED_POSITION) <= COLLECTION_RADIUS:
 			if game_state.collect_seed():
+				_start_collect_sparkles(SEED_POSITION, Color("f2c879"))
 				message = "找到种子啦！现在去右侧花圃种下。"
 				message_color = Color("d9ffd0")
 				_save_game()
@@ -897,6 +940,7 @@ func _try_collect_nearby() -> void:
 	if game_state.can_plant_seed():
 		if player_position.distance_to(FLOWERBED_POSITION) <= FLOWERBED_INTERACTION_RADIUS:
 			if game_state.plant_seed():
+				_start_collect_sparkles(FLOWERBED_POSITION, Color("a9e98b"))
 				message = "种植成功！幼苗长出来了！"
 				message_color = Color("d9ffd0")
 				_save_game()
@@ -937,6 +981,7 @@ func _try_q007_interaction() -> bool:
 	if player_position.distance_to(Q007_SHELL_POSITION) > COLLECTION_RADIUS:
 		return false
 	if game_state.collect_q007_shell():
+		_start_collect_sparkles(Q007_SHELL_POSITION, Color("fff1a8"))
 		_save_game()
 		message = "隐藏的贝壳完成！获得珍珠贝壳摆件。"
 		message_color = Color("fff1a8")
@@ -962,6 +1007,8 @@ func _try_q005_interaction() -> bool:
 			nearest_distance = distance
 	if target_kind == 1:
 		if game_state.water_q005():
+			q005_growth_remaining = Q005_GROWTH_DURATION
+			_start_collect_sparkles(Q005_WATERING_POINT_POSITION, Color("9be7f0"))
 			_save_game()
 			message = "浇水成功！现在收集 3 株植物并摆进花园。"
 			message_color = Color("d9ffd0")
@@ -974,6 +1021,7 @@ func _try_q005_interaction() -> bool:
 		message_color = Color("fff1a8")
 		return true
 	if target_kind == 2 and game_state.collect_q005_plant(target_id):
+		_start_collect_sparkles(Q005_PLANT_POSITIONS[target_id], Color("a9e98b"))
 		_save_game()
 		message = "植物收集成功：%d/3。" % game_state.q005_plant_count()
 		message_color = Color("d9ffd0")
@@ -1009,6 +1057,7 @@ func _try_q004_interaction() -> void:
 			nearest_distance = distance
 			nearest_id = wood_id
 	if nearest_id >= 0 and game_state.collect_wood(nearest_id):
+		_start_collect_sparkles(WOOD_POSITIONS[nearest_id], Color("f2c879"))
 		_save_game()
 		message = "木材收集成功：%d/%d。" % [game_state.wood_count(), GameState.Q004_WOOD_TOTAL]
 		message_color = Color("d9ffd0")
@@ -1031,6 +1080,7 @@ func _try_q009_interaction() -> bool:
 			nearest_distance = distance
 			nearest_id = material_id
 	if nearest_id >= 0 and game_state.collect_q009_material(nearest_id):
+		_start_collect_sparkles(Q009_MATERIAL_POSITIONS[nearest_id], Color("fff1a8"))
 		_save_game()
 		if game_state.is_q009_complete():
 			message = "鸟屋计划完成！小鸟互动已开放。"
@@ -1064,6 +1114,7 @@ func _try_q010_interaction() -> bool:
 			nearest_id = seed_id
 	if nearest_id < 0 or not game_state.collect_q010_seed(nearest_id):
 		return false
+	_start_collect_sparkles(Q010_SEED_POSITIONS[nearest_id], Color("fff1a8"))
 	_save_game()
 	if game_state.is_q010_complete():
 		message = "种子收藏完成！植物外观已解锁。"
@@ -1080,6 +1131,7 @@ func _try_collect_board(board_id: int) -> void:
 		message_color = Color("ffe1b8")
 		return
 	if game_state.collect_board(board_id):
+		_start_collect_sparkles(BOARD_POSITIONS[board_id], Color("f2c879"))
 		message = "收集成功！木板：%d/3。" % game_state.board_count()
 		message_color = Color("d9ffd0")
 		_save_game()
@@ -1229,6 +1281,12 @@ func _restart_game() -> void:
 	game_state.reset()
 	player_position = Vector2(250, 500)
 	player_facing = Vector2.RIGHT
+	player_walk_phase = 0.0
+	player_is_moving = false
+	collect_sparkle_remaining = 0.0
+	q005_growth_remaining = 0.0
+	bridge_repair_remaining = 0.0
+	celebration_remaining = 0.0
 	dragging_board = -1
 	dragging_pond_stone = -1
 	pond_drag_position = Vector2.ZERO
@@ -1318,6 +1376,7 @@ func _draw() -> void:
 	var font := UI_FONT
 	_draw_background()
 	_draw_world(font)
+	_draw_feedback_effects()
 	_draw_hud(font)
 	_draw_touch_hint(font)
 	if dragging_board >= 0:
@@ -1332,6 +1391,33 @@ func _draw() -> void:
 		_draw_q008_path_paver_at(q008_path_drag_position, dragging_q008_path, true)
 	elif dragging_q011_item >= 0:
 		_draw_q011_item_at(q011_drag_position, dragging_q011_item, true)
+
+
+func _draw_feedback_effects() -> void:
+	if collect_sparkle_remaining > 0.0:
+		var progress := 1.0 - collect_sparkle_remaining / COLLECT_SPARKLE_DURATION
+		var fade := 1.0 - progress
+		var ring_color := collect_sparkle_color
+		ring_color.a = fade * 0.8
+		draw_arc(collect_sparkle_position, 9.0 + progress * 27.0, 0.0, TAU, 32, ring_color, 2.5)
+		for sparkle_id in range(8):
+			var angle := TAU * float(sparkle_id) / 8.0 + animation_time * 1.3
+			var direction := Vector2(cos(angle), sin(angle))
+			var radius := 10.0 + progress * 25.0
+			var sparkle_center := collect_sparkle_position + direction * radius
+			draw_line(sparkle_center - direction * 3.5, sparkle_center + direction * 3.5, ring_color, 2.5)
+			draw_circle(sparkle_center, 2.0 + fade, ring_color)
+	if celebration_remaining > 0.0:
+		var celebration_progress := 1.0 - celebration_remaining / CELEBRATION_DURATION
+		var confetti_colors := [Color("f2c879"), Color("e96b70"), Color("67a9dc"), Color("a9df88"), Color("fff1a8")]
+		for confetti_id in range(18):
+			var fall := fposmod(celebration_progress + float(confetti_id) * 0.071, 1.0)
+			var horizontal_start := float((confetti_id * 37) % 130) - 65.0
+			var sway := sin(animation_time * 5.0 + float(confetti_id)) * 9.0
+			var confetti_position := Q012_RABBIT_POSITION + Vector2(horizontal_start + sway, -82.0 + fall * 118.0)
+			var confetti_color: Color = confetti_colors[confetti_id % confetti_colors.size()]
+			confetti_color.a = clampf(celebration_remaining / 0.6, 0.0, 1.0)
+			draw_rect(Rect2(confetti_position, Vector2(5, 8)), confetti_color, true)
 
 
 func _draw_background() -> void:
@@ -1439,6 +1525,12 @@ func _draw_bridge(font: Font) -> void:
 		draw_string(font, Vector2(700, 465), drag_hint, HORIZONTAL_ALIGNMENT_LEFT, -1, 20, VISUAL_PALETTE["ink"])
 	if game_state.bridge_repaired:
 		draw_line(Vector2(770, 342), Vector2(870, 342), Color("f4d28b"), 6.0)
+		if bridge_repair_remaining > 0.0:
+			var repair_progress := 1.0 - bridge_repair_remaining / BRIDGE_REPAIR_DURATION
+			var shimmer_x := lerpf(770.0, 870.0, repair_progress)
+			var shimmer_alpha := 1.0 - repair_progress
+			_draw_ellipse_custom(Vector2(shimmer_x, 377), Vector2(18, 34), Color(1.0, 0.91, 0.57, shimmer_alpha * 0.5))
+			draw_line(Vector2(shimmer_x, 345), Vector2(shimmer_x, 408), Color(1.0, 0.98, 0.78, shimmer_alpha), 4.0)
 		draw_string(font, Vector2(760, 315), _bridge_status_text(), HORIZONTAL_ALIGNMENT_LEFT, -1, 20, Color("fff1a8"))
 	else:
 		draw_line(Vector2(800, 344), Vector2(814, 358), Color("49342c"), 3.0)
@@ -1599,7 +1691,14 @@ func _draw_q005_area(font: Font) -> void:
 	for plant_id in range(GameState.Q005_PLANT_TOTAL):
 		if game_state.q005_plants_collected[plant_id]:
 			continue
-		_draw_q005_plant_at(Q005_PLANT_POSITIONS[plant_id], false, false, not game_state.q005_watered)
+		var plant_position: Vector2 = Q005_PLANT_POSITIONS[plant_id]
+		var plant_scale := 1.0
+		if game_state.q005_watered and q005_growth_remaining > 0.0:
+			var growth_progress := clampf(1.0 - q005_growth_remaining / Q005_GROWTH_DURATION, 0.0, 1.0)
+			var eased_growth := growth_progress * growth_progress * (3.0 - 2.0 * growth_progress)
+			plant_scale = lerpf(0.35, 1.0, eased_growth)
+			plant_position.y -= eased_growth * 9.0
+		_draw_q005_plant_at(plant_position, false, false, not game_state.q005_watered, plant_scale)
 		draw_string(font, Q005_PLANT_POSITIONS[plant_id] + Vector2(-26, 30), "待浇水" if not game_state.q005_watered else "植物", HORIZONTAL_ALIGNMENT_LEFT, -1, 13, VISUAL_PALETTE["ink"])
 
 	var watering_color := Color("5bbbd0") if not game_state.q005_watered else Color("78c977")
@@ -1956,38 +2055,42 @@ func _draw_q008_path_paver_at(position: Vector2, material_id: int, lifted: bool)
 	draw_line(paver_position + Vector2(18, -7), paver_position + Vector2(25, 5), Color("f0c981"), 2.0)
 
 
-func _draw_q005_plant_at(position: Vector2, grown: bool, appearance_unlocked := false, wilted := false) -> void:
+func _draw_q005_plant_at(position: Vector2, grown: bool, appearance_unlocked := false, wilted := false, growth_scale := 1.0) -> void:
 	var stem_color := Color("8a9866") if wilted else Color("4f9e55")
 	if wilted:
-		draw_line(position + Vector2(0, 12), position + Vector2(0, 0), stem_color, 4.0)
-		draw_line(position + Vector2(0, 3), position + Vector2(-9, 7), Color("a2ae70"), 4.0)
-		draw_line(position + Vector2(0, 1), position + Vector2(8, 6), Color("b0b879"), 4.0)
+		draw_line(position + Vector2(0, 12) * growth_scale, position, stem_color, 4.0 * growth_scale)
+		draw_line(position + Vector2(0, 3) * growth_scale, position + Vector2(-9, 7) * growth_scale, Color("a2ae70"), 4.0 * growth_scale)
+		draw_line(position + Vector2(0, 1) * growth_scale, position + Vector2(8, 6) * growth_scale, Color("b0b879"), 4.0 * growth_scale)
 		return
-	draw_line(position + Vector2(0, 12), position + Vector2(0, -10), stem_color, 4.0)
+	draw_line(position + Vector2(0, 12) * growth_scale, position + Vector2(0, -10) * growth_scale, stem_color, 4.0 * growth_scale)
 	if grown:
 		if appearance_unlocked:
-			draw_circle(position + Vector2(-10, -10), 8.0, Color("e96b70"))
-			draw_circle(position + Vector2(10, -10), 8.0, Color("67a9dc"))
-			draw_circle(position + Vector2(0, -20), 7.0, Color("f0c85e"))
-			draw_circle(position + Vector2(0, -10), 5.0, Color("fff3ad"))
-			draw_line(position + Vector2(-3, -10), position + Vector2(3, -10), Color("fff8df"), 2.0)
+			draw_circle(position + Vector2(-10, -10) * growth_scale, 8.0 * growth_scale, Color("e96b70"))
+			draw_circle(position + Vector2(10, -10) * growth_scale, 8.0 * growth_scale, Color("67a9dc"))
+			draw_circle(position + Vector2(0, -20) * growth_scale, 7.0 * growth_scale, Color("f0c85e"))
+			draw_circle(position + Vector2(0, -10) * growth_scale, 5.0 * growth_scale, Color("fff3ad"))
+			draw_line(position + Vector2(-3, -10) * growth_scale, position + Vector2(3, -10) * growth_scale, Color("fff8df"), 2.0 * growth_scale)
 		else:
-			draw_circle(position + Vector2(-9, -10), 8.0, Color("78c977"))
-			draw_circle(position + Vector2(9, -10), 8.0, Color("9be087"))
-			draw_circle(position + Vector2(0, -18), 6.0, Color("ffe38a"))
+			draw_circle(position + Vector2(-9, -10) * growth_scale, 8.0 * growth_scale, Color("78c977"))
+			draw_circle(position + Vector2(9, -10) * growth_scale, 8.0 * growth_scale, Color("9be087"))
+			draw_circle(position + Vector2(0, -18) * growth_scale, 6.0 * growth_scale, Color("ffe38a"))
 	else:
-		draw_circle(position + Vector2(-7, -5), 7.0, Color("75b85e"))
-		draw_circle(position + Vector2(7, -5), 7.0, Color("a0cf6b"))
+		draw_circle(position + Vector2(-7, -5) * growth_scale, 7.0 * growth_scale, Color("75b85e"))
+		draw_circle(position + Vector2(7, -5) * growth_scale, 7.0 * growth_scale, Color("a0cf6b"))
 
 
 func _draw_turtle(position: Vector2) -> void:
+	position.y += _character_bob(2.1, 1.0)
 	_draw_ellipse_custom(position + Vector2(0, 27), Vector2(28, 8), Color(0.19, 0.29, 0.24, 0.18))
 	draw_circle(position, 25.0, Color("4f8f68"))
 	draw_circle(position, 19.0, Color("8fcf78"))
 	draw_line(position + Vector2(-12, -6), position + Vector2(12, 7), Color("4f8f68"), 3.0)
 	draw_line(position + Vector2(12, -6), position + Vector2(-12, 7), Color("4f8f68"), 3.0)
 	draw_circle(position + Vector2(27, 0), 10.0, Color("8fcf78"))
-	draw_circle(position + Vector2(29, -3), 2.5, Color("2f4b3a"))
+	if _character_is_blinking(1.7):
+		draw_line(position + Vector2(25, -3), position + Vector2(31, -3), Color("2f4b3a"), 2.5)
+	else:
+		draw_circle(position + Vector2(29, -3), 2.5, Color("2f4b3a"))
 	draw_circle(position + Vector2(-20, -20), 7.0, Color("8fcf78"))
 	draw_circle(position + Vector2(20, -20), 7.0, Color("8fcf78"))
 
@@ -2002,6 +2105,7 @@ func _draw_wood_at(position: Vector2) -> void:
 
 
 func _draw_fox(position: Vector2) -> void:
+	position.y += _character_bob(0.8, 1.5)
 	_draw_ellipse_custom(position + Vector2(0, 25), Vector2(27, 7), Color(0.19, 0.13, 0.10, 0.16))
 	draw_colored_polygon(PackedVector2Array([
 		position + Vector2(-22, -13), position + Vector2(-13, -42), position + Vector2(-2, -18),
@@ -2011,8 +2115,14 @@ func _draw_fox(position: Vector2) -> void:
 	]), Color("d96f58"))
 	draw_circle(position, 24.0, Color("d96f58"))
 	draw_circle(position + Vector2(0, 8), 15.0, Color("fff0d1"))
-	draw_circle(position + Vector2(-8, -3), 3.0, Color("3b302c"))
-	draw_circle(position + Vector2(8, -3), 3.0, Color("3b302c"))
+	if _character_is_blinking(0.8):
+		draw_line(position + Vector2(-11, -3), position + Vector2(-5, -3), Color("3b302c"), 2.5)
+		draw_line(position + Vector2(5, -3), position + Vector2(11, -3), Color("3b302c"), 2.5)
+	else:
+		draw_circle(position + Vector2(-8, -3), 3.0, Color("3b302c"))
+		draw_circle(position + Vector2(8, -3), 3.0, Color("3b302c"))
+	draw_circle(position + Vector2(-16, 8), 3.0, Color("f2a094"))
+	draw_circle(position + Vector2(16, 8), 3.0, Color("f2a094"))
 	draw_circle(position + Vector2(0, 8), 4.0, Color("3b302c"))
 	draw_arc(position + Vector2(0, 10), 8.0, 0.0, PI, 12, Color("3b302c"), 2.0)
 
@@ -2026,11 +2136,15 @@ func _draw_boards(font: Font) -> void:
 
 func _draw_player() -> void:
 	_draw_ellipse_custom(player_position + Vector2(0, 20), Vector2(25, 8), Color(0.19, 0.29, 0.24, 0.20))
-	draw_circle(player_position, PLAYER_RADIUS + 5.0, Color("fff3bc"))
-	draw_circle(player_position, PLAYER_RADIUS, VISUAL_PALETTE["player"])
-	draw_circle(player_position + Vector2(-6, -4), 3.0, Color("ffffff"))
-	draw_circle(player_position + Vector2(6, -4), 3.0, Color("ffffff"))
-	draw_line(player_position, player_position + player_facing.normalized() * 22.0, VISUAL_PALETTE["player_outline"], 4.0)
+	var bounce := absf(sin(player_walk_phase)) * 3.0 if player_is_moving else sin(animation_time * 2.0) * 1.0
+	var squash := 0.06 * sin(player_walk_phase * 2.0) if player_is_moving else 0.0
+	var body_center := player_position + Vector2(0, -bounce)
+	var body_radius := Vector2(PLAYER_RADIUS * (1.0 + squash), PLAYER_RADIUS * (1.0 - squash))
+	_draw_ellipse_custom(body_center, body_radius + Vector2(5, 5), Color("fff3bc"))
+	_draw_ellipse_custom(body_center, body_radius, VISUAL_PALETTE["player"])
+	draw_circle(body_center + Vector2(-6, -4), 3.0, Color("ffffff"))
+	draw_circle(body_center + Vector2(6, -4), 3.0, Color("ffffff"))
+	draw_line(body_center, body_center + player_facing.normalized() * 22.0, VISUAL_PALETTE["player_outline"], 4.0)
 
 
 func _draw_panel(rect: Rect2, fill: Color, border: Color, radius: int) -> void:
@@ -2049,6 +2163,8 @@ func _draw_panel(rect: Rect2, fill: Color, border: Color, radius: int) -> void:
 
 
 func _draw_rabbit(position: Vector2) -> void:
+	var celebration_bob := 1.3 if celebration_remaining > 0.0 else 0.0
+	position.y += _character_bob(0.0, 2.0 + celebration_bob)
 	var rabbit_color: Color = VISUAL_PALETTE["rabbit_complete"] if game_state.is_complete() else VISUAL_PALETTE["rabbit_request"]
 	var rabbit_outline := Color("5f9c70") if game_state.is_complete() else Color("c99564")
 	_draw_ellipse_custom(position + Vector2(0, 31), Vector2(34, 8), Color(0.19, 0.29, 0.24, 0.18))
@@ -2058,8 +2174,12 @@ func _draw_rabbit(position: Vector2) -> void:
 	_draw_ellipse_custom(position + Vector2(17, -33), Vector2(10, 28), rabbit_color)
 	draw_circle(position, 31.0, rabbit_outline)
 	draw_circle(position, 28.0, rabbit_color)
-	draw_circle(position + Vector2(-9, -3), 4.0, Color("3c3030"))
-	draw_circle(position + Vector2(9, -3), 4.0, Color("3c3030"))
+	if _character_is_blinking(0.0):
+		draw_line(position + Vector2(-13, -3), position + Vector2(-5, -3), Color("3c3030"), 3.0)
+		draw_line(position + Vector2(5, -3), position + Vector2(13, -3), Color("3c3030"), 3.0)
+	else:
+		draw_circle(position + Vector2(-9, -3), 4.0, Color("3c3030"))
+		draw_circle(position + Vector2(9, -3), 4.0, Color("3c3030"))
 	draw_circle(position + Vector2(-16, 7), 5.0, Color("f5b1a8"))
 	draw_circle(position + Vector2(16, 7), 5.0, Color("f5b1a8"))
 	draw_circle(position + Vector2(0, 9), 5.0, Color("f28a9b"))
