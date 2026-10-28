@@ -253,7 +253,6 @@ def main() -> int:
                 # is approached on its own horizontal line, away from the gold.
                 move("w", 200)
                 move("a", 1_800)
-                move("a", 500)
                 interact()
                 verify(lambda save: save.get("q010_seeds_collected") == [True, False, False], "Q010 collect red seed")
                 move("d", 240)

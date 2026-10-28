@@ -315,7 +315,7 @@ def main() -> int:
                         # Cross at the center of the bridge, then approach the
                         # watering point from the south with timing margin for WebGL.
                         page.mouse.click(800, 600)
-                        for key, duration_ms in (("w", 600), ("d", 3_000), ("s", 650)):
+                        for key, duration_ms in (("w", 600), ("d", 3_000), ("s", 650), ("a", 350)):
                             page.keyboard.down(key)
                             page.wait_for_timeout(duration_ms)
                             page.keyboard.up(key)
@@ -346,7 +346,7 @@ def main() -> int:
                             raise AssertionError("The bottom-right control did not water the Q005 garden")
                         # Move into the first bloom's small pickup radius; each
                         # flower remains a distinct action rather than overlapping.
-                        for key, duration_ms in (("d", 250), ("w", 250), ("s", 150)):
+                        for key, duration_ms in (("d", 250), ("w", 250), ("s", 150), ("d", 220)):
                             page.keyboard.down(key)
                             page.wait_for_timeout(duration_ms)
                             page.keyboard.up(key)
@@ -379,9 +379,10 @@ def main() -> int:
                             raise AssertionError("Harvesting must leave the flower in its bed and wait for bouquet delivery")
 
                         for harvest_step in range(1, 3):
-                            page.keyboard.down("d")
-                            page.wait_for_timeout(200)
-                            page.keyboard.up("d")
+                            direction = "d" if harvest_step == 1 else "a"
+                            page.keyboard.down(direction)
+                            page.wait_for_timeout(200 if harvest_step == 1 else 400)
+                            page.keyboard.up(direction)
                             page.mouse.click(1_214, 662)
                             page.wait_for_timeout(500)
                             page.screenshot(

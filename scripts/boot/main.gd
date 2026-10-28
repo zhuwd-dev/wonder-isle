@@ -7,6 +7,7 @@ const RABBIT_ART: Texture2D = preload("res://assets/art/characters/rabbit.png")
 const FOX_ART: Texture2D = preload("res://assets/art/characters/fox.png")
 const TURTLE_ART: Texture2D = preload("res://assets/art/characters/turtle.png")
 const BIRD_ART: Texture2D = preload("res://assets/art/characters/bird.png")
+const ISLAND_BACKGROUND: Texture2D = preload("res://assets/art/environment/floating-garden-bg.jpg")
 const SAVE_PATH := "user://qxisland_stage2_save.json"
 const WORLD_SIZE := Vector2(1280, 720)
 const PLAYER_SPEED := 260.0
@@ -1832,39 +1833,33 @@ func _draw_feedback_effects() -> void:
 
 
 func _draw_background() -> void:
-	var viewport_size := get_viewport_rect().size
-	var background_size := Vector2(maxf(WORLD_SIZE.x, viewport_size.x), maxf(WORLD_SIZE.y, viewport_size.y))
-	draw_rect(Rect2(Vector2.ZERO, background_size), Color("e4f2e8"))
-	draw_rect(Rect2(0, 0, background_size.x, 42), Color("c2e7e9"))
-	draw_rect(Rect2(0, 42, background_size.x, 40), Color("c9e9e9"))
-	draw_rect(Rect2(0, 82, background_size.x, 40), Color("d7efeb"))
-	draw_rect(Rect2(0, 122, background_size.x, 42), Color("e4f2e8"))
-	var far_shore := PackedVector2Array([
-		Vector2(0, 126), Vector2(92, 113), Vector2(174, 122), Vector2(292, 107),
-		Vector2(402, 120), Vector2(542, 108), Vector2(665, 126), Vector2(786, 111),
-		Vector2(914, 126), Vector2(1050, 108), Vector2(1180, 121), Vector2(background_size.x, 110),
-		Vector2(background_size.x, 164), Vector2(0, 164),
-	])
-	draw_colored_polygon(far_shore, Color(0.78, 0.88, 0.75, 0.28))
-	var sun_pulse := sin(animation_time * 0.65)
-	draw_circle(Vector2(1128, 76), 48.0 + sun_pulse * 1.6, Color(1.0, 0.88, 0.59, 0.18))
-	draw_circle(Vector2(1128, 76), 38, VISUAL_PALETTE["sun"])
-	draw_arc(Vector2(1128, 76), 44.0, 0.0, TAU, 48, Color(1.0, 0.97, 0.80, 0.64), 2.0)
-	var cloud_bases := [174.0, 514.0, 1012.0]
-	for cloud_id in range(cloud_bases.size()):
-		var cloud_phase := animation_time * 0.38 + float(cloud_id) * 1.9
-		var cloud_x: float = cloud_bases[cloud_id] + sin(cloud_phase) * 7.0
-		var cloud_y := 71.0 + sin(cloud_phase * 0.8) * 2.0
-		draw_circle(Vector2(cloud_x + 2, cloud_y + 5), 19, Color(0.39, 0.64, 0.63, 0.10))
-		draw_circle(Vector2(cloud_x + 27, cloud_y + 8), 25, Color(0.39, 0.64, 0.63, 0.10))
-		draw_circle(Vector2(cloud_x + 53, cloud_y + 5), 17, Color(0.39, 0.64, 0.63, 0.10))
-		draw_circle(Vector2(cloud_x, cloud_y), 18, VISUAL_PALETTE["cloud"])
-		draw_circle(Vector2(cloud_x + 25, cloud_y + 2), 25, VISUAL_PALETTE["cloud"])
-		draw_circle(Vector2(cloud_x + 51, cloud_y), 17, VISUAL_PALETTE["cloud"])
+	draw_texture_rect(ISLAND_BACKGROUND, Rect2(Vector2.ZERO, WORLD_SIZE), false)
+	# A veil of warm daylight keeps the painted landscape gentle under the journal UI.
+	draw_rect(Rect2(Vector2.ZERO, WORLD_SIZE), Color(1.0, 0.98, 0.88, 0.035))
+	_draw_floating_petals()
+
+
+func _draw_floating_petals() -> void:
+	var petal_colors := [Color("fff2cf"), Color("f7c5cf"), Color("d9eff1")]
+	for petal_id in range(10):
+		var phase := animation_time * (0.17 + float(petal_id % 3) * 0.025) + float(petal_id) * 1.73
+		var x_base := float((petal_id * 139 + 72) % 1220) + 30.0
+		var y := 150.0 + fposmod(animation_time * (11.0 + float(petal_id % 4) * 1.8) + float(petal_id) * 83.0, 500.0)
+		var petal_position := Vector2(x_base + sin(phase) * 18.0, y + cos(phase * 0.7) * 5.0)
+		var petal_size := Vector2(2.0 + float(petal_id % 2), 4.0 + float(petal_id % 3))
+		var petal_color: Color = petal_colors[petal_id % petal_colors.size()]
+		petal_color.a = 0.42
+		var petal_points := PackedVector2Array([
+			petal_position + Vector2(-petal_size.x, 0).rotated(phase),
+			petal_position + Vector2(0, -petal_size.y).rotated(phase),
+			petal_position + Vector2(petal_size.x, 0).rotated(phase),
+			petal_position + Vector2(0, petal_size.y).rotated(phase),
+		])
+		draw_colored_polygon(petal_points, petal_color)
 
 
 func _draw_world(font: Font) -> void:
-	_draw_islands()
+	_draw_environment_glimmers()
 	_draw_river()
 	_draw_bridge(font)
 	_draw_rabbit_area(font)
@@ -1882,6 +1877,15 @@ func _draw_world(font: Font) -> void:
 		_draw_q011_area(font)
 	_draw_boards(font)
 	_draw_player()
+
+
+func _draw_environment_glimmers() -> void:
+	for glimmer_id in range(6):
+		var phase := animation_time * 0.82 + float(glimmer_id) * 1.91
+		var position := Vector2(180.0 + float((glimmer_id * 173) % 900), 204.0 + float((glimmer_id * 97) % 380))
+		var alpha := 0.20 + (sin(phase) + 1.0) * 0.12
+		var glimmer_color := Color(1.0, 0.96, 0.76, alpha)
+		draw_circle(position + Vector2(sin(phase) * 4.0, cos(phase) * 3.0), 1.6 + (sin(phase) + 1.0) * 0.7, glimmer_color)
 
 
 func _draw_islands() -> void:
@@ -1999,22 +2003,8 @@ func _draw_grass_cluster(center: Vector2, scale: float, phase: int) -> void:
 
 
 func _draw_locked_area_preview() -> void:
-	if game_state.area_unlocked:
-		return
-	var pond_preview := Rect2(972, 334, 164, 104)
-	_draw_panel(pond_preview, Color(0.35, 0.72, 0.76, 0.30), Color(0.94, 0.91, 0.71, 0.40), 24)
-	for line_id in range(3):
-		var line_y := pond_preview.position.y + 28.0 + float(line_id) * 26.0
-		draw_line(Vector2(pond_preview.position.x + 18, line_y), Vector2(pond_preview.end.x - 18, line_y), Color(0.92, 0.99, 0.87, 0.28), 2.0)
-	var preview_bed := Rect2(1008, 481, 124, 55)
-	_draw_panel(preview_bed, Color(0.83, 0.83, 0.50, 0.27), Color(0.98, 0.93, 0.66, 0.34), 17)
-	for flower_id in range(3):
-		var flower_position := Vector2(1032 + flower_id * 37, 507)
-		draw_line(flower_position + Vector2(0, 12), flower_position + Vector2(0, -1), Color(0.38, 0.64, 0.39, 0.34), 2.0)
-		draw_circle(flower_position + Vector2(-4, -2), 4.0, Color(1.0, 0.91, 0.68, 0.48))
-		draw_circle(flower_position + Vector2(4, -2), 4.0, Color(0.99, 0.78, 0.65, 0.44))
-		draw_circle(flower_position + Vector2(0, -7), 4.0, Color(0.99, 0.94, 0.73, 0.55))
-		draw_circle(flower_position, 2.5, Color(0.85, 0.69, 0.37, 0.6))
+	# The painted island art already previews the far garden naturally. Avoid ghost UI outlines.
+	return
 
 
 func _draw_ground_flowers() -> void:
@@ -2042,26 +2032,13 @@ func _draw_ground_flowers() -> void:
 
 
 func _draw_river() -> void:
-	draw_rect(RIVER_RECT, VISUAL_PALETTE["river"])
-	draw_rect(Rect2(RIVER_RECT.position + Vector2(10, 0), RIVER_RECT.size - Vector2(20, 0)), Color("55b9d7"))
-	draw_line(Vector2(RIVER_RECT.position.x + 2, RIVER_RECT.position.y), Vector2(RIVER_RECT.position.x + 2, RIVER_RECT.end.y), VISUAL_PALETTE["river_edge"], 5.0)
-	draw_line(Vector2(RIVER_RECT.end.x - 2, RIVER_RECT.position.y), Vector2(RIVER_RECT.end.x - 2, RIVER_RECT.end.y), VISUAL_PALETTE["river_edge"], 5.0)
-	for y in range(150, 620, 58):
-		var current_phase := animation_time * 1.15 + float(y) * 0.025
-		var wave := PackedVector2Array([
-			Vector2(744 + sin(current_phase) * 4.0, y),
-			Vector2(778 + sin(current_phase + 0.9) * 4.0, y - 5 + sin(current_phase + 0.4) * 1.8),
-			Vector2(812 + sin(current_phase + 1.8) * 4.0, y + 5 + sin(current_phase + 1.2) * 1.8),
-			Vector2(846 + sin(current_phase + 2.7) * 4.0, y - 4 + sin(current_phase + 2.0) * 1.8),
-			Vector2(875 + sin(current_phase + 3.6) * 4.0, y),
-		])
-		draw_polyline(wave, VISUAL_PALETTE["river_light"], 3.0, true)
-	for glint_id in range(3):
-		var glint_phase := animation_time * 1.8 + float(glint_id) * 1.7
-		var glint_x := 730.0 + fposmod(animation_time * 15.0 + float(glint_id) * 48.0, 150.0)
-		var glint_y := 190.0 + float(glint_id) * 145.0 + sin(glint_phase) * 5.0
-		var glint_color := Color(0.91, 0.98, 0.86, 0.30 + (sin(glint_phase) + 1.0) * 0.12)
-		draw_line(Vector2(glint_x, glint_y), Vector2(glint_x + 14.0, glint_y - 1.0), glint_color, 2.0)
+	# The environment illustration contains the water. Animated caustics give it a quiet loop.
+	for glint_id in range(5):
+		var glint_phase := animation_time * 1.55 + float(glint_id) * 1.31
+		var glint_x := 728.0 + fposmod(animation_time * 9.0 + float(glint_id) * 31.0, 164.0)
+		var glint_y := 188.0 + float(glint_id) * 82.0 + sin(glint_phase) * 4.0
+		var glint_color := Color(0.91, 0.99, 0.93, 0.32 + (sin(glint_phase) + 1.0) * 0.10)
+		draw_line(Vector2(glint_x, glint_y), Vector2(glint_x + 9.0, glint_y - 1.0), glint_color, 1.7, true)
 
 
 func _main_story_progress() -> int:
@@ -2831,8 +2808,9 @@ func _draw_pond_stone_at(position: Vector2, color: Color, lifted: bool) -> void:
 
 func _draw_hud(font: Font) -> void:
 	var hud_rect := Rect2(20, 16, 720, 112)
-	_draw_soft_panel(hud_rect, Color("fff8e8"), Color("b8c58e"), 20, 0.18)
+	_draw_soft_panel(hud_rect, Color("fff9ed", 0.97), Color("d5bd83"), 22, 0.19)
 	draw_rect(Rect2(hud_rect.position, Vector2(5, hud_rect.size.y)), Color("668e59"), true)
+	draw_line(hud_rect.position + Vector2(22, hud_rect.size.y - 2), hud_rect.position + Vector2(hud_rect.size.x - 22, hud_rect.size.y - 2), Color("fffdf4", 0.72), 1.0, true)
 	var emblem_center := Vector2(48, 43)
 	draw_circle(emblem_center + Vector2(0, 2), 16.0, Color(0.28, 0.35, 0.23, 0.13))
 	draw_circle(emblem_center, 14.0, Color("ecd18e"))
@@ -2840,12 +2818,13 @@ func _draw_hud(font: Font) -> void:
 	_draw_ellipse_custom(emblem_center + Vector2(-3, 1), Vector2(2.8, 5.4), Color("6d9c62"))
 	_draw_ellipse_custom(emblem_center + Vector2(3, -1), Vector2(2.8, 5.4), Color("91b875"))
 	draw_circle(emblem_center, 1.8, Color("fffaf0"))
+	draw_arc(emblem_center, 17.0, -2.55, -0.65, 12, Color("fffaf0", 0.78), 1.3)
 	draw_string(font, Vector2(72, 47), "奇趣小岛", HORIZONTAL_ALIGNMENT_LEFT, 148, 14, Color("75846a"))
 	var title := _hud_title_text().replace("奇趣小岛 · ", "")
 	draw_string(font, Vector2(72, 76), title, HORIZONTAL_ALIGNMENT_LEFT, 482, 24, VISUAL_PALETTE["ink"])
 	var badge_fill := Color("e8efd5") if not game_state.can_start_q012() else Color("f7e5b4")
 	var badge_border := Color("a8bd85") if not game_state.can_start_q012() else Color("d6aa5d")
-	_draw_panel(Rect2(606, 29, 112, 27), badge_fill, badge_border, 13)
+	_draw_soft_panel(Rect2(606, 29, 112, 27), badge_fill, badge_border, 13, 0.07)
 	draw_string(font, Vector2(617, 48), _task_stage_label(), HORIZONTAL_ALIGNMENT_CENTER, 90, 13, Color("425d48"))
 	draw_string(font, Vector2(72, 101), _task_prompt_text(), HORIZONTAL_ALIGNMENT_LEFT, 638, 14, Color("506858"))
 	var progress_count := _main_story_progress()
