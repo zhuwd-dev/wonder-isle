@@ -84,7 +84,7 @@ func _run() -> void:
 	_expect(main.build_button.visible, "the optional garden build button must unlock after the main story")
 	_expect(main.build_button.text == "开始布置", "the current next action must be named directly on the build button")
 	var build_style: StyleBox = main.build_button.get_theme_stylebox("normal")
-	_expect(build_style is StyleBoxFlat and build_style.bg_color == Color("68bd72"), "the current next action button must use its green primary style")
+	_expect(build_style is StyleBoxFlat and build_style.bg_color == Color("459b63"), "the current next action button must use its green primary style")
 	_expect(not main._should_show_q006_slots(), "empty garden slots must stay hidden outside build mode")
 	_expect(not main._should_show_rabbit_dialog(), "the rabbit's seed guidance must end after the seed is planted")
 	_expect(not main._should_show_region_access_card(), "the bridge access card must disappear after the area opens")

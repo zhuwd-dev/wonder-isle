@@ -76,7 +76,7 @@ func _run() -> void:
 	_expect(main._task_action_hint_text().contains("点下后物品托盘才会出现"), "the Q011 hint must explain that the tray appears after starting")
 	_expect(main.game_state.q011_item_is_available(1) and main._q011_item_inventory_rect(1).size.x > 0.0, "the tray items must remain ready before entering placement mode")
 	var q011_button_style: StyleBox = main.q011_button.get_theme_stylebox("normal")
-	_expect(q011_button_style is StyleBoxFlat and q011_button_style.bg_color == Color("68bd72"), "the Q011 start button must be highlighted as the next action")
+	_expect(q011_button_style is StyleBoxFlat and q011_button_style.bg_color == Color("459b63"), "the Q011 start button must be highlighted as the next action")
 
 	main.q011_button.emit_signal("pressed")
 	_expect(main.q011_mode, "the Q011 control must enter its independent placement mode")

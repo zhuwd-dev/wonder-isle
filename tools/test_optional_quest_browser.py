@@ -148,6 +148,20 @@ def main() -> int:
                     page.mouse.click(1_214, 662)
                     page.wait_for_timeout(650)
 
+                def approach_and_interact(direction: str, label: str, condition, steps: int = 20) -> dict[str, object]:
+                    latest: dict[str, object] = {}
+                    for _ in range(steps):
+                        interact()
+                        for _ in range(5):
+                            latest = read_save()
+                            if latest and condition(latest):
+                                checks.append(label)
+                                print(f"PASS {label}", flush=True)
+                                return latest
+                            page.wait_for_timeout(250)
+                        move(direction, 120)
+                    raise AssertionError(f"{label}; latest save: {json.dumps(latest, ensure_ascii=False)}")
+
                 def drag(source: tuple[int, int], target: tuple[int, int], screenshot: str | None = None) -> None:
                     page.mouse.move(*source)
                     page.mouse.down()
@@ -166,27 +180,34 @@ def main() -> int:
                 snap("web-q007-optional-unlocked.png")
 
                 # Cross the repaired bridge, reach the shell, and collect it.
-                move("w", 480)
-                move("d", 1_700)
-                move("d", 900)
+                move("w", 650)
+                move("d", 2_000)
                 move("s", 211)
-                interact()
-                verify(lambda save: save.get("q007_shell_collected") is True and save.get("q007_reward_unlocked") is True, "Q007 collect shell and unlock reward")
+                approach_and_interact(
+                    "d",
+                    "Q007 collect shell and unlock reward",
+                    lambda save: save.get("q007_shell_collected") is True and save.get("q007_reward_unlocked") is True,
+                )
                 snap("web-q007-shell-collected.png")
 
                 # Return across the bridge and gather all birdhouse materials.
                 # Cross on the bridge centerline, then turn onto the west bank
                 # before walking down to the rope pickup.
-                move("w", 211)
+                move("w", 200)
                 move("a", 1_200)
-                move("s", 700)
-                move("d", 240)
+                move("s", 850)
+                move("d", 500)
                 snap("web-q009-before-rope.png")
                 interact()
                 verify(lambda save: save.get("q009_materials_collected") == [False, False, True], "Q009 collect rope at west shore")
-                move("a", 1_692)
-                interact()
-                verify(lambda save: save.get("q009_materials_collected") == [True, False, True], "Q009 collect branch by west shore")
+                move("a", 1_600)
+                snap("web-q009-at-branch.png")
+                approach_and_interact(
+                    "a",
+                    "Q009 collect branch by west shore",
+                    lambda save: save.get("q009_materials_collected") == [True, False, True],
+                    steps=12,
+                )
                 move("w", 1_077)
                 move("d", 230)
                 # The feather sits near the edge of the interaction radius on
@@ -232,6 +253,7 @@ def main() -> int:
                 # is approached on its own horizontal line, away from the gold.
                 move("w", 200)
                 move("a", 1_800)
+                move("a", 500)
                 interact()
                 verify(lambda save: save.get("q010_seeds_collected") == [True, False, False], "Q010 collect red seed")
                 move("d", 240)
@@ -240,7 +262,7 @@ def main() -> int:
                 verify(lambda save: save.get("q010_seeds_collected") == [True, False, True], "Q010 collect gold seed")
                 snap("web-q010-after-gold-seed.png")
                 move("w", 500)
-                move("d", 1_115)
+                move("d", 1_315)
                 interact()
                 verify(lambda save: save.get("q010_seeds_collected") == [True, True, True], "Q010 collect all three seeds")
                 snap("web-q010-seeds-complete.png")

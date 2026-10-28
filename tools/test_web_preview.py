@@ -312,8 +312,10 @@ def main() -> int:
                         # Play the complete Q005 interaction in the browser: water,
                         # collect all three blooms without a redundant tray drag, then
                         # carry the bouquet to the turtle and deliver it.
+                        # Cross at the center of the bridge, then approach the
+                        # watering point from the south with timing margin for WebGL.
                         page.mouse.click(800, 600)
-                        for key, duration_ms in (("w", 500), ("d", 2_750), ("s", 570)):
+                        for key, duration_ms in (("w", 600), ("d", 3_000), ("s", 650)):
                             page.keyboard.down(key)
                             page.wait_for_timeout(duration_ms)
                             page.keyboard.up(key)
@@ -323,7 +325,7 @@ def main() -> int:
                         page.screenshot(path=str(turtle_growth_screenshot_path), full_page=True)
                         # Godot WebFS commits writes to IndexedDB asynchronously.
                         watered_save = {}
-                        for _ in range(12):
+                        for _ in range(24):
                             watered_save = page.evaluate(
                                 """async key => new Promise((resolve, reject) => {
                                     const opening = indexedDB.open('/userfs');
@@ -342,10 +344,8 @@ def main() -> int:
                             page.wait_for_timeout(500)
                         if watered_save.get("q005_watered") is not True:
                             raise AssertionError("The bottom-right control did not water the Q005 garden")
-                        # Stand near the middle of the three blooms. All three
-                        # remain within the interaction radius from here, so
-                        # frame timing cannot make the test collect a different
-                        # flower order than the one it assumed.
+                        # Move into the first bloom's small pickup radius; each
+                        # flower remains a distinct action rather than overlapping.
                         for key, duration_ms in (("d", 250), ("w", 250), ("s", 150)):
                             page.keyboard.down(key)
                             page.wait_for_timeout(duration_ms)
@@ -354,7 +354,7 @@ def main() -> int:
                         page.wait_for_timeout(180)
                         page.screenshot(path=str(turtle_collection_screenshot_path), full_page=True)
                         collected_save = {}
-                        for _ in range(12):
+                        for _ in range(24):
                             collected_save = page.evaluate(
                                 """async key => new Promise((resolve, reject) => {
                                     const opening = indexedDB.open('/userfs');
@@ -379,12 +379,9 @@ def main() -> int:
                             raise AssertionError("Harvesting must leave the flower in its bed and wait for bouquet delivery")
 
                         for harvest_step in range(1, 3):
-                            if harvest_step == 2 and isinstance(plant_flags, list):
-                                edge_direction = "d" if not plant_flags[2] else ("a" if not plant_flags[0] else "")
-                                if edge_direction:
-                                    page.keyboard.down(edge_direction)
-                                    page.wait_for_timeout(100)
-                                    page.keyboard.up(edge_direction)
+                            page.keyboard.down("d")
+                            page.wait_for_timeout(200)
+                            page.keyboard.up("d")
                             page.mouse.click(1_214, 662)
                             page.wait_for_timeout(500)
                             page.screenshot(
@@ -392,7 +389,7 @@ def main() -> int:
                                 full_page=True,
                             )
                             expected_count = harvest_step + 1
-                            for _ in range(12):
+                            for _ in range(24):
                                 harvested_save = page.evaluate(
                                     """async key => new Promise((resolve, reject) => {
                                         const opening = indexedDB.open('/userfs');
@@ -414,7 +411,7 @@ def main() -> int:
                             if not isinstance(plant_flags, list) or sum(bool(flag) for flag in plant_flags) < expected_count:
                                 raise AssertionError(f"The browser must collect flower {expected_count}/3; latest save: " + json.dumps(harvested_save, ensure_ascii=False))
                         harvested_save = {}
-                        for _ in range(12):
+                        for _ in range(24):
                             harvested_save = page.evaluate(
                                 """async key => new Promise((resolve, reject) => {
                                     const opening = indexedDB.open('/userfs');
@@ -497,9 +494,6 @@ def main() -> int:
                     fixture_base64 = base64.b64encode(fixture_path.read_bytes()).decode("ascii")
                     save_key = "/userfs/godot/app_userdata/奇趣小岛/qxisland_stage2_save.json"
                     page.mouse.click(800, 600)
-                    page.keyboard.down("d")
-                    page.wait_for_timeout(900)
-                    page.keyboard.up("d")
                     # Use the right-thumb interaction control for the final
                     # celebration, matching the intended touch-friendly action.
                     page.mouse.click(1_214, 662)
@@ -538,19 +532,12 @@ def main() -> int:
                     page.screenshot(path=str(ending_screenshot_path), full_page=True)
 
                     page.mouse.click(800, 600)
-                    for key, duration_ms in (("w", 750), ("d", 1_150), ("s", 280)):
+                    for key, duration_ms in (("w", 600), ("d", 1_400), ("w", 550)):
                         page.keyboard.down(key)
                         page.wait_for_timeout(duration_ms)
                         page.keyboard.up(key)
-                    page.keyboard.down("w")
-                    page.wait_for_timeout(450)
-                    page.keyboard.up("w")
-                    # Finish the approach using the same prominent right-thumb
-                    # control the player sees; the small final correction keeps
-                    # the avatar inside the rabbit interaction radius.
-                    page.keyboard.down("w")
-                    page.wait_for_timeout(150)
-                    page.keyboard.up("w")
+                    # Finish with the same prominent right-thumb action the
+                    # player sees after reaching the rabbit.
                     page.screenshot(path=str(artifact_dir / "web-q012-at-rabbit.png"), full_page=True)
                     page.mouse.click(1_214, 662)
                     page.wait_for_timeout(1_500)
