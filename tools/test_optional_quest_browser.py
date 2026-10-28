@@ -189,6 +189,10 @@ def main() -> int:
                 verify(lambda save: save.get("q009_materials_collected") == [True, False, True], "Q009 collect branch by west shore")
                 move("w", 1_077)
                 move("d", 230)
+                # The feather sits near the edge of the interaction radius on
+                # the timed route above. Step a little closer so slower browser
+                # frames cannot leave the avatar just outside pickup range.
+                move("s", 130)
                 interact()
                 collected_materials = verify(
                     lambda save: save.get("q009_materials_collected") == [True, True, True]

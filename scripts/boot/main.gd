@@ -125,8 +125,8 @@ const VISUAL_PALETTE := {
 	"player_outline": Color("70363a"),
 	"rabbit_request": Color("fff4df"),
 	"rabbit_complete": Color("e9ffe8"),
-	"panel": Color(0.08, 0.19, 0.16, 0.90),
-	"panel_border": Color("6cae87"),
+	"panel": Color(0.07, 0.19, 0.17, 0.94),
+	"panel_border": Color("91c89b"),
 	"ink": Color("214232"),
 }
 
@@ -183,6 +183,9 @@ var interaction_button_tooltip := ""
 var build_button: Button
 var remove_decor_button: Button
 var q011_button: Button
+var panel_style_cache: Dictionary = {}
+var soft_panel_style_cache: Dictionary = {}
+var slot_card_style: StyleBoxFlat
 
 
 func _ready() -> void:
@@ -229,6 +232,7 @@ func _physics_process(delta: float) -> void:
 			player_is_moving = true
 			player_walk_phase = fposmod(player_walk_phase + delta * TAU * 2.3, TAU)
 	_update_interact_button()
+	_update_interact_button_animation()
 	queue_redraw()
 
 
@@ -515,7 +519,19 @@ func _layout_controls() -> void:
 	remove_decor_button.position = Vector2(layout_width - 420.0, 88.0)
 	q011_button.position = Vector2(layout_width - 420.0, 88.0)
 	interact_button.position = Vector2(layout_width - INTERACT_BUTTON_SIZE.x - 8.0, maxf(8.0, visible_size.y - INTERACT_BUTTON_SIZE.y - 12.0))
+	interact_button.pivot_offset = INTERACT_BUTTON_SIZE * 0.5
 	_update_interact_button()
+	_update_interact_button_animation()
+
+
+func _update_interact_button_animation() -> void:
+	if interact_button == null:
+		return
+	if interact_button.visible and interaction_button_ready:
+		var pulse := 1.0 + sin(animation_time * 3.0) * 0.012
+		interact_button.scale = Vector2.ONE * pulse
+	else:
+		interact_button.scale = Vector2.ONE
 
 
 func _update_interact_button() -> void:
@@ -636,22 +652,26 @@ func _update_interact_button() -> void:
 	interact_button.text = action_label
 	interact_button.tooltip_text = action_tooltip
 	var style := StyleBoxFlat.new()
-	style.bg_color = Color("70c77c") if action_ready else Color("d7e8d2")
-	style.border_color = Color("328950") if action_ready else Color("7ea88a")
-	style.set_border_width_all(3 if action_ready else 2)
-	style.set_corner_radius_all(20)
-	style.content_margin_left = 8.0
-	style.content_margin_right = 8.0
+	style.bg_color = Color("459b63") if action_ready else Color("f5f0dc")
+	style.border_color = Color("287548") if action_ready else Color("b9c9a7")
+	style.set_border_width_all(2)
+	style.set_corner_radius_all(24)
+	style.shadow_color = Color(0.05, 0.20, 0.15, 0.24)
+	style.shadow_size = 8 if action_ready else 4
+	style.shadow_offset = Vector2(0, 4)
+	style.anti_aliasing = true
+	style.content_margin_left = 12.0
+	style.content_margin_right = 12.0
 	var hover := style.duplicate() as StyleBoxFlat
-	hover.bg_color = Color("89dc91") if action_ready else Color("e7f2e2")
+	hover.bg_color = Color("58b779") if action_ready else Color("fff9e9")
 	var pressed := style.duplicate() as StyleBoxFlat
-	pressed.bg_color = Color("58b36c") if action_ready else Color("c8ddc4")
+	pressed.bg_color = Color("348653") if action_ready else Color("e8e2cf")
 	interact_button.add_theme_stylebox_override("normal", style)
 	interact_button.add_theme_stylebox_override("hover", hover)
 	interact_button.add_theme_stylebox_override("pressed", pressed)
-	interact_button.add_theme_color_override("font_color", Color("173d2d"))
-	interact_button.add_theme_color_override("font_hover_color", Color("123927"))
-	interact_button.add_theme_color_override("font_pressed_color", Color("102f23"))
+	interact_button.add_theme_color_override("font_color", Color("fff9e8") if action_ready else Color("405d4c"))
+	interact_button.add_theme_color_override("font_hover_color", Color("ffffff") if action_ready else Color("294c3a"))
+	interact_button.add_theme_color_override("font_pressed_color", Color("f8ffe9") if action_ready else Color("294c3a"))
 	interact_button.visible = _should_show_interact_button()
 
 
@@ -803,24 +823,28 @@ func _refresh_build_controls() -> void:
 
 func _apply_build_button_style(highlighted: bool) -> void:
 	_apply_button_style(build_button, highlighted)
-	build_button.add_theme_color_override("font_color", Color("173d2d") if highlighted else Color("253b32"))
-	build_button.add_theme_color_override("font_hover_color", Color("123927"))
-	build_button.add_theme_color_override("font_pressed_color", Color("102f23"))
+	build_button.add_theme_color_override("font_color", Color("fff9e8") if highlighted else Color("405d4c"))
+	build_button.add_theme_color_override("font_hover_color", Color("ffffff") if highlighted else Color("294c3a"))
+	build_button.add_theme_color_override("font_pressed_color", Color("f8ffe9") if highlighted else Color("294c3a"))
 	build_button.add_theme_font_size_override("font_size", 20 if highlighted else 22)
 
 
 func _apply_button_style(button: Button, highlighted: bool) -> void:
 	var normal := StyleBoxFlat.new()
-	normal.bg_color = Color("68bd72") if highlighted else Color("e6eee2")
-	normal.border_color = Color("3d8d58") if highlighted else Color("9ab5a0")
-	normal.set_border_width_all(3 if highlighted else 2)
-	normal.set_corner_radius_all(12)
-	normal.content_margin_left = 8.0
-	normal.content_margin_right = 8.0
+	normal.bg_color = Color("459b63") if highlighted else Color("f5f0dc")
+	normal.border_color = Color("287548") if highlighted else Color("b9c9a7")
+	normal.set_border_width_all(2)
+	normal.set_corner_radius_all(16)
+	normal.shadow_color = Color(0.05, 0.20, 0.15, 0.20)
+	normal.shadow_size = 6 if highlighted else 4
+	normal.shadow_offset = Vector2(0, 3)
+	normal.anti_aliasing = true
+	normal.content_margin_left = 10.0
+	normal.content_margin_right = 10.0
 	var hover := normal.duplicate() as StyleBoxFlat
-	hover.bg_color = Color("82d789") if highlighted else Color("f2f7ef")
+	hover.bg_color = Color("58b779") if highlighted else Color("fff9e9")
 	var pressed := normal.duplicate() as StyleBoxFlat
-	pressed.bg_color = Color("54a966") if highlighted else Color("d7e4d4")
+	pressed.bg_color = Color("348653") if highlighted else Color("e8e2cf")
 	button.add_theme_stylebox_override("normal", normal)
 	button.add_theme_stylebox_override("hover", hover)
 	button.add_theme_stylebox_override("pressed", pressed)
@@ -1714,6 +1738,11 @@ func _draw() -> void:
 
 
 func _draw_feedback_effects() -> void:
+	if interact_button != null and interact_button.visible and interaction_button_ready:
+		var button_center := interact_button.position + interact_button.size * 0.5
+		var button_pulse := 0.5 + sin(animation_time * 3.2) * 0.5
+		var glow_color := Color(0.58, 0.92, 0.61, 0.07 + button_pulse * 0.07)
+		_draw_ellipse_custom(button_center, Vector2(interact_button.size.x * 0.54 + button_pulse * 2.0, interact_button.size.y * 0.53 + button_pulse * 2.0), glow_color)
 	if collect_sparkle_remaining > 0.0:
 		var progress := 1.0 - collect_sparkle_remaining / COLLECT_SPARKLE_DURATION
 		var fade := 1.0 - progress
@@ -1732,14 +1761,22 @@ func _draw_feedback_effects() -> void:
 		var fade_in := clampf(progress / 0.16, 0.0, 1.0)
 		var fade_out := clampf((1.0 - progress) / 0.24, 0.0, 1.0)
 		var alpha := minf(fade_in, fade_out)
-		var ripple_color := Color(0.92, 1.0, 0.72, alpha * 0.72)
-		draw_arc(task_transition_position, 24.0 + progress * 48.0, 0.0, TAU, 36, ripple_color, 3.0)
+		var eased_progress := 1.0 - pow(1.0 - progress, 3.0)
+		var ripple_color := Color(0.95, 1.0, 0.79, alpha * 0.66)
+		for ring_id in range(2):
+			var ring_delay := float(ring_id) * 0.16
+			var ring_progress := clampf(eased_progress - ring_delay, 0.0, 1.0)
+			var ring_alpha := alpha * (1.0 - ring_progress * 0.72)
+			draw_arc(task_transition_position, 21.0 + ring_progress * 50.0, 0.0, TAU, 40, Color(ripple_color, ring_alpha), 2.5 - ring_progress * 0.8)
 		var label_width := maxf(118.0, UI_FONT.get_string_size(task_transition_text, HORIZONTAL_ALIGNMENT_CENTER, -1, 16).x + 28.0)
-		var label_rect := Rect2(task_transition_position + Vector2(-label_width * 0.5, -65.0 - progress * 9.0), Vector2(label_width, 34.0))
-		var label_fill := Color(0.08, 0.22, 0.17, alpha * 0.88)
-		var label_border := Color(0.70, 0.92, 0.60, alpha)
-		_draw_panel(label_rect, label_fill, label_border, 12)
-		draw_string(UI_FONT, label_rect.position + Vector2(10, 22), task_transition_text, HORIZONTAL_ALIGNMENT_CENTER, label_width - 20, 16, Color(1.0, 0.97, 0.82, alpha))
+		var label_scale := 0.90 + clampf(progress / 0.18, 0.0, 1.0) * 0.10
+		var label_size := Vector2(label_width, 38.0) * label_scale
+		var label_rect := Rect2(task_transition_position + Vector2(-label_size.x * 0.5, -67.0 - eased_progress * 13.0), label_size)
+		var label_fill := Color("faf2d2")
+		var label_border := Color("d6ae62")
+		_draw_soft_panel(label_rect, label_fill, label_border, 17, 0.12)
+		draw_circle(label_rect.position + Vector2(15, 19), 4.0, Color(0.39, 0.69, 0.43, alpha))
+		draw_string(UI_FONT, label_rect.position + Vector2(28, 24), task_transition_text, HORIZONTAL_ALIGNMENT_CENTER, label_width - 36, 16, Color(0.22, 0.35, 0.28, alpha))
 	if pond_ripple_remaining > 0.0:
 		var progress := 1.0 - pond_ripple_remaining / 1.0
 		var ripple_alpha := 1.0 - progress
@@ -1749,15 +1786,23 @@ func _draw_feedback_effects() -> void:
 			draw_arc(POND_RECT.get_center(), 14.0 + ring_progress * 70.0, 0.0, TAU, 42, ring_color, 2.0)
 	if celebration_remaining > 0.0:
 		var celebration_progress := 1.0 - celebration_remaining / CELEBRATION_DURATION
-		var confetti_colors := [Color("f2c879"), Color("e96b70"), Color("67a9dc"), Color("a9df88"), Color("fff1a8")]
-		for confetti_id in range(18):
-			var fall := fposmod(celebration_progress + float(confetti_id) * 0.071, 1.0)
-			var horizontal_start := float((confetti_id * 37) % 130) - 65.0
-			var sway := sin(animation_time * 5.0 + float(confetti_id)) * 9.0
-			var confetti_position := Q012_RABBIT_POSITION + Vector2(horizontal_start + sway, -82.0 + fall * 118.0)
+		var celebration_glow := 0.025 + (0.5 + sin(animation_time * 2.0) * 0.5) * 0.04
+		_draw_ellipse_custom(Q012_RABBIT_POSITION + Vector2(0, 8), Vector2(74, 90), Color(1.0, 0.92, 0.62, celebration_glow))
+		var confetti_colors := [Color("f2c879"), Color("e96b70"), Color("67a9dc"), Color("a9df88"), Color("fff1a8"), Color("f6e2bb")]
+		var confetti_alpha := clampf(celebration_remaining / 0.7, 0.0, 1.0)
+		for confetti_id in range(42):
+			var column := float((confetti_id * 67) % 1180) + 42.0
+			var fall := fposmod(celebration_progress * 0.82 + float(confetti_id) * 0.047, 1.0)
+			var sway := sin(animation_time * 2.7 + float(confetti_id) * 1.6) * (7.0 + float(confetti_id % 5) * 1.5)
+			var confetti_position := Vector2(column + sway, 118.0 + fall * 520.0)
 			var confetti_color: Color = confetti_colors[confetti_id % confetti_colors.size()]
-			confetti_color.a = clampf(celebration_remaining / 0.6, 0.0, 1.0)
-			draw_rect(Rect2(confetti_position, Vector2(5, 8)), confetti_color, true)
+			confetti_color.a = confetti_alpha * (0.76 if confetti_id % 4 == 0 else 0.90)
+			var spin := animation_time * (1.4 + float(confetti_id % 4) * 0.2) + float(confetti_id) * 0.9
+			var petal_size := Vector2(3.0 + float(confetti_id % 3), 6.0 + float(confetti_id % 4))
+			var points := PackedVector2Array()
+			for corner in [Vector2(-petal_size.x, -petal_size.y), Vector2(petal_size.x, -petal_size.y), Vector2(petal_size.x, petal_size.y), Vector2(-petal_size.x, petal_size.y)]:
+				points.append(confetti_position + corner.rotated(spin))
+			draw_colored_polygon(points, confetti_color)
 
 
 func _draw_background() -> void:
@@ -2511,9 +2556,12 @@ func _draw_q005_plant_at(position: Vector2, grown: bool, appearance_unlocked := 
 
 func _draw_turtle(position: Vector2) -> void:
 	position.y += _character_bob(2.1, 1.0)
+	var step_phase := sin(animation_time * 1.7) * 1.4
 	_draw_ellipse_custom(position + Vector2(0, 27), Vector2(28, 8), Color(0.19, 0.29, 0.24, 0.18))
-	for leg_offset in [Vector2(-14, 12), Vector2(14, 12), Vector2(-14, -10), Vector2(14, -10)]:
-		_draw_ellipse_custom(position + leg_offset, Vector2(8, 6), Color("73b779"))
+	_draw_ellipse_custom(position + Vector2(-14, 12 + step_phase), Vector2(8, 6), Color("73b779"))
+	_draw_ellipse_custom(position + Vector2(14, 12 - step_phase), Vector2(8, 6), Color("73b779"))
+	_draw_ellipse_custom(position + Vector2(-14, -10 - step_phase), Vector2(8, 6), Color("73b779"))
+	_draw_ellipse_custom(position + Vector2(14, -10 + step_phase), Vector2(8, 6), Color("73b779"))
 	draw_circle(position, 24.0, Color("4f8f68"))
 	draw_circle(position, 19.0, Color("a8bb72"))
 	draw_arc(position, 17.0, PI * 0.1, PI * 0.9, 12, Color("d0d69a"), 2.0)
@@ -2543,8 +2591,9 @@ func _draw_wood_at(position: Vector2) -> void:
 func _draw_fox(position: Vector2) -> void:
 	position.y += _character_bob(0.8, 1.5)
 	_draw_ellipse_custom(position + Vector2(0, 25), Vector2(27, 7), Color(0.19, 0.13, 0.10, 0.16))
-	_draw_ellipse_custom(position + Vector2(-22, 16), Vector2(10, 7), Color("d96f58"))
-	_draw_ellipse_custom(position + Vector2(-29, 16), Vector2(4, 5), Color("fff0d1"))
+	var tail_wag := sin(animation_time * 3.1 + 0.8) * 4.0
+	_draw_ellipse_custom(position + Vector2(-22, 16 + tail_wag), Vector2(10, 7), Color("d96f58"))
+	_draw_ellipse_custom(position + Vector2(-29, 16 + tail_wag), Vector2(4, 5), Color("fff0d1"))
 	_draw_ellipse_custom(position + Vector2(0, 19), Vector2(19, 12), Color("d96f58"))
 	_draw_ellipse_custom(position + Vector2(0, 20), Vector2(10, 8), Color("fff0d1"))
 	_draw_ellipse_custom(position + Vector2(-10, 27), Vector2(8, 4), Color("b85b49"))
@@ -2615,23 +2664,48 @@ func _draw_player() -> void:
 
 
 func _draw_panel(rect: Rect2, fill: Color, border: Color, radius: int) -> void:
-	var style := StyleBoxFlat.new()
-	style.bg_color = fill
-	style.border_color = border
-	style.border_width_left = 2
-	style.border_width_top = 2
-	style.border_width_right = 2
-	style.border_width_bottom = 2
-	style.corner_radius_top_left = radius
-	style.corner_radius_top_right = radius
-	style.corner_radius_bottom_left = radius
-	style.corner_radius_bottom_right = radius
+	var cache_key := "%s|%s|%d" % [str(fill), str(border), radius]
+	var style := panel_style_cache.get(cache_key) as StyleBoxFlat
+	if style == null:
+		style = StyleBoxFlat.new()
+		style.bg_color = fill
+		style.border_color = border
+		style.set_border_width_all(2)
+		style.set_corner_radius_all(radius)
+		style.anti_aliasing = true
+		panel_style_cache[cache_key] = style
 	draw_style_box(style, rect)
+
+
+func _draw_soft_panel(rect: Rect2, fill: Color, border: Color, radius: int, shadow_alpha := 0.18) -> void:
+	var cache_key := "%s|%s|%d|%s" % [str(fill), str(border), radius, str(shadow_alpha)]
+	var styles: Array = soft_panel_style_cache.get(cache_key, [])
+	if styles.is_empty():
+		var shadow := StyleBoxFlat.new()
+		shadow.bg_color = fill
+		shadow.set_corner_radius_all(radius)
+		shadow.shadow_color = Color(0.08, 0.18, 0.16, shadow_alpha)
+		shadow.shadow_size = 9
+		shadow.shadow_offset = Vector2(0, 4)
+		shadow.anti_aliasing = true
+		var face := StyleBoxFlat.new()
+		face.bg_color = fill
+		face.border_color = border
+		face.set_border_width_all(1)
+		face.set_corner_radius_all(radius)
+		face.anti_aliasing = true
+		styles = [shadow, face]
+		soft_panel_style_cache[cache_key] = styles
+	draw_style_box(styles[0], rect)
+	draw_style_box(styles[1], rect)
+	var highlight := Color(1.0, 1.0, 0.91, 0.16)
+	draw_line(rect.position + Vector2(radius, 2), rect.position + Vector2(rect.size.x - radius, 2), highlight, 1.0, true)
 
 
 func _draw_rabbit(position: Vector2) -> void:
 	var celebration_bob := 1.3 if celebration_remaining > 0.0 else 0.0
 	position.y += _character_bob(0.0, 2.0 + celebration_bob)
+	var ear_sway := sin(animation_time * 1.8) * 2.0
 	var rabbit_color: Color = VISUAL_PALETTE["rabbit_complete"] if game_state.is_complete() else VISUAL_PALETTE["rabbit_request"]
 	var rabbit_outline := Color("5f9c70") if game_state.is_complete() else Color("c99564")
 	_draw_ellipse_custom(position + Vector2(0, 31), Vector2(34, 8), Color(0.19, 0.29, 0.24, 0.18))
@@ -2639,12 +2713,12 @@ func _draw_rabbit(position: Vector2) -> void:
 	_draw_ellipse_custom(position + Vector2(0, 21), Vector2(16, 12), rabbit_color)
 	_draw_ellipse_custom(position + Vector2(-11, 32), Vector2(8, 4), rabbit_color)
 	_draw_ellipse_custom(position + Vector2(11, 32), Vector2(8, 4), rabbit_color)
-	_draw_ellipse_custom(position + Vector2(-17, -33), Vector2(12, 30), rabbit_outline)
-	_draw_ellipse_custom(position + Vector2(17, -33), Vector2(12, 30), rabbit_outline)
-	_draw_ellipse_custom(position + Vector2(-17, -33), Vector2(10, 28), rabbit_color)
-	_draw_ellipse_custom(position + Vector2(17, -33), Vector2(10, 28), rabbit_color)
-	_draw_ellipse_custom(position + Vector2(-17, -34), Vector2(5, 20), Color("efb5b0"))
-	_draw_ellipse_custom(position + Vector2(17, -34), Vector2(5, 20), Color("efb5b0"))
+	_draw_ellipse_custom(position + Vector2(-17, -33 - ear_sway), Vector2(12, 30), rabbit_outline)
+	_draw_ellipse_custom(position + Vector2(17, -33 + ear_sway), Vector2(12, 30), rabbit_outline)
+	_draw_ellipse_custom(position + Vector2(-17, -33 - ear_sway), Vector2(10, 28), rabbit_color)
+	_draw_ellipse_custom(position + Vector2(17, -33 + ear_sway), Vector2(10, 28), rabbit_color)
+	_draw_ellipse_custom(position + Vector2(-17, -34 - ear_sway), Vector2(5, 20), Color("efb5b0"))
+	_draw_ellipse_custom(position + Vector2(17, -34 + ear_sway), Vector2(5, 20), Color("efb5b0"))
 	draw_circle(position, 31.0, rabbit_outline)
 	draw_circle(position, 28.0, rabbit_color)
 	_draw_ellipse_custom(position + Vector2(0, 9), Vector2(12, 8), Color("fffdf5"))
@@ -2712,18 +2786,31 @@ func _draw_pond_stone_at(position: Vector2, color: Color, lifted: bool) -> void:
 
 func _draw_hud(font: Font) -> void:
 	var ending_focus: bool = game_state.can_start_q012() or (game_state.is_q012_complete() and celebration_remaining > 0.0)
-	var hud_rect := Rect2(26, 22, 900, 112) if ending_focus else Rect2(26, 22, 760, 104)
-	_draw_panel(hud_rect, VISUAL_PALETTE["panel"], VISUAL_PALETTE["panel_border"], 20)
-	draw_string(font, Vector2(48, 58), _hud_title_text(), HORIZONTAL_ALIGNMENT_LEFT, -1, 30, Color("fff7cf"))
-	_draw_panel(Rect2(46, 72, 88, 26), Color("426b51"), Color("8fc47d"), 9)
-	draw_string(font, Vector2(56, 91), _task_stage_label(), HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color("fff7cf"))
-	draw_string(font, Vector2(148, 90), _task_prompt_text(), HORIZONTAL_ALIGNMENT_LEFT, 750 if ending_focus else 620, 18, Color("fff7cf"))
+	# Keep the story card clear of the top-right build/restart controls, even in
+	# the finale where the objective sentence is longer.
+	var hud_rect := Rect2(24, 18, 820, 112) if ending_focus else Rect2(24, 18, 780, 106)
+	_draw_soft_panel(hud_rect, VISUAL_PALETTE["panel"], VISUAL_PALETTE["panel_border"], 22, 0.24)
+	var emblem_center := Vector2(52, 49)
+	draw_circle(emblem_center + Vector2(0, 2), 18, Color(0.02, 0.10, 0.08, 0.24))
+	draw_circle(emblem_center, 17, Color("e7c77d"))
+	draw_circle(emblem_center, 13, Color("f7e8bc"))
+	_draw_ellipse_custom(emblem_center + Vector2(-4, 1), Vector2(3.3, 7.0), Color("6eaa69"))
+	_draw_ellipse_custom(emblem_center + Vector2(4, 0), Vector2(3.3, 7.0), Color("8ac67a"))
+	draw_circle(emblem_center, 2.3, Color("fffaf0"))
+	draw_string(font, Vector2(78, 57), _hud_title_text(), HORIZONTAL_ALIGNMENT_LEFT, 700 if ending_focus else 625, 27, Color("fff5dc"))
+	var badge_fill := Color("bd9050") if ending_focus else Color("4f8060")
+	var badge_border := Color("e4c17b") if ending_focus else Color("8bc690")
+	_draw_panel(Rect2(46, 70, 92, 27), badge_fill, badge_border, 13)
+	draw_string(font, Vector2(55, 89), _task_stage_label(), HORIZONTAL_ALIGNMENT_LEFT, 78, 14, Color("fff9e9"))
+	draw_line(Vector2(150, 75), Vector2(150, 94), Color(0.86, 0.94, 0.78, 0.42), 1.0, true)
+	draw_string(font, Vector2(166, 90), _task_prompt_text(), HORIZONTAL_ALIGNMENT_LEFT, 735 if ending_focus else 605, 17, Color("fff5dc"))
 	if _should_show_hud_message():
-		draw_string(font, Vector2(48, 112), message, HORIZONTAL_ALIGNMENT_LEFT, 850 if ending_focus else 720, 16, message_color)
+		draw_circle(Vector2(53, 112), 3.0, Color("f2ca7a"))
+		draw_string(font, Vector2(64, 117), message, HORIZONTAL_ALIGNMENT_LEFT, hud_rect.size.x - 84, 14, message_color)
 	var show_inventory: bool = q011_mode or build_mode or game_state.can_start_q004() or not game_state.is_complete() or (_can_use_q008_side_task() and not game_state.is_q008_complete())
 	if not show_inventory:
 		return
-	_draw_panel(INVENTORY_PANEL_RECT, VISUAL_PALETTE["panel"], VISUAL_PALETTE["panel_border"], 18)
+	_draw_soft_panel(INVENTORY_PANEL_RECT, VISUAL_PALETTE["panel"], VISUAL_PALETTE["panel_border"], 18, 0.22)
 	if q011_mode:
 		_draw_q011_inventory(font)
 	elif build_mode:
@@ -2739,9 +2826,9 @@ func _draw_hud(font: Font) -> void:
 			if game_state.collected[board_id] and not game_state.placed[board_id] and dragging_board != board_id:
 				_draw_board_at(rect.position + rect.size / 2.0, VISUAL_PALETTE["board_collected"], false)
 			else:
-				draw_rect(rect, Color("d5e4cb"), false, 2.0)
+				_draw_slot_card(rect)
 			if game_state.placed[board_id]:
-				draw_string(font, rect.position + Vector2(29, 29), "✓", HORIZONTAL_ALIGNMENT_LEFT, -1, 22, Color("d9ffd0"))
+				_draw_check_badge(rect.get_center())
 
 
 func _draw_q004_inventory(font: Font) -> void:
@@ -2751,9 +2838,9 @@ func _draw_q004_inventory(font: Font) -> void:
 		if game_state.wood_collected[wood_id] and not game_state.wood_delivered[wood_id]:
 			_draw_wood_at(rect.position + rect.size / 2.0)
 		else:
-			draw_rect(rect, Color("d5e4cb"), false, 2.0)
+			_draw_slot_card(rect)
 		if game_state.wood_delivered[wood_id]:
-			draw_string(font, rect.position + Vector2(29, 29), "✓", HORIZONTAL_ALIGNMENT_LEFT, -1, 22, Color("d9ffd0"))
+			_draw_check_badge(rect.get_center())
 
 
 func _draw_q008_inventory(font: Font) -> void:
@@ -2763,9 +2850,9 @@ func _draw_q008_inventory(font: Font) -> void:
 		if game_state.q008_path_material_is_available(material_id) and dragging_q008_path != material_id:
 			_draw_q008_path_paver_at(rect.position + rect.size / 2.0, material_id, false)
 		else:
-			draw_rect(rect, Color("d5e4cb"), false, 2.0)
+			_draw_slot_card(rect)
 		if not game_state.q008_path_material_is_available(material_id):
-			draw_string(font, rect.position + Vector2(29, 29), "✓", HORIZONTAL_ALIGNMENT_LEFT, -1, 22, Color("d9ffd0"))
+			_draw_check_badge(rect.get_center())
 
 
 func _draw_q011_inventory(font: Font) -> void:
@@ -2776,9 +2863,9 @@ func _draw_q011_inventory(font: Font) -> void:
 		if game_state.q011_item_is_available(item_id) and dragging_q011_item != item_id:
 			_draw_q011_item_at(rect.position + rect.size / 2.0, item_id, false)
 		else:
-			draw_rect(rect, Color("d5e4cb"), false, 2.0)
+			_draw_slot_card(rect)
 		if not game_state.q011_item_is_available(item_id):
-			draw_string(font, rect.position + Vector2(29, 28), "✓", HORIZONTAL_ALIGNMENT_LEFT, -1, 20, Color("d9ffd0"))
+			_draw_check_badge(rect.get_center())
 
 
 func _draw_q006_inventory(font: Font) -> void:
@@ -2788,23 +2875,47 @@ func _draw_q006_inventory(font: Font) -> void:
 		if game_state.q006_decor_is_available(decor_id) and dragging_q006_decor != decor_id:
 			_draw_q006_decor_at(rect.position + rect.size / 2.0, decor_id, false)
 		else:
-			draw_rect(rect, Color("d5e4cb"), false, 2.0)
+			_draw_slot_card(rect)
 		if not game_state.q006_decor_is_available(decor_id):
-			draw_string(font, rect.position + Vector2(30, 28), "✓", HORIZONTAL_ALIGNMENT_LEFT, -1, 22, Color("d9ffd0"))
+			_draw_check_badge(rect.get_center())
 	if game_state.q006_windmill_unlocked:
 		draw_string(font, Vector2(914, 678), "小风车已解锁（保留在库存）", HORIZONTAL_ALIGNMENT_LEFT, 230, 14, Color("fff1a8"))
 	else:
 		draw_string(font, Vector2(914, 678), "放满三件装饰后解锁小风车", HORIZONTAL_ALIGNMENT_LEFT, 230, 14, Color("d5e4cb"))
 
 
+func _draw_slot_card(rect: Rect2) -> void:
+	if slot_card_style == null:
+		slot_card_style = StyleBoxFlat.new()
+		slot_card_style.bg_color = Color("f2ecd7")
+		slot_card_style.border_color = Color("afc39e")
+		slot_card_style.set_border_width_all(1)
+		slot_card_style.set_corner_radius_all(8)
+		slot_card_style.shadow_color = Color(0.02, 0.11, 0.08, 0.16)
+		slot_card_style.shadow_size = 2
+		slot_card_style.shadow_offset = Vector2(0, 2)
+		slot_card_style.anti_aliasing = true
+	draw_style_box(slot_card_style, rect)
+	draw_line(rect.position + Vector2(8, 2), rect.position + Vector2(rect.size.x - 8, 2), Color(1.0, 1.0, 0.91, 0.48), 1.0, true)
+
+
+func _draw_check_badge(center: Vector2) -> void:
+	draw_circle(center + Vector2(0, 1), 12.0, Color(0.03, 0.14, 0.10, 0.30))
+	draw_circle(center, 11.0, Color("3f9a62"))
+	draw_circle(center, 8.0, Color("70c983"))
+	draw_line(center + Vector2(-4, 0), center + Vector2(-1, 3), Color("fff9e8"), 2.2, true)
+	draw_line(center + Vector2(-1, 3), center + Vector2(5, -4), Color("fff9e8"), 2.2, true)
+
+
 func _draw_touch_hint(font: Font) -> void:
 	var visible_height := size.y
 	var hint_y := minf(644.0, maxf(8.0, visible_height - 76.0))
 	var joystick_center := _virtual_joystick_center()
-	_draw_panel(Rect2(160, hint_y, 720, 52), Color(0.91, 0.98, 0.88, 0.94), VISUAL_PALETTE["island_highlight"], 14)
-	_draw_panel(Rect2(172, hint_y + 12.0, 72, 28), Color("d7edcb"), Color("86b877"), 10)
-	draw_string(font, Vector2(180, hint_y + 31.0), "现在做什么", HORIZONTAL_ALIGNMENT_LEFT, -1, 13, VISUAL_PALETTE["ink"])
-	draw_string(font, Vector2(256, hint_y + 32.0), _task_action_hint_text(), HORIZONTAL_ALIGNMENT_LEFT, 608, 16, VISUAL_PALETTE["ink"])
+	_draw_soft_panel(Rect2(160, hint_y, 720, 52), Color("f7f2dc"), Color("afd58f"), 17, 0.16)
+	draw_rect(Rect2(160, hint_y + 13, 4, 26), Color("e4b85f"), true)
+	_draw_panel(Rect2(174, hint_y + 12.0, 78, 28), Color("dceacb"), Color("a6c68e"), 12)
+	draw_string(font, Vector2(181, hint_y + 31.0), "下一步", HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Color("416048"))
+	draw_string(font, Vector2(264, hint_y + 32.0), _task_action_hint_text(), HORIZONTAL_ALIGNMENT_LEFT, 598, 16, Color("2d4a3c"))
 	draw_string(font, joystick_center + Vector2(-68, -76), "拖动摇杆移动", HORIZONTAL_ALIGNMENT_LEFT, -1, 15, VISUAL_PALETTE["ink"])
 	_draw_virtual_joystick()
 

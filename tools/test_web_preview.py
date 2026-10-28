@@ -342,7 +342,11 @@ def main() -> int:
                             page.wait_for_timeout(500)
                         if watered_save.get("q005_watered") is not True:
                             raise AssertionError("The bottom-right control did not water the Q005 garden")
-                        for key, duration_ms in (("d", 190), ("w", 250), ("s", 150)):
+                        # Stand near the middle of the three blooms. All three
+                        # remain within the interaction radius from here, so
+                        # frame timing cannot make the test collect a different
+                        # flower order than the one it assumed.
+                        for key, duration_ms in (("d", 250), ("w", 250), ("s", 150)):
                             page.keyboard.down(key)
                             page.wait_for_timeout(duration_ms)
                             page.keyboard.up(key)
@@ -364,32 +368,51 @@ def main() -> int:
                                 })""",
                                 save_key,
                             )
-                            if collected_save.get("q005_plants_collected") == [True, False, False]:
+                            plant_flags = collected_save.get("q005_plants_collected", [])
+                            if isinstance(plant_flags, list) and sum(bool(flag) for flag in plant_flags) == 1:
                                 break
                             page.wait_for_timeout(500)
-                        if collected_save.get("q005_plants_collected") != [True, False, False]:
+                        plant_flags = collected_save.get("q005_plants_collected", [])
+                        if not isinstance(plant_flags, list) or sum(bool(flag) for flag in plant_flags) != 1:
                             raise AssertionError("The Q005 plant was not collected after watering through the browser")
-                        if collected_save.get("q005_plant_slots") != [True, False, False] or collected_save.get("q005_completed") is True:
+                        if collected_save.get("q005_plant_slots") != plant_flags or collected_save.get("q005_completed") is True:
                             raise AssertionError("Harvesting must leave the flower in its bed and wait for bouquet delivery")
 
-                        # The first pickup leaves the player inside range of the
-                        # neighboring bloom. Move only one short step toward the
-                        # middle flower, then collect the middle and right blooms
-                        # from the same spot so the browser test cannot overshoot.
-                        page.keyboard.down("d")
-                        page.wait_for_timeout(180)
-                        page.keyboard.up("d")
                         for harvest_step in range(1, 3):
+                            if harvest_step == 2 and isinstance(plant_flags, list):
+                                edge_direction = "d" if not plant_flags[2] else ("a" if not plant_flags[0] else "")
+                                if edge_direction:
+                                    page.keyboard.down(edge_direction)
+                                    page.wait_for_timeout(100)
+                                    page.keyboard.up(edge_direction)
                             page.mouse.click(1_214, 662)
-                            page.wait_for_timeout(180)
+                            page.wait_for_timeout(500)
                             page.screenshot(
                                 path=str(artifact_dir / f"web-q005-harvest-{harvest_step + 1}.png"),
                                 full_page=True,
                             )
-                            if harvest_step == 1:
-                                page.keyboard.down("d")
-                                page.wait_for_timeout(90)
-                                page.keyboard.up("d")
+                            expected_count = harvest_step + 1
+                            for _ in range(12):
+                                harvested_save = page.evaluate(
+                                    """async key => new Promise((resolve, reject) => {
+                                        const opening = indexedDB.open('/userfs');
+                                        opening.onerror = () => reject(opening.error);
+                                        opening.onsuccess = () => {
+                                            const transaction = opening.result.transaction('FILE_DATA', 'readonly');
+                                            const request = transaction.objectStore('FILE_DATA').get(key);
+                                            request.onsuccess = () => resolve(JSON.parse(new TextDecoder().decode(new Uint8Array(request.result.contents))));
+                                            request.onerror = () => reject(request.error);
+                                        };
+                                    })""",
+                                    save_key,
+                                )
+                                plant_flags = harvested_save.get("q005_plants_collected", [])
+                                if isinstance(plant_flags, list) and sum(bool(flag) for flag in plant_flags) >= expected_count:
+                                    break
+                                page.wait_for_timeout(500)
+                            plant_flags = harvested_save.get("q005_plants_collected", [])
+                            if not isinstance(plant_flags, list) or sum(bool(flag) for flag in plant_flags) < expected_count:
+                                raise AssertionError(f"The browser must collect flower {expected_count}/3; latest save: " + json.dumps(harvested_save, ensure_ascii=False))
                         harvested_save = {}
                         for _ in range(12):
                             harvested_save = page.evaluate(
