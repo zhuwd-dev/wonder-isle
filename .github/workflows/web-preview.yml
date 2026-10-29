@@ -45,7 +45,23 @@ jobs:
         run: bash tools/setup_web_environment.sh
 
       - name: Export, run Chromium smoke test, and capture screenshot
-        run: tools/test_web_preview.sh
+        run: |
+          set +e
+          tools/test_web_preview.sh > /tmp/wonder-isle-web-preview.log 2>&1
+          test_status=$?
+          set -e
+          cat /tmp/wonder-isle-web-preview.log
+          if [[ "$test_status" -ne 0 ]]; then
+            {
+              printf '## Web preview browser validation failed\n\n'
+              printf 'Exit code: `%s`\n\n' "$test_status"
+              printf '```text\n'
+              tail -n 100 /tmp/wonder-isle-web-preview.log
+              printf '\n```\n'
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit "$test_status"
+          fi
+          printf '## Web preview browser validation passed\n' >> "$GITHUB_STEP_SUMMARY"
 
       - name: Stamp Pages build revision
         if: github.event_name != 'pull_request'
@@ -59,6 +75,7 @@ jobs:
           path: |
             build/web
             tests/artifacts/web-preview.png
+            /tmp/wonder-isle-web-preview.log
           if-no-files-found: ignore
           retention-days: 7
 
