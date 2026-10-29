@@ -52,6 +52,14 @@ jobs:
           set -e
           cat /tmp/wonder-isle-web-preview.log
           if [[ "$test_status" -ne 0 ]]; then
+            failure_detail="$(grep -E 'Traceback|AssertionError:|FAILED|Error:|ERROR:' /tmp/wonder-isle-web-preview.log | tail -n 6 | sed -E 's/^[0-9]+://' | tr '\r\n' '  ' | cut -c1-1200 || true)"
+            if [[ -z "$failure_detail" ]]; then
+              failure_detail="$(tail -n 12 /tmp/wonder-isle-web-preview.log | tr '\r\n' '  ' | cut -c1-1200)"
+            fi
+            failure_detail="${failure_detail//'%'/'%25'}"
+            failure_detail="${failure_detail//$'\r'/'%0D'}"
+            failure_detail="${failure_detail//$'\n'/'%0A'}"
+            printf '::error title=Web preview failure::%s\n' "$failure_detail"
             {
               printf '## Web preview browser validation failed\n\n'
               printf 'Exit code: `%s`\n\n' "$test_status"
