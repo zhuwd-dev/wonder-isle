@@ -191,12 +191,13 @@ def main() -> int:
                 snap("web-q007-shell-collected.png")
 
                 # Return across the bridge and gather all birdhouse materials.
-                # Cross on the bridge centerline, then turn onto the west bank
-                # before walking down to the rope pickup.
-                move("w", 200)
+                # Q007 ends beside the bridge at its south entrance. Keep the
+                # avatar on that lane while crossing west, then head south to
+                # the rope on the west bank. Stepping north first leaves the
+                # bridge lane and makes the river correctly block movement.
                 move("a", 1_200)
-                move("s", 850)
-                move("d", 500)
+                move("s", 700)
+                move("d", 450)
                 snap("web-q009-before-rope.png")
                 interact()
                 verify(lambda save: save.get("q009_materials_collected") == [False, False, True], "Q009 collect rope at west shore")
@@ -227,19 +228,25 @@ def main() -> int:
                 # Take the materials to the birdhouse and hand them over one by
                 # one so each interaction visibly advances construction.
                 move("d", 1_360)
-                move("s", 860)
+                move("a", 200)
                 snap("web-q009-at-birdhouse.png")
-                for delivery_id in range(3):
+                delivery_save = approach_and_interact(
+                    "s",
+                    "Q009 deliver birdhouse material 1/3",
+                    lambda save: save.get("q009_materials_delivered") == [True, False, False],
+                )
+                if delivery_save.get("q009_completed") is not False:
+                    raise AssertionError("The birdhouse must remain under construction until all deliveries")
+                snap("web-q009-birdhouse-under-construction.png")
+                for delivery_id in range(1, 3):
                     interact()
-                    expected_deliveries = [delivery_id >= 0, delivery_id >= 1, delivery_id >= 2]
+                    expected_deliveries = [True, delivery_id >= 1, delivery_id >= 2]
                     delivery_save = verify(
                         lambda save, expected=expected_deliveries: save.get("q009_materials_delivered") == expected,
                         f"Q009 deliver birdhouse material {delivery_id + 1}/3",
                     )
                     if delivery_id < 2 and delivery_save.get("q009_completed") is not False:
                         raise AssertionError("The birdhouse must remain under construction until all deliveries")
-                    if delivery_id == 0:
-                        snap("web-q009-birdhouse-under-construction.png")
                 verify(lambda save: save.get("q009_completed") is True, "Q009 finish birdhouse after three deliveries")
                 snap("web-q009-birdhouse-complete.png")
 
@@ -249,10 +256,11 @@ def main() -> int:
                 snap("web-q009-bird-greeting.png")
 
                 # Collect the three visible seeds across the west island.
-                # Move above the fox house before crossing west so the red seed
-                # is approached on its own horizontal line, away from the gold.
-                move("w", 200)
+                # Go above the fox house before heading west, then descend to
+                # the red seed so its pickup radius does not overlap the gold.
+                move("w", 500)
                 move("a", 1_800)
+                move("s", 600)
                 interact()
                 verify(lambda save: save.get("q010_seeds_collected") == [True, False, False], "Q010 collect red seed")
                 move("d", 240)

@@ -438,7 +438,7 @@ def main() -> int:
                             raise AssertionError("A full harvest must still wait for the turtle delivery interaction")
                         page.screenshot(path=str(turtle_bouquet_screenshot_path), full_page=True)
 
-                        for key, duration_ms in (("d", 150), ("w", 700)):
+                        for key, duration_ms in (("d", 500), ("w", 700)):
                             page.keyboard.down(key)
                             page.wait_for_timeout(duration_ms)
                             page.keyboard.up(key)

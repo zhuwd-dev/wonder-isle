@@ -529,7 +529,9 @@ func _create_controls() -> void:
 	interact_button.add_theme_font_size_override("font_size", 22)
 	interact_button.add_theme_color_override("font_color", Color("253b32"))
 	interact_button.tooltip_text = "收集、浇水、交付或与伙伴互动"
-	interact_button.pressed.connect(_try_collect_nearby)
+	# Pointer presses are handled in _input before Control's GUI pass. Connecting
+	# pressed here would process the same click twice and could deliver multiple
+	# quest items from one tap. Keyboard interaction stays on the shared action.
 	add_child(interact_button)
 	_apply_button_style(interact_button, true)
 	_refresh_build_controls()

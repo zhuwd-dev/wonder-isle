@@ -123,7 +123,7 @@ func _complete_q004_runtime() -> void:
 
 
 func _press_interact() -> void:
-	main.interact_button.emit_signal("pressed")
+	main._try_collect_nearby()
 
 
 func _read_save():
