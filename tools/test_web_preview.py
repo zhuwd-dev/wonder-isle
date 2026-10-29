@@ -537,17 +537,21 @@ def main() -> int:
                         page.keyboard.down(key)
                         page.wait_for_timeout(duration_ms)
                         page.keyboard.up(key)
-                    # The timed route can stop just beyond the rabbit's
-                    # interaction radius on slower browsers; align the player
-                    # before checking the final celebration interaction.
-                    for key, duration_ms in (("a", 200), ("s", 200)):
-                        page.keyboard.down(key)
-                        page.wait_for_timeout(duration_ms)
-                        page.keyboard.up(key)
-                    # Finish with the same prominent right-thumb action the
-                    # player sees after reaching the rabbit.
+                    # Low-FPS software rendering can make the timed approach
+                    # undershoot by over 70px. Sweep east across the rabbit's
+                    # interaction radius and tap the same right-thumb action
+                    # a player would use; repeated taps are harmless after the
+                    # one-shot ending state has been saved.
+                    page.keyboard.down("a")
+                    page.wait_for_timeout(350)
+                    page.keyboard.up("a")
+                    for _ in range(28):
+                        page.keyboard.down("d")
+                        page.wait_for_timeout(160)
+                        page.keyboard.up("d")
+                        page.mouse.click(1_214, 662)
+                        page.wait_for_timeout(100)
                     page.screenshot(path=str(artifact_dir / "web-q012-at-rabbit.png"), full_page=True)
-                    page.mouse.click(1_214, 662)
                     page.wait_for_timeout(1_500)
                     page.screenshot(path=str(artifact_dir / "web-q012-after-interact.png"), full_page=True)
                     page.wait_for_timeout(6_000)

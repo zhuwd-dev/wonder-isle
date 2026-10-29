@@ -8,6 +8,7 @@ const FOX_ART: Texture2D = preload("res://assets/art/characters/fox.png")
 const TURTLE_ART: Texture2D = preload("res://assets/art/characters/turtle.png")
 const BIRD_ART: Texture2D = preload("res://assets/art/characters/bird.png")
 const ISLAND_BACKGROUND: Texture2D = preload("res://assets/art/environment/floating-garden-bg.jpg")
+const BRIDGE_ART: Texture2D = preload("res://assets/art/environment/woodland-footbridge.png")
 const SAVE_PATH := "user://qxisland_stage2_save.json"
 const WORLD_SIZE := Vector2(1280, 720)
 const PLAYER_SPEED := 260.0
@@ -92,8 +93,8 @@ const JOYSTICK_RADIUS := 54.0
 const JOYSTICK_DEADZONE := 0.14
 const JOYSTICK_HIT_RADIUS := 88.0
 const INTERACT_BUTTON_SIZE := Vector2(116, 92)
-const INVENTORY_PANEL_RECT := Rect2(890, 574, 256, 110)
-const INVENTORY_ORIGIN := Vector2(904, 638)
+const INVENTORY_PANEL_RECT := Rect2(890, 558, 264, 138)
+const INVENTORY_ORIGIN := Vector2(904, 624)
 const INVENTORY_STEP := 80.0
 const COLLECT_SPARKLE_DURATION := 0.72
 const Q005_GROWTH_DURATION := 1.4
@@ -102,9 +103,9 @@ const CELEBRATION_DURATION := 2.4
 const TASK_TRANSITION_DURATION := 1.15
 const POND_INTERACTION_RADIUS := 112.0
 const BRIDGE_SLOTS := [
-	Rect2(772, 356, 34, 38),
-	Rect2(813, 356, 34, 38),
-	Rect2(854, 356, 18, 38),
+	Rect2(789, 367, 16, 18),
+	Rect2(806, 366, 16, 18),
+	Rect2(828, 367, 16, 18),
 ]
 const VISUAL_PALETTE := {
 	"sky": Color("c8edf0"),
@@ -2062,22 +2063,35 @@ func _main_story_progress() -> int:
 
 
 func _draw_bridge(font: Font) -> void:
-	_draw_ellipse_custom(BRIDGE_RECT.get_center() + Vector2(0, 53), Vector2(76, 10), Color(0.15, 0.25, 0.22, 0.20))
-	var bridge_color: Color = VISUAL_PALETTE["bridge_repaired"] if game_state.bridge_repaired else VISUAL_PALETTE["bridge_damaged"]
-	_draw_soft_panel(BRIDGE_RECT, bridge_color, VISUAL_PALETTE["bridge_edge"], 11, 0.10)
-	draw_line(Vector2(765, 334), Vector2(875, 334), Color("f2d08b"), 5.0, true)
-	draw_line(Vector2(765, 416), Vector2(875, 416), Color("815a3b"), 4.0, true)
-	for post_x in [766.0, 874.0]:
-		draw_line(Vector2(post_x, 326), Vector2(post_x, 424), Color("e0b56e"), 4.0, true)
+	# Painterly timber art carries the bridge; the three transparent deck gaps
+	# in the texture line up with the interactive repair slots below.
+	var bridge_draw_size := Vector2(164, 105)
+	draw_set_transform(BRIDGE_RECT.get_center(), 0.24, Vector2.ONE)
+	draw_texture_rect(BRIDGE_ART, Rect2(-bridge_draw_size * 0.5, bridge_draw_size), false)
+	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 	for slot_id in range(BRIDGE_SLOTS.size()):
 		var slot: Rect2 = BRIDGE_SLOTS[slot_id]
-		var slot_color: Color = Color("d8ad6c") if game_state.placed[slot_id] or game_state.bridge_repaired else Color("bf925b")
-		_draw_panel(slot, slot_color, Color("745039"), 5)
-		draw_line(slot.position + Vector2(7, 5), slot.position + Vector2(7, slot.size.y - 5), Color("986a46"), 1.5, true)
-		var grain_width := minf(slot.size.x - 10.0, 14.0)
-		draw_line(slot.position + Vector2(5, 7), slot.position + Vector2(5 + grain_width, 16), Color("f2ce8c", 0.72), 1.4, true)
-		draw_line(slot.position + Vector2(5, 23), slot.position + Vector2(5 + grain_width, 32), Color("f2ce8c", 0.56), 1.2, true)
+		var installed: bool = game_state.placed[slot_id] or game_state.bridge_repaired
+		var plank_points := PackedVector2Array([
+			Vector2(-slot.size.x * 0.5 + 1, -slot.size.y * 0.5 + 2),
+			Vector2(slot.size.x * 0.5 - 2, -slot.size.y * 0.5),
+			Vector2(slot.size.x * 0.5, slot.size.y * 0.5 - 2),
+			Vector2(-slot.size.x * 0.5, slot.size.y * 0.5),
+		])
+		draw_set_transform(slot.get_center(), 0.24, Vector2.ONE)
+		if installed:
+			draw_colored_polygon(plank_points, Color("d6a76c"))
+			draw_polyline(plank_points, Color("76533d"), 2.0, true)
+			draw_line(Vector2(-slot.size.x * 0.5 + 3, -slot.size.y * 0.5 + 4), Vector2(slot.size.x * 0.5 - 3, -slot.size.y * 0.5 + 4), Color("f1d49d", 0.86), 1.2, true)
+			draw_line(Vector2(-slot.size.x * 0.5 + 5, 0), Vector2(slot.size.x * 0.5 - 5, 0), Color("a5794d", 0.72), 1.0, true)
+		else:
+			# Empty joints glow softly; water remains visible through each gap.
+			var target_color: Color = VISUAL_PALETTE["target_valid"] if _drag_target_slot_at(drag_position) == slot_id else Color("f6dfaa", 0.85)
+			var target_fill: Color = VISUAL_PALETTE["target_valid_fill"] if _drag_target_slot_at(drag_position) == slot_id else Color("f7e7c2", 0.18)
+			draw_colored_polygon(plank_points, target_fill)
+			draw_polyline(plank_points, target_color, 1.5, true)
+		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 		if dragging_board >= 0 and slot_id == dragging_board and game_state.can_place_board(dragging_board):
 			var target_color: Color = VISUAL_PALETTE["target_valid"] if _drag_target_slot_at(drag_position) == slot_id else VISUAL_PALETTE["target_idle"]
 			var target_fill: Color = VISUAL_PALETTE["target_valid_fill"] if _drag_target_slot_at(drag_position) == slot_id else VISUAL_PALETTE["target_idle_fill"]
@@ -2087,18 +2101,24 @@ func _draw_bridge(font: Font) -> void:
 		var drag_hint := "绿色高亮位置可以松开" if _drag_target_slot_at(drag_position) >= 0 else "把木板移到高亮位置再松开"
 		draw_string(font, Vector2(700, 465), drag_hint, HORIZONTAL_ALIGNMENT_LEFT, -1, 20, VISUAL_PALETTE["ink"])
 	if game_state.bridge_repaired:
-		draw_line(Vector2(770, 342), Vector2(870, 342), Color("f4d28b"), 6.0)
 		if bridge_repair_remaining > 0.0:
 			var repair_progress := 1.0 - bridge_repair_remaining / BRIDGE_REPAIR_DURATION
 			var shimmer_x := lerpf(770.0, 870.0, repair_progress)
 			var shimmer_alpha := 1.0 - repair_progress
 			_draw_ellipse_custom(Vector2(shimmer_x, 377), Vector2(18, 34), Color(1.0, 0.91, 0.57, shimmer_alpha * 0.5))
 			draw_line(Vector2(shimmer_x, 345), Vector2(shimmer_x, 408), Color(1.0, 0.98, 0.78, shimmer_alpha), 4.0)
-		draw_string(font, Vector2(760, 315), _bridge_status_text(), HORIZONTAL_ALIGNMENT_LEFT, -1, 20, Color("fff1a8"))
+		_draw_bridge_status(font, _bridge_status_text())
 	else:
-		draw_line(Vector2(800, 344), Vector2(814, 358), Color("49342c"), 3.0)
-		draw_line(Vector2(818, 358), Vector2(832, 346), Color("49342c"), 3.0)
-		draw_string(font, Vector2(752, 315), "损坏的小桥", HORIZONTAL_ALIGNMENT_LEFT, -1, 20, Color("fff1a8"))
+		# The small snapped cord makes the repair state legible without a crude X.
+		draw_line(Vector2(810, 344), Vector2(818, 352), Color("805b3e"), 2.0, true)
+		draw_line(Vector2(818, 352), Vector2(824, 344), Color("805b3e"), 2.0, true)
+		_draw_bridge_status(font, "待修复")
+
+
+func _draw_bridge_status(font: Font, label: String) -> void:
+	var rect := Rect2(752, 304, 136, 27)
+	_draw_soft_panel(rect, Color("fff7e5", 0.96), Color("d8bd83"), 13, 0.10)
+	draw_string(font, rect.position + Vector2(8, 19), label, HORIZONTAL_ALIGNMENT_CENTER, rect.size.x - 16, 14, Color("536c4c"))
 
 
 func _draw_rabbit_area(font: Font) -> void:
@@ -2809,10 +2829,10 @@ func _draw_pond_stone_at(position: Vector2, color: Color, lifted: bool) -> void:
 
 
 func _draw_hud(font: Font) -> void:
-	var hud_rect := Rect2(20, 16, 720, 112)
-	_draw_soft_panel(hud_rect, Color("fff9ed", 0.97), Color("d5bd83"), 22, 0.19)
-	draw_rect(Rect2(hud_rect.position, Vector2(5, hud_rect.size.y)), Color("668e59"), true)
-	draw_line(hud_rect.position + Vector2(22, hud_rect.size.y - 2), hud_rect.position + Vector2(hud_rect.size.x - 22, hud_rect.size.y - 2), Color("fffdf4", 0.72), 1.0, true)
+	var panel_width := minf(580.0, maxf(350.0, size.x - 250.0))
+	var hud_rect := Rect2(18, 14, panel_width, 84)
+	_draw_soft_panel(hud_rect, Color("fff9ed", 0.91), Color("d5bd83", 0.92), 20, 0.15)
+	draw_rect(Rect2(hud_rect.position, Vector2(4, hud_rect.size.y)), Color("668e59"), true)
 	var emblem_center := Vector2(48, 43)
 	draw_circle(emblem_center + Vector2(0, 2), 16.0, Color(0.28, 0.35, 0.23, 0.13))
 	draw_circle(emblem_center, 14.0, Color("ecd18e"))
@@ -2821,28 +2841,32 @@ func _draw_hud(font: Font) -> void:
 	_draw_ellipse_custom(emblem_center + Vector2(3, -1), Vector2(2.8, 5.4), Color("91b875"))
 	draw_circle(emblem_center, 1.8, Color("fffaf0"))
 	draw_arc(emblem_center, 17.0, -2.55, -0.65, 12, Color("fffaf0", 0.78), 1.3)
-	draw_string(font, Vector2(72, 47), "奇趣小岛", HORIZONTAL_ALIGNMENT_LEFT, 148, 14, Color("75846a"))
 	var title := _hud_title_text().replace("奇趣小岛 · ", "")
-	draw_string(font, Vector2(72, 76), title, HORIZONTAL_ALIGNMENT_LEFT, 482, 24, VISUAL_PALETTE["ink"])
+	draw_string(font, Vector2(72, 48), title, HORIZONTAL_ALIGNMENT_LEFT, panel_width - 224.0, 22, VISUAL_PALETTE["ink"])
 	var badge_fill := Color("e8efd5") if not game_state.can_start_q012() else Color("f7e5b4")
 	var badge_border := Color("a8bd85") if not game_state.can_start_q012() else Color("d6aa5d")
-	_draw_soft_panel(Rect2(606, 29, 112, 27), badge_fill, badge_border, 13, 0.07)
-	draw_string(font, Vector2(617, 48), _task_stage_label(), HORIZONTAL_ALIGNMENT_CENTER, 90, 13, Color("425d48"))
-	draw_string(font, Vector2(72, 101), _task_prompt_text(), HORIZONTAL_ALIGNMENT_LEFT, 638, 14, Color("506858"))
+	var badge_rect := Rect2(hud_rect.end.x - 132.0, 25, 112, 27)
+	_draw_soft_panel(badge_rect, badge_fill, badge_border, 13, 0.07)
+	draw_string(font, badge_rect.position + Vector2(8, 19), _task_stage_label(), HORIZONTAL_ALIGNMENT_CENTER, badge_rect.size.x - 16, 13, Color("425d48"))
+	draw_string(font, Vector2(72, 70), _hud_summary_text(), HORIZONTAL_ALIGNMENT_LEFT, panel_width - 94.0, 14, Color("506858"))
 	var progress_count := _main_story_progress()
 	var progress_x := 72.0
-	var progress_y := 115.0
+	var progress_y := 86.0
+	var available_progress_width := panel_width - 94.0
+	var segment_gap := 5.0
+	var segment_width := (available_progress_width - segment_gap * 6.0) / 7.0
 	for step_id in range(7):
-		var x0 := progress_x + float(step_id) * 91.0
+		var x0 := progress_x + float(step_id) * (segment_width + segment_gap)
 		var segment_color := Color("6c9b66") if step_id < progress_count else Color("dce2cc")
 		if step_id == progress_count and progress_count < 7:
 			segment_color = Color("dbb66e")
-		draw_line(Vector2(x0, progress_y), Vector2(x0 + 82.0, progress_y), segment_color, 4.0, true)
+		draw_line(Vector2(x0, progress_y), Vector2(x0 + segment_width, progress_y), segment_color, 3.0, true)
 	var show_inventory: bool = q011_mode or build_mode or game_state.can_start_q004() or not game_state.is_complete() or (_can_use_q008_side_task() and not game_state.is_q008_complete())
 	if not show_inventory:
 		return
-	_draw_soft_panel(INVENTORY_PANEL_RECT, Color("fff8e8"), Color("b8c58e"), 18, 0.16)
-	draw_rect(Rect2(INVENTORY_PANEL_RECT.position + Vector2(14, 14), Vector2(3, 20)), Color("6c9a65"), true)
+	_draw_soft_panel(INVENTORY_PANEL_RECT, Color("f7edd8", 0.97), Color("ad8a5f"), 18, 0.15)
+	draw_rect(INVENTORY_PANEL_RECT.grow(-5.0), Color("fffaf0", 0.18), false, 1.0, true)
+	draw_rect(Rect2(INVENTORY_PANEL_RECT.position + Vector2(14, 16), Vector2(3, 20)), Color("6c9a65"), true)
 	if q011_mode:
 		_draw_q011_inventory(font)
 	elif build_mode:
@@ -2852,7 +2876,9 @@ func _draw_hud(font: Font) -> void:
 	elif _can_use_q008_side_task() and not game_state.is_q008_complete():
 		_draw_q008_inventory(font)
 	else:
-		draw_string(font, Vector2(928, 602), "修桥木板", HORIZONTAL_ALIGNMENT_LEFT, 210, 16, Color("425d48"))
+		draw_string(font, Vector2(928, 602), "小桥修缮 · 木板", HORIZONTAL_ALIGNMENT_LEFT, 158, 16, Color("425d48"))
+		var board_count_label := "%d/3" % game_state.board_count()
+		draw_string(font, Vector2(1082, 602), board_count_label, HORIZONTAL_ALIGNMENT_RIGHT, 48, 14, Color("8a714c"))
 		for board_id in range(GameState.BOARD_TOTAL):
 			var rect := _inventory_rect(board_id)
 			if game_state.collected[board_id] and not game_state.placed[board_id] and dragging_board != board_id:
@@ -2924,19 +2950,18 @@ func _draw_slot_card(rect: Rect2) -> void:
 		slot_card_style.set_border_width_all(1)
 		slot_card_style.set_corner_radius_all(10)
 		slot_card_style.shadow_color = Color(0.23, 0.27, 0.18, 0.12)
-		slot_card_style.shadow_size = 3
-		slot_card_style.shadow_offset = Vector2(0, 2)
+		slot_card_style.shadow_size = 2
+		slot_card_style.shadow_offset = Vector2(0, 1)
 		slot_card_style.anti_aliasing = true
 	draw_style_box(slot_card_style, rect)
 	draw_line(rect.position + Vector2(9, 2), rect.position + Vector2(rect.size.x - 9, 2), Color(1.0, 1.0, 0.91, 0.70), 1.0, true)
 
 
 func _draw_check_badge(center: Vector2) -> void:
-	draw_circle(center + Vector2(0, 1), 12.0, Color(0.03, 0.14, 0.10, 0.30))
-	draw_circle(center, 11.0, Color("3f9a62"))
-	draw_circle(center, 8.0, Color("70c983"))
-	draw_line(center + Vector2(-4, 0), center + Vector2(-1, 3), Color("fff9e8"), 2.2, true)
-	draw_line(center + Vector2(-1, 3), center + Vector2(5, -4), Color("fff9e8"), 2.2, true)
+	# An inset check keeps the completion mark inside each tray slot without
+	# adding a badge that spills past the item silhouette.
+	draw_line(center + Vector2(-5, 1), center + Vector2(-1, 5), Color("3f8153"), 2.7, true)
+	draw_line(center + Vector2(-1, 5), center + Vector2(6, -5), Color("3f8153"), 2.7, true)
 
 
 func _draw_touch_hint(font: Font) -> void:
@@ -2975,6 +3000,50 @@ func _draw_virtual_joystick() -> void:
 func _virtual_joystick_center() -> Vector2:
 	var visible_height := size.y
 	return Vector2(JOYSTICK_CENTER.x, maxf(JOYSTICK_RADIUS + 12.0, minf(JOYSTICK_CENTER.y, visible_height - JOYSTICK_RADIUS - 24.0)))
+
+
+func _hud_summary_text() -> String:
+	if q011_mode:
+		return "额外地块 · 摆放物品 %d/3" % game_state.q011_placed_count()
+	if _can_use_q011_mode() and not build_mode:
+		return "新地块已开放 · 点击整理开始布置"
+	if game_state.can_start_q012():
+		return "主线最后一步 · 找到兔子参加庆祝"
+	if game_state.is_q012_complete() and celebration_remaining > 0.0:
+		return "主线完成 · 和兔子一起庆祝"
+	if build_mode and _can_use_q006_build_mode():
+		return "花园装饰 · 已摆放 %d/3" % game_state.q006_placed_count()
+	if game_state.is_q011_complete():
+		return "任务全部完成 · 可以自由探索"
+	if not game_state.is_complete():
+		if game_state.board_count() < GameState.BOARD_TOTAL:
+			return "修桥任务 · 收集木板 %d/3" % game_state.board_count()
+		return "修桥任务 · 安装木板 %d/3" % game_state.placed_count()
+	if not game_state.seed_collected:
+		return "继续探索 · 过桥寻找发光种子"
+	if not game_state.seed_planted:
+		return "种下种子 · 前往右侧花圃"
+	if not game_state.is_q004_complete():
+		return "狐狸小屋 · 交付木材 %d/3" % game_state.delivered_wood_count()
+	if not game_state.is_pond_complete():
+		return "恢复池塘 · 已放置石头 %d/3" % game_state.pond_stones_placed.count(true)
+	if not game_state.is_q005_complete():
+		if not game_state.q005_watered:
+			return "乌龟花园 · 先给花苗浇水"
+		return "乌龟花园 · 收集花朵 %d/3" % game_state.q005_plant_count()
+	if not game_state.is_q006_complete():
+		return "花园装饰 · 已摆放 %d/3" % game_state.q006_placed_count()
+	if not game_state.is_q007_complete():
+		return "可选探索 · 池塘边藏着一枚贝壳"
+	if not game_state.is_q009_complete():
+		return "可选计划 · 帮小鸟收集建屋材料"
+	if not game_state.is_q010_complete():
+		return "可选收藏 · 寻找三种花朵种子"
+	if not game_state.is_q008_complete():
+		return "可选修整 · 把石板铺成一条小路"
+	if not game_state.is_q011_complete():
+		return "可选整理 · 布置额外地块"
+	return "小岛任务完成 · 继续自由探索"
 
 
 func _task_prompt_text() -> String:

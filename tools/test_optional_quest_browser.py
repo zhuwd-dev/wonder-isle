@@ -214,11 +214,12 @@ def main() -> int:
                 verify(lambda save: save.get("q009_materials_collected") == [False, False, True], "Q009 collect rope at west shore")
                 move("a", 1_600)
                 snap("web-q009-at-branch.png")
-                approach_and_interact(
-                    "a",
-                    "Q009 collect branch by west shore",
+                # The westbound return path ends inside this branch's radius;
+                # interact immediately instead of walking past it.
+                interact()
+                verify(
                     lambda save: save.get("q009_materials_collected") == [True, False, True],
-                    steps=12,
+                    "Q009 collect branch by west shore",
                 )
                 move("w", 1_077)
                 move("d", 230)
@@ -242,8 +243,10 @@ def main() -> int:
                 move("a", 200)
                 # Align with the birdhouse before walking south. At this
                 # viewport, the player can otherwise remain just outside its
-                # circular interaction radius while following a vertical path.
+                # circular interaction radius or meet the river edge. Step
+                # back onto the west bank, then follow the shore south.
                 move("d", 180)
+                move("a", 200)
                 snap("web-q009-at-birdhouse.png")
                 delivery_save = approach_and_interact(
                     "s",
@@ -284,7 +287,10 @@ def main() -> int:
                 move("a", 1_800)
                 snap("web-q010-before-red-seed.png")
                 interact()
-                verify(lambda save: save.get("q010_seeds_collected") == [True, False, False], "Q010 collect red seed")
+                verify(
+                    lambda save: save.get("q010_seeds_collected") == [True, False, False],
+                    "Q010 collect red seed",
+                )
                 move("d", 320)
                 snap("web-q010-before-gold-seed.png")
                 interact()
