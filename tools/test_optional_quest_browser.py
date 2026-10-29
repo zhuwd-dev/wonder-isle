@@ -137,6 +137,15 @@ def main() -> int:
                     print(f"PASS {label}", flush=True)
                     return latest
 
+                def verify_stable(condition, label: str) -> dict[str, object]:
+                    # Let WebFS persist the last interaction before the next
+                    # deliberate click, then confirm its stage did not change.
+                    page.wait_for_timeout(350)
+                    latest = read_save()
+                    if not latest or not condition(latest):
+                        raise AssertionError(f"{label}; settled save: {json.dumps(latest, ensure_ascii=False)}")
+                    return latest
+
                 def move(key: str, milliseconds: int) -> None:
                     page.mouse.click(800, 600)
                     page.keyboard.down(key)
@@ -151,15 +160,17 @@ def main() -> int:
                 def approach_and_interact(direction: str, label: str, condition, steps: int = 20) -> dict[str, object]:
                     latest: dict[str, object] = {}
                     for _ in range(steps):
+                        move(direction, 120)
                         interact()
-                        for _ in range(5):
+                        # Avoid issuing another physical tap while the browser
+                        # has not yet flushed Godot's save into IndexedDB.
+                        for _ in range(16):
                             latest = read_save()
                             if latest and condition(latest):
                                 checks.append(label)
                                 print(f"PASS {label}", flush=True)
                                 return latest
-                            page.wait_for_timeout(250)
-                        move(direction, 120)
+                            page.wait_for_timeout(500)
                     raise AssertionError(f"{label}; latest save: {json.dumps(latest, ensure_ascii=False)}")
 
                 def drag(source: tuple[int, int], target: tuple[int, int], screenshot: str | None = None) -> None:
@@ -237,6 +248,10 @@ def main() -> int:
                 )
                 if delivery_save.get("q009_completed") is not False:
                     raise AssertionError("The birdhouse must remain under construction until all deliveries")
+                verify_stable(
+                    lambda save: save.get("q009_materials_delivered") == [True, False, False],
+                    "Q009 delivery 1/3 remains stable after one tap",
+                )
                 snap("web-q009-birdhouse-under-construction.png")
                 for delivery_id in range(1, 3):
                     interact()
@@ -247,6 +262,10 @@ def main() -> int:
                     )
                     if delivery_id < 2 and delivery_save.get("q009_completed") is not False:
                         raise AssertionError("The birdhouse must remain under construction until all deliveries")
+                    verify_stable(
+                        lambda save, expected=expected_deliveries: save.get("q009_materials_delivered") == expected,
+                        f"Q009 delivery {delivery_id + 1}/3 remains stable after one tap",
+                    )
                 verify(lambda save: save.get("q009_completed") is True, "Q009 finish birdhouse after three deliveries")
                 snap("web-q009-birdhouse-complete.png")
 
@@ -261,9 +280,10 @@ def main() -> int:
                 move("w", 500)
                 move("a", 1_800)
                 move("s", 600)
+                snap("web-q010-before-red-seed.png")
                 interact()
                 verify(lambda save: save.get("q010_seeds_collected") == [True, False, False], "Q010 collect red seed")
-                move("d", 240)
+                move("d", 320)
                 snap("web-q010-before-gold-seed.png")
                 interact()
                 verify(lambda save: save.get("q010_seeds_collected") == [True, False, True], "Q010 collect gold seed")
