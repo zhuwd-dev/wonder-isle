@@ -537,6 +537,13 @@ def main() -> int:
                         page.keyboard.down(key)
                         page.wait_for_timeout(duration_ms)
                         page.keyboard.up(key)
+                    # The timed route can stop just beyond the rabbit's
+                    # interaction radius on slower browsers; align the player
+                    # before checking the final celebration interaction.
+                    for key, duration_ms in (("a", 200), ("s", 200)):
+                        page.keyboard.down(key)
+                        page.wait_for_timeout(duration_ms)
+                        page.keyboard.up(key)
                     # Finish with the same prominent right-thumb action the
                     # player sees after reaching the rabbit.
                     page.screenshot(path=str(artifact_dir / "web-q012-at-rabbit.png"), full_page=True)

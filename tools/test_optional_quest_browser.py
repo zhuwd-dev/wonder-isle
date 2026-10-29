@@ -170,7 +170,7 @@ def main() -> int:
                                 checks.append(label)
                                 print(f"PASS {label}", flush=True)
                                 return latest
-                            page.wait_for_timeout(500)
+                            page.wait_for_timeout(200)
                     raise AssertionError(f"{label}; latest save: {json.dumps(latest, ensure_ascii=False)}")
 
                 def drag(source: tuple[int, int], target: tuple[int, int], screenshot: str | None = None) -> None:
@@ -240,6 +240,10 @@ def main() -> int:
                 # one so each interaction visibly advances construction.
                 move("d", 1_360)
                 move("a", 200)
+                # Align with the birdhouse before walking south. At this
+                # viewport, the player can otherwise remain just outside its
+                # circular interaction radius while following a vertical path.
+                move("d", 180)
                 snap("web-q009-at-birdhouse.png")
                 delivery_save = approach_and_interact(
                     "s",
@@ -274,12 +278,10 @@ def main() -> int:
                 interact()
                 snap("web-q009-bird-greeting.png")
 
-                # Collect the three visible seeds across the west island.
-                # Go above the fox house before heading west, then descend to
-                # the red seed so its pickup radius does not overlap the gold.
-                move("w", 500)
+                # The birdhouse sits nearly level with the red seed. Head west
+                # in one straight run so frame timing cannot leave us above or
+                # below its interaction radius, and stop before the gold seed.
                 move("a", 1_800)
-                move("s", 600)
                 snap("web-q010-before-red-seed.png")
                 interact()
                 verify(lambda save: save.get("q010_seeds_collected") == [True, False, False], "Q010 collect red seed")
@@ -288,8 +290,8 @@ def main() -> int:
                 interact()
                 verify(lambda save: save.get("q010_seeds_collected") == [True, False, True], "Q010 collect gold seed")
                 snap("web-q010-after-gold-seed.png")
-                move("w", 500)
-                move("d", 1_315)
+                move("w", 350)
+                move("d", 1_135)
                 interact()
                 verify(lambda save: save.get("q010_seeds_collected") == [True, True, True], "Q010 collect all three seeds")
                 snap("web-q010-seeds-complete.png")
