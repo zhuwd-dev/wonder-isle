@@ -247,6 +247,11 @@ def main() -> int:
                 # back onto the west bank, then follow the shore south.
                 move("d", 180)
                 move("a", 200)
+                # The walk from the river lane can stop slightly west of the
+                # birdhouse because terrain blocks the diagonal approach.
+                # Align with the house before heading south to deliver.
+                move("d", 350)
+                move("a", 250)
                 snap("web-q009-at-birdhouse.png")
                 delivery_save = approach_and_interact(
                     "s",
@@ -293,8 +298,11 @@ def main() -> int:
                 )
                 move("d", 320)
                 snap("web-q010-before-gold-seed.png")
-                interact()
-                verify(lambda save: save.get("q010_seeds_collected") == [True, False, True], "Q010 collect gold seed")
+                approach_and_interact(
+                    "d",
+                    "Q010 collect gold seed",
+                    lambda save: save.get("q010_seeds_collected") == [True, False, True],
+                )
                 snap("web-q010-after-gold-seed.png")
                 move("w", 350)
                 move("d", 1_135)

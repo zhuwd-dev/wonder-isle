@@ -7,6 +7,7 @@ import base64
 import functools
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -97,6 +98,18 @@ def main() -> int:
 
                 page.wait_for_selector("canvas", timeout=60_000)
                 page.wait_for_timeout(3_000)
+                godot_config_match = re.search(r"const GODOT_CONFIG = (\{[^;]+\});", index_html)
+                if godot_config_match is None:
+                    raise AssertionError("Web export has no Godot startup configuration")
+                godot_config = json.loads(godot_config_match.group(1))
+                executable = godot_config.get("executable", "")
+                if not re.fullmatch(r"index-[a-f0-9]{12}", executable):
+                    raise AssertionError(f"Web game payloads are not cache-busted: {executable!r}")
+                for suffix in (".js", ".wasm", ".pck", ".audio.worklet.js", ".audio.position.worklet.js"):
+                    payload = build_dir / f"{executable}{suffix}"
+                    if not payload.is_file():
+                        raise AssertionError(f"Cache-busted game payload is missing: {payload.name}")
+
                 canvas_box = page.locator("canvas").first.bounding_box()
                 if canvas_box is None or canvas_box["width"] < 640 or canvas_box["height"] < 360:
                     raise AssertionError(f"Unexpected game canvas bounds: {canvas_box}")

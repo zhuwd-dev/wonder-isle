@@ -3091,7 +3091,6 @@ func _draw_hud(font: Font) -> void:
 	var panel_width := minf(580.0, maxf(350.0, size.x - 250.0))
 	var hud_rect := Rect2(18, 14, panel_width, 84)
 	_draw_soft_panel(hud_rect, Color("fff9ed", 0.91), Color("d5bd83", 0.92), 20, 0.15)
-	draw_rect(Rect2(hud_rect.position, Vector2(4, hud_rect.size.y)), Color("668e59"), true)
 	var emblem_center := Vector2(48, 43)
 	draw_circle(emblem_center + Vector2(0, 2), 16.0, Color(0.28, 0.35, 0.23, 0.13))
 	draw_circle(emblem_center, 14.0, Color("ecd18e"))
