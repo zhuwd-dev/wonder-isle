@@ -9,10 +9,15 @@ const TURTLE_ART: Texture2D = preload("res://assets/art/characters/turtle.png")
 const BIRD_ART: Texture2D = preload("res://assets/art/characters/bird.png")
 const ISLAND_BACKGROUND: Texture2D = preload("res://assets/art/environment/floating-garden-bg.jpg")
 const BRIDGE_ART: Texture2D = preload("res://assets/art/environment/woodland-footbridge.png")
+const PLANK_ART: Texture2D = preload("res://assets/art/props/weathered-planks.png")
+const CRATE_ART: Texture2D = preload("res://assets/art/props/island-wood-crate.png")
 const SAVE_PATH := "user://qxisland_stage2_save.json"
 const WORLD_SIZE := Vector2(1280, 720)
 const PLAYER_SPEED := 260.0
 const PLAYER_RADIUS := 18.0
+const CAMERA_MIN_ZOOM := 1.0
+const CAMERA_MAX_ZOOM := 1.65
+const CAMERA_ZOOM_STEP := 1.2
 const COLLECTION_RADIUS := 72.0
 const RIVER_RECT := Rect2(720, 110, 180, 530)
 const BRIDGE_RECT := Rect2(760, 330, 120, 90)
@@ -143,6 +148,11 @@ var game_state
 var save_path := SAVE_PATH
 var player_position := Vector2(250, 500)
 var player_facing := Vector2.RIGHT
+var camera_center := WORLD_SIZE * 0.5
+var camera_zoom := 1.0
+var camera_pan_active := false
+var camera_pan_touch_index := -1
+var camera_pan_last_screen := Vector2.ZERO
 var animation_time := 0.0
 var player_walk_phase := 0.0
 var player_is_moving := false
@@ -186,6 +196,9 @@ var message: String = "兔子需要帮助：收集 3 块木板，修好小桥。
 var message_color := Color("fff7cf")
 var restart_button: Button
 var interact_button: Button
+var zoom_out_button: Button
+var zoom_in_button: Button
+var zoom_reset_button: Button
 var interaction_button_label := ""
 var interaction_button_ready := false
 var interaction_button_tooltip := ""
@@ -239,7 +252,7 @@ func _physics_process(delta: float) -> void:
 		if _is_walkable(candidate):
 			player_position = candidate
 			player_is_moving = true
-			player_walk_phase = fposmod(player_walk_phase + delta * TAU * 2.3, TAU)
+			player_walk_phase = fposmod(player_walk_phase + delta * TAU * 3.2, TAU)
 	_update_interact_button()
 	_update_interact_button_animation()
 	queue_redraw()
@@ -277,7 +290,13 @@ func _tick_transient_message(delta: float) -> void:
 
 
 func _input(event: InputEvent) -> void:
-	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
+	if event is InputEventMouseButton:
+		if event.button_index in [MOUSE_BUTTON_WHEEL_UP, MOUSE_BUTTON_WHEEL_DOWN] and event.pressed:
+			_change_camera_zoom(CAMERA_ZOOM_STEP if event.button_index == MOUSE_BUTTON_WHEEL_UP else 1.0 / CAMERA_ZOOM_STEP, event.position)
+			get_viewport().set_input_as_handled()
+			return
+		if event.button_index != MOUSE_BUTTON_LEFT:
+			return
 		if event.pressed:
 			if _handle_interact_button_pointer(event.position, true):
 				return
@@ -286,8 +305,12 @@ func _input(event: InputEvent) -> void:
 				return
 			if _is_button_control_position(event.position):
 				return
-			_pointer_down(event.position)
+			_begin_world_pointer(event.position, -1)
 		else:
+			if camera_pan_active and camera_pan_touch_index == -1:
+				_end_camera_pan()
+				get_viewport().set_input_as_handled()
+				return
 			if _handle_interact_button_pointer(event.position, false):
 				return
 			if virtual_joystick_mouse_active:
@@ -296,27 +319,29 @@ func _input(event: InputEvent) -> void:
 				return
 			if _is_button_control_position(event.position):
 				return
-			_pointer_up(event.position)
+			_pointer_up(_screen_to_world(event.position), event.position)
 	elif event is InputEventMouseMotion:
 		if virtual_joystick_mouse_active:
 			_update_virtual_joystick(event.position)
+		elif camera_pan_active and camera_pan_touch_index == -1:
+			_update_camera_pan(event.position)
 		elif dragging_board >= 0:
-			drag_position = event.position
+			drag_position = _screen_to_world(event.position)
 			queue_redraw()
 		elif dragging_pond_stone >= 0:
-			pond_drag_position = event.position
+			pond_drag_position = _screen_to_world(event.position)
 			queue_redraw()
 		elif dragging_q005_plant >= 0:
-			q005_plant_drag_position = event.position
+			q005_plant_drag_position = _screen_to_world(event.position)
 			queue_redraw()
 		elif dragging_q006_decor >= 0:
-			q006_decor_drag_position = event.position
+			q006_decor_drag_position = _screen_to_world(event.position)
 			queue_redraw()
 		elif dragging_q008_path >= 0:
-			q008_path_drag_position = event.position
+			q008_path_drag_position = _screen_to_world(event.position)
 			queue_redraw()
 		elif dragging_q011_item >= 0:
-			q011_drag_position = event.position
+			q011_drag_position = _screen_to_world(event.position)
 			queue_redraw()
 	elif event is InputEventScreenTouch:
 		if event.pressed:
@@ -327,8 +352,12 @@ func _input(event: InputEvent) -> void:
 				return
 			if _is_button_control_position(event.position):
 				return
-			_pointer_down(event.position)
+			_begin_world_pointer(event.position, event.index)
 		else:
+			if camera_pan_active and camera_pan_touch_index == event.index:
+				_end_camera_pan()
+				get_viewport().set_input_as_handled()
+				return
 			if _handle_interact_button_pointer(event.position, false):
 				return
 			if virtual_joystick_active and not virtual_joystick_mouse_active and virtual_joystick_touch_index == event.index:
@@ -337,29 +366,157 @@ func _input(event: InputEvent) -> void:
 				return
 			if _is_button_control_position(event.position):
 				return
-			_pointer_up(event.position)
+			_pointer_up(_screen_to_world(event.position), event.position)
 	elif event is InputEventScreenDrag:
 		if virtual_joystick_active and not virtual_joystick_mouse_active and virtual_joystick_touch_index == event.index:
 			_update_virtual_joystick(event.position)
 			get_viewport().set_input_as_handled()
+		elif camera_pan_active and camera_pan_touch_index == event.index:
+			_update_camera_pan(event.position)
+			get_viewport().set_input_as_handled()
 		elif dragging_board >= 0:
-			drag_position = event.position
+			drag_position = _screen_to_world(event.position)
 			queue_redraw()
 		elif dragging_pond_stone >= 0:
-			pond_drag_position = event.position
+			pond_drag_position = _screen_to_world(event.position)
 			queue_redraw()
 		elif dragging_q005_plant >= 0:
-			q005_plant_drag_position = event.position
+			q005_plant_drag_position = _screen_to_world(event.position)
 			queue_redraw()
 		elif dragging_q006_decor >= 0:
-			q006_decor_drag_position = event.position
+			q006_decor_drag_position = _screen_to_world(event.position)
 			queue_redraw()
 		elif dragging_q008_path >= 0:
-			q008_path_drag_position = event.position
+			q008_path_drag_position = _screen_to_world(event.position)
 			queue_redraw()
 		elif dragging_q011_item >= 0:
-			q011_drag_position = event.position
+			q011_drag_position = _screen_to_world(event.position)
 			queue_redraw()
+
+
+func _begin_world_pointer(screen_position: Vector2, touch_index: int) -> void:
+	var world_position := _screen_to_world(screen_position)
+	if _can_begin_camera_pan(world_position, screen_position):
+		camera_pan_active = true
+		camera_pan_touch_index = touch_index
+		camera_pan_last_screen = screen_position
+		get_viewport().set_input_as_handled()
+		return
+	_pointer_down(world_position, screen_position)
+
+
+func _can_begin_camera_pan(world_position: Vector2, screen_position: Vector2) -> bool:
+	if camera_zoom <= CAMERA_MIN_ZOOM + 0.01:
+		return false
+	# Fixed trays remain usable while the world is zoomed. A drag beginning on
+	# one of these cards should always pick up its item, never move the map.
+	for board_id in range(GameState.BOARD_TOTAL):
+		if _inventory_rect(board_id).has_point(screen_position):
+			return false
+	for material_id in range(GameState.Q008_PATH_SLOT_TOTAL):
+		if _q008_path_material_rect(material_id).grow(12).has_point(screen_position):
+			return false
+	for decor_id in range(GameState.Q006_DECOR_TOTAL):
+		if _q006_decor_inventory_rect(decor_id).has_point(screen_position):
+			return false
+	for item_id in range(GameState.Q011_ITEM_TOTAL):
+		if _q011_item_inventory_rect(item_id).has_point(screen_position):
+			return false
+	for board_id in range(GameState.BOARD_TOTAL):
+		if not game_state.collected[board_id] and _board_rect(board_id).grow(12).has_point(world_position):
+			return false
+	if _can_start_pond_stage():
+		for stone_id in range(GameState.POND_STONE_TOTAL):
+			if not game_state.pond_stones_placed[stone_id] and _pond_stone_rect(stone_id).grow(12).has_point(world_position):
+				return false
+	if build_mode:
+		for decor_id in range(GameState.Q006_DECOR_TOTAL):
+			if game_state.q006_slot_for_decoration(decor_id) >= 0 and _q006_decor_rect(decor_id).grow(12).has_point(world_position):
+				return false
+	return true
+
+
+func _screen_to_world(screen_position: Vector2) -> Vector2:
+	return camera_center + (screen_position - _camera_viewport_size() * 0.5) / _camera_zoom_scale()
+
+
+func _world_to_screen(world_position: Vector2) -> Vector2:
+	return _camera_viewport_size() * 0.5 + (world_position - camera_center) * _camera_zoom_scale()
+
+
+func _camera_viewport_size() -> Vector2:
+	return Vector2(maxf(WORLD_SIZE.x, size.x), maxf(WORLD_SIZE.y, size.y))
+
+
+func _camera_fit_scale() -> float:
+	var viewport_size := _camera_viewport_size()
+	return minf(viewport_size.x / WORLD_SIZE.x, viewport_size.y / WORLD_SIZE.y)
+
+
+func _camera_zoom_scale() -> float:
+	return _camera_fit_scale() * camera_zoom
+
+
+func _camera_draw_offset() -> Vector2:
+	return _camera_viewport_size() * 0.5 - camera_center * _camera_zoom_scale()
+
+
+func _set_world_draw_transform() -> void:
+	draw_set_transform(_camera_draw_offset(), 0.0, Vector2.ONE * _camera_zoom_scale())
+
+
+func _restore_world_draw_transform() -> void:
+	_set_world_draw_transform()
+
+
+func _change_camera_zoom(factor: float, screen_anchor: Vector2) -> void:
+	var world_anchor := _screen_to_world(screen_anchor)
+	camera_zoom = clampf(camera_zoom * factor, CAMERA_MIN_ZOOM, CAMERA_MAX_ZOOM)
+	camera_center = world_anchor - (screen_anchor - _camera_viewport_size() * 0.5) / _camera_zoom_scale()
+	_clamp_camera_center()
+	if zoom_reset_button != null:
+		zoom_reset_button.text = "%d%%" % roundi(camera_zoom * 100.0)
+	queue_redraw()
+
+
+func _zoom_in() -> void:
+	_change_camera_zoom(CAMERA_ZOOM_STEP, _camera_viewport_size() * 0.5)
+
+
+func _zoom_out() -> void:
+	_change_camera_zoom(1.0 / CAMERA_ZOOM_STEP, _camera_viewport_size() * 0.5)
+
+
+func _reset_camera() -> void:
+	camera_zoom = CAMERA_MIN_ZOOM
+	camera_center = WORLD_SIZE * 0.5
+	if zoom_reset_button != null:
+		zoom_reset_button.text = "100%"
+	queue_redraw()
+
+
+func _clamp_camera_center() -> void:
+	var half_view := _camera_viewport_size() * 0.5 / _camera_zoom_scale()
+	camera_center.x = clampf(camera_center.x, half_view.x, WORLD_SIZE.x - half_view.x)
+	camera_center.y = clampf(camera_center.y, half_view.y, WORLD_SIZE.y - half_view.y)
+
+
+func _update_camera_pan(screen_position: Vector2) -> void:
+	var screen_delta := screen_position - camera_pan_last_screen
+	camera_center -= screen_delta / _camera_zoom_scale()
+	camera_pan_last_screen = screen_position
+	_clamp_camera_center()
+	queue_redraw()
+
+
+func _end_camera_pan() -> void:
+	camera_pan_active = false
+	camera_pan_touch_index = -1
+	camera_pan_last_screen = Vector2.ZERO
+
+
+func _is_world_drag_active() -> bool:
+	return dragging_board >= 0 or dragging_pond_stone >= 0 or dragging_q005_plant >= 0 or dragging_q006_decor >= 0 or dragging_q008_path >= 0 or dragging_q011_item >= 0
 
 
 func _handle_interact_button_pointer(position: Vector2, pressed: bool) -> bool:
@@ -378,7 +535,7 @@ func _is_virtual_joystick_hit(position: Vector2) -> bool:
 
 
 func _is_button_control_position(position: Vector2) -> bool:
-	for control in [restart_button, build_button, remove_decor_button, q011_button, interact_button]:
+	for control in [restart_button, build_button, remove_decor_button, q011_button, interact_button, zoom_out_button, zoom_in_button, zoom_reset_button]:
 		if control != null and control.visible and control.get_global_rect().has_point(position):
 			return true
 	return false
@@ -415,8 +572,9 @@ func _end_virtual_joystick() -> void:
 
 
 func _notification(what: int) -> void:
-	if what == NOTIFICATION_WM_WINDOW_FOCUS_OUT and (virtual_joystick_active or dragging_board >= 0 or dragging_pond_stone >= 0 or dragging_q005_plant >= 0 or dragging_q006_decor >= 0 or dragging_q008_path >= 0 or dragging_q011_item >= 0):
+	if what == NOTIFICATION_WM_WINDOW_FOCUS_OUT and (virtual_joystick_active or camera_pan_active or _is_world_drag_active()):
 		_end_virtual_joystick()
+		_end_camera_pan()
 		dragging_board = -1
 		drag_position = Vector2.ZERO
 		dragging_pond_stone = -1
@@ -485,6 +643,42 @@ func _create_controls() -> void:
 	add_child(restart_button)
 	_apply_button_style(restart_button, false)
 
+	zoom_out_button = Button.new()
+	zoom_out_button.name = "ZoomOutButton"
+	zoom_out_button.text = "−"
+	zoom_out_button.position = Vector2(648, 30)
+	zoom_out_button.size = Vector2(48, 44)
+	zoom_out_button.add_theme_font_size_override("font_size", 24)
+	zoom_out_button.add_theme_color_override("font_color", Color("425d48"))
+	zoom_out_button.tooltip_text = "缩小地图"
+	zoom_out_button.pressed.connect(_zoom_out)
+	add_child(zoom_out_button)
+	_apply_button_style(zoom_out_button, false)
+
+	zoom_in_button = Button.new()
+	zoom_in_button.name = "ZoomInButton"
+	zoom_in_button.text = "+"
+	zoom_in_button.position = Vector2(702, 30)
+	zoom_in_button.size = Vector2(48, 44)
+	zoom_in_button.add_theme_font_size_override("font_size", 24)
+	zoom_in_button.add_theme_color_override("font_color", Color("425d48"))
+	zoom_in_button.tooltip_text = "放大地图；放大后可拖动画布查看各处"
+	zoom_in_button.pressed.connect(_zoom_in)
+	add_child(zoom_in_button)
+	_apply_button_style(zoom_in_button, false)
+
+	zoom_reset_button = Button.new()
+	zoom_reset_button.name = "ZoomResetButton"
+	zoom_reset_button.text = "100%"
+	zoom_reset_button.position = Vector2(756, 30)
+	zoom_reset_button.size = Vector2(82, 44)
+	zoom_reset_button.add_theme_font_size_override("font_size", 14)
+	zoom_reset_button.add_theme_color_override("font_color", Color("425d48"))
+	zoom_reset_button.tooltip_text = "恢复全地图视野"
+	zoom_reset_button.pressed.connect(_reset_camera)
+	add_child(zoom_reset_button)
+	_apply_button_style(zoom_reset_button, false)
+
 	build_button = Button.new()
 	build_button.name = "BuildButton"
 	build_button.text = "建造"
@@ -545,6 +739,9 @@ func _layout_controls() -> void:
 	var visible_size := size
 	var layout_width := maxf(WORLD_SIZE.x, visible_size.x)
 	restart_button.position = Vector2(layout_width - 220.0, 24.0)
+	zoom_out_button.position = Vector2(layout_width - 632.0, 30.0)
+	zoom_in_button.position = Vector2(layout_width - 578.0, 30.0)
+	zoom_reset_button.position = Vector2(layout_width - 524.0, 30.0)
 	build_button.position = Vector2(layout_width - 420.0, 24.0)
 	remove_decor_button.position = Vector2(layout_width - 420.0, 88.0)
 	q011_button.position = Vector2(layout_width - 420.0, 88.0)
@@ -942,13 +1139,15 @@ func _should_show_q011_area_contents() -> bool:
 	return _can_show_q011_area() and (q011_mode or game_state.is_q011_complete())
 
 
-func _pointer_down(position: Vector2) -> void:
+func _pointer_down(position: Vector2, screen_position := Vector2(-1.0, -1.0)) -> void:
+	if screen_position.x < 0.0:
+		screen_position = position
 	if dragging_board >= 0 or dragging_pond_stone >= 0 or dragging_q005_plant >= 0 or dragging_q006_decor >= 0 or dragging_q008_path >= 0 or dragging_q011_item >= 0:
 		return
 	if q011_mode:
 		if _can_use_q011_mode():
 			for item_id in range(GameState.Q011_ITEM_TOTAL):
-				if game_state.q011_item_is_available(item_id) and _q011_item_inventory_rect(item_id).has_point(position):
+				if game_state.q011_item_is_available(item_id) and _q011_item_inventory_rect(item_id).has_point(screen_position):
 					dragging_q011_item = item_id
 					q011_drag_start_position = position
 					q011_drag_position = position
@@ -986,7 +1185,7 @@ func _pointer_down(position: Vector2) -> void:
 				queue_redraw()
 				return
 		for decor_id in range(GameState.Q006_DECOR_TOTAL):
-			if game_state.q006_decor_is_available(decor_id) and _q006_decor_inventory_rect(decor_id).has_point(position):
+			if game_state.q006_decor_is_available(decor_id) and _q006_decor_inventory_rect(decor_id).has_point(screen_position):
 				dragging_q006_decor = decor_id
 				q006_decor_drag_from_slot = -1
 				q006_decor_drag_position = position
@@ -1019,7 +1218,7 @@ func _pointer_down(position: Vector2) -> void:
 		for material_id in range(GameState.Q008_PATH_SLOT_TOTAL):
 			if not game_state.q008_path_material_is_available(material_id):
 				continue
-			if _q008_path_material_rect(material_id).grow(12).has_point(position):
+			if _q008_path_material_rect(material_id).grow(12).has_point(screen_position):
 				dragging_q008_path = material_id
 				q008_path_drag_position = position
 				message = "把路面石板拖到小路的空槽位。"
@@ -1033,7 +1232,7 @@ func _pointer_down(position: Vector2) -> void:
 			return
 
 	for board_id in range(GameState.BOARD_TOTAL):
-		if game_state.can_place_board(board_id) and _inventory_rect(board_id).has_point(position):
+		if game_state.can_place_board(board_id) and _inventory_rect(board_id).has_point(screen_position):
 			dragging_board = board_id
 			drag_position = position
 			message = "拖动木板到桥上的高亮位置，绿色时松开。"
@@ -1042,7 +1241,7 @@ func _pointer_down(position: Vector2) -> void:
 			return
 
 
-func _pointer_up(position: Vector2) -> void:
+func _pointer_up(position: Vector2, _screen_position := Vector2(-1.0, -1.0)) -> void:
 	if dragging_q011_item >= 0:
 		var item_id := dragging_q011_item
 		var target_slot := _q011_slot_at(position)
@@ -1657,6 +1856,7 @@ func _restart_game() -> void:
 	player_facing = Vector2.RIGHT
 	player_walk_phase = 0.0
 	player_is_moving = false
+	_reset_camera()
 	collect_sparkle_remaining = 0.0
 	q005_growth_remaining = 0.0
 	bridge_repair_remaining = 0.0
@@ -1748,11 +1948,17 @@ func _loaded_progress_message() -> String:
 
 func _draw() -> void:
 	var font := UI_FONT
+	draw_rect(Rect2(Vector2.ZERO, _camera_viewport_size()), VISUAL_PALETTE["sky"], true)
+	_set_world_draw_transform()
 	_draw_background()
 	_draw_world(font)
 	_draw_feedback_effects()
+	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+	_draw_interact_button_glow()
 	_draw_hud(font)
 	_draw_touch_hint(font)
+	if _is_world_drag_active():
+		_set_world_draw_transform()
 	if dragging_board >= 0:
 		_draw_board_at(drag_position, Color("fff2ad"), true)
 	elif dragging_pond_stone >= 0:
@@ -1765,14 +1971,11 @@ func _draw() -> void:
 		_draw_q008_path_paver_at(q008_path_drag_position, dragging_q008_path, true)
 	elif dragging_q011_item >= 0:
 		_draw_q011_item_at(q011_drag_position, dragging_q011_item, true)
+	if _is_world_drag_active():
+		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 
 func _draw_feedback_effects() -> void:
-	if interact_button != null and interact_button.visible and interaction_button_ready:
-		var button_center := interact_button.position + interact_button.size * 0.5
-		var button_pulse := 0.5 + sin(animation_time * 3.2) * 0.5
-		var glow_color := Color(0.58, 0.92, 0.61, 0.07 + button_pulse * 0.07)
-		_draw_ellipse_custom(button_center, Vector2(interact_button.size.x * 0.54 + button_pulse * 2.0, interact_button.size.y * 0.53 + button_pulse * 2.0), glow_color)
 	if collect_sparkle_remaining > 0.0:
 		var progress := 1.0 - collect_sparkle_remaining / COLLECT_SPARKLE_DURATION
 		var fade := 1.0 - progress
@@ -1814,6 +2017,15 @@ func _draw_feedback_effects() -> void:
 			var ring_progress := clampf(progress + float(ring_id) * 0.12, 0.0, 1.0)
 			var ring_color := Color(0.89, 0.99, 0.95, ripple_alpha * 0.52)
 			draw_arc(POND_RECT.get_center(), 14.0 + ring_progress * 70.0, 0.0, TAU, 42, ring_color, 2.0)
+
+
+func _draw_interact_button_glow() -> void:
+	if interact_button == null or not interact_button.visible or not interaction_button_ready:
+		return
+	var button_center := interact_button.position + interact_button.size * 0.5
+	var button_pulse := 0.5 + sin(animation_time * 3.2) * 0.5
+	var glow_color := Color(0.58, 0.92, 0.61, 0.07 + button_pulse * 0.07)
+	_draw_ellipse_custom(button_center, Vector2(interact_button.size.x * 0.54 + button_pulse * 2.0, interact_button.size.y * 0.53 + button_pulse * 2.0), glow_color)
 	if celebration_remaining > 0.0:
 		var celebration_progress := 1.0 - celebration_remaining / CELEBRATION_DURATION
 		var celebration_glow := 0.025 + (0.5 + sin(animation_time * 2.0) * 0.5) * 0.04
@@ -2066,9 +2278,9 @@ func _draw_bridge(font: Font) -> void:
 	# Painterly timber art carries the bridge; the three transparent deck gaps
 	# in the texture line up with the interactive repair slots below.
 	var bridge_draw_size := Vector2(164, 105)
-	draw_set_transform(BRIDGE_RECT.get_center(), 0.24, Vector2.ONE)
+	draw_set_transform(_world_to_screen(BRIDGE_RECT.get_center()), 0.24, Vector2.ONE * _camera_zoom_scale())
 	draw_texture_rect(BRIDGE_ART, Rect2(-bridge_draw_size * 0.5, bridge_draw_size), false)
-	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+	_restore_world_draw_transform()
 
 	for slot_id in range(BRIDGE_SLOTS.size()):
 		var slot: Rect2 = BRIDGE_SLOTS[slot_id]
@@ -2079,7 +2291,7 @@ func _draw_bridge(font: Font) -> void:
 			Vector2(slot.size.x * 0.5, slot.size.y * 0.5 - 2),
 			Vector2(-slot.size.x * 0.5, slot.size.y * 0.5),
 		])
-		draw_set_transform(slot.get_center(), 0.24, Vector2.ONE)
+		draw_set_transform(_world_to_screen(slot.get_center()), 0.24, Vector2.ONE * _camera_zoom_scale())
 		if installed:
 			draw_colored_polygon(plank_points, Color("d6a76c"))
 			draw_polyline(plank_points, Color("76533d"), 2.0, true)
@@ -2091,7 +2303,7 @@ func _draw_bridge(font: Font) -> void:
 			var target_fill: Color = VISUAL_PALETTE["target_valid_fill"] if _drag_target_slot_at(drag_position) == slot_id else Color("f7e7c2", 0.18)
 			draw_colored_polygon(plank_points, target_fill)
 			draw_polyline(plank_points, target_color, 1.5, true)
-		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+		_restore_world_draw_transform()
 		if dragging_board >= 0 and slot_id == dragging_board and game_state.can_place_board(dragging_board):
 			var target_color: Color = VISUAL_PALETTE["target_valid"] if _drag_target_slot_at(drag_position) == slot_id else VISUAL_PALETTE["target_idle"]
 			var target_fill: Color = VISUAL_PALETTE["target_valid_fill"] if _drag_target_slot_at(drag_position) == slot_id else VISUAL_PALETTE["target_idle_fill"]
@@ -2703,12 +2915,11 @@ func _draw_turtle(position: Vector2) -> void:
 	_draw_character_sprite(TURTLE_ART, position, 87.0, 0.39, 2.1, 1.0)
 
 func _draw_wood_at(position: Vector2) -> void:
-	_draw_ellipse_custom(position + Vector2(0, 17), Vector2(27, 7), Color(0.19, 0.13, 0.10, 0.16))
-	draw_rect(Rect2(position - Vector2(28, 16), Vector2(56, 30)), Color("bd814e"))
-	draw_rect(Rect2(position - Vector2(28, 16), Vector2(56, 30)), Color("704d35"), false, 3.0)
-	draw_line(position + Vector2(-13, -10), position + Vector2(-13, 9), Color("e2ad6b"), 2.0)
-	draw_line(position + Vector2(0, -10), position + Vector2(0, 9), Color("e2ad6b"), 2.0)
-	draw_line(position + Vector2(13, -10), position + Vector2(13, 9), Color("e2ad6b"), 2.0)
+	_draw_grass_cluster(position + Vector2(-34, 15), 0.42, 2)
+	_draw_grass_cluster(position + Vector2(34, 15), 0.36, 4)
+	_draw_ellipse_custom(position + Vector2(2, 18), Vector2(32, 8), Color(0.16, 0.22, 0.13, 0.16))
+	_draw_ellipse_custom(position + Vector2(0, 15), Vector2(25, 4), Color(0.28, 0.20, 0.13, 0.18))
+	draw_texture_rect(CRATE_ART, Rect2(position - Vector2(36, 27), Vector2(72, 54)), false)
 
 
 func _draw_fox(position: Vector2) -> void:
@@ -2722,20 +2933,48 @@ func _draw_boards(font: Font) -> void:
 
 
 func _draw_player() -> void:
-	_draw_character_sprite(MOUSE_ART, player_position, 68.0, 0.42, 0.0, 1.0)
+	var foot_anchor := player_position + Vector2(0.0, 36.0)
+	var stride := sin(player_walk_phase) if player_is_moving else 0.0
+	var foot_lift := absf(stride)
+	var planted := 1.0 - foot_lift
+	var shadow_alpha := 0.22 + planted * 0.14
+	_draw_ellipse_custom(foot_anchor + Vector2(2, 3), Vector2(21.0 - foot_lift * 4.0, 5.8 - foot_lift), Color(0.19, 0.15, 0.11, shadow_alpha))
+	_draw_ellipse_custom(foot_anchor + Vector2(0, 2), Vector2(14.0 - foot_lift * 2.5, 3.6 - foot_lift * 0.6), Color(0.28, 0.34, 0.19, 0.14 + planted * 0.07))
+	if player_is_moving:
+		var left_step := stride
+		var right_step := sin(player_walk_phase + PI)
+		var left_lift := maxf(left_step, 0.0) * 3.0
+		var right_lift := maxf(right_step, 0.0) * 3.0
+		var print_alpha := 0.12 + planted * 0.10
+		_draw_ellipse_custom(foot_anchor + Vector2(-7.0 + left_step * 4.0, -left_lift), Vector2(3.6, 2.0), Color(0.46, 0.31, 0.22, print_alpha))
+		_draw_ellipse_custom(foot_anchor + Vector2(7.0 + right_step * 4.0, -right_lift), Vector2(3.6, 2.0), Color(0.46, 0.31, 0.22, print_alpha))
+	var bob := absf(stride) * 6.0 if player_is_moving else 0.0
+	var breath := 1.0 + sin(animation_time * 2.2) * 0.003
+	var stride_squash := absf(stride) * 0.06 if player_is_moving else 0.0
+	var sprite_height := 68.0 * breath * (1.0 - stride_squash)
+	var sprite_width := sprite_height * MOUSE_ART.get_width() / MOUSE_ART.get_height()
+	var lean := player_facing.x * 0.04 + stride * 0.16 if player_is_moving else sin(animation_time * 1.15) * 0.004
+	var width_scale := 1.0 + (sin(player_walk_phase) * 0.07 if player_is_moving else 0.0)
+	var facing_scale := -1.0 if player_facing.x < -0.1 else 1.0
+	var body_sway := sin(player_walk_phase) * 1.4 if player_is_moving else 0.0
+	draw_set_transform(_world_to_screen(player_position + Vector2(body_sway, -bob)), lean, Vector2(width_scale * facing_scale * _camera_zoom_scale(), _camera_zoom_scale()))
+	draw_texture_rect(MOUSE_ART, Rect2(Vector2(-sprite_width * 0.5, -sprite_height * 0.42), Vector2(sprite_width, sprite_height)), false)
+	_restore_world_draw_transform()
 
 
 func _draw_character_sprite(texture: Texture2D, anchor: Vector2, height: float, face_ratio: float, phase: float, bob_amount: float) -> void:
-	var breath := 1.0 + sin(animation_time * 2.2 + phase) * 0.009
+	var breath := 1.0 + sin(animation_time * 2.2 + phase) * 0.004
 	var walk_sway := sin(player_walk_phase) * 0.018 if phase == 0.0 and player_is_moving else 0.0
-	var sway := sin(animation_time * 1.15 + phase) * 0.008 + walk_sway
+	var sway := sin(animation_time * 1.15 + phase) * 0.004 + walk_sway
 	var sprite_height := height * breath
 	var sprite_width := sprite_height * texture.get_width() / texture.get_height()
-	var walk_bob := absf(sin(player_walk_phase)) * 2.5 if phase == 0.0 and player_is_moving else 0.0
-	var bob := _character_bob(phase, bob_amount) - walk_bob
-	draw_set_transform(anchor + Vector2(0, bob), sway, Vector2(breath, breath))
+	var bob := _character_bob(phase, bob_amount * 0.35)
+	var foot_y := anchor.y + height * (1.0 - face_ratio) - 2.0
+	_draw_ellipse_custom(Vector2(anchor.x + 2.0, foot_y + 2.5), Vector2(height * 0.31, maxf(4.0, height * 0.055)), Color(0.16, 0.20, 0.13, 0.20))
+	_draw_ellipse_custom(Vector2(anchor.x, foot_y + 1.5), Vector2(height * 0.23, maxf(2.5, height * 0.032)), Color(0.28, 0.34, 0.19, 0.12))
+	draw_set_transform(_world_to_screen(anchor + Vector2(0, bob)), sway, Vector2(breath * _camera_zoom_scale(), breath * _camera_zoom_scale()))
 	draw_texture_rect(texture, Rect2(Vector2(-sprite_width * 0.5, -sprite_height * face_ratio), Vector2(sprite_width, sprite_height)), false)
-	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+	_restore_world_draw_transform()
 
 func _draw_panel(rect: Rect2, fill: Color, border: Color, radius: int) -> void:
 	var cache_key := "%s|%s|%d" % [str(fill), str(border), radius]
@@ -2808,14 +3047,34 @@ func _draw_board_at(position: Vector2, color: Color, lifted: bool) -> void:
 	var rect := Rect2(position - Vector2(28, 14), Vector2(56, 28))
 	if lifted:
 		rect.position -= Vector2(0, 14)
-	_draw_ellipse_custom(rect.position + Vector2(rect.size.x / 2.0, rect.size.y + 7), Vector2(34, 7), Color(0.19, 0.13, 0.10, 0.16))
-	if lifted:
-		draw_rect(rect.grow(5), VISUAL_PALETTE["target_idle"], false, 3.0)
-	draw_rect(rect, color)
-	draw_rect(rect, VISUAL_PALETTE["board_outline"], false, 3.0)
-	draw_line(rect.position + Vector2(10, 5), rect.position + Vector2(10, rect.size.y - 5), Color("9b6d43"), 2.0)
-	draw_line(rect.position + Vector2(24, 5), rect.position + Vector2(24, rect.size.y - 5), Color("9b6d43"), 2.0)
-	draw_line(rect.position + Vector2(4, 6), rect.position + Vector2(rect.size.x - 4, 6), Color("efc57d"), 2.0)
+	if lifted or color == VISUAL_PALETTE["board"]:
+		# Keep the contact shadow attached to the ground even while the plank is
+		# lifted by the drag animation. Grass tucks its edges into the landscape.
+		_draw_grass_cluster(position + Vector2(-38, 18), 0.34, 1)
+		_draw_grass_cluster(position + Vector2(38, 18), 0.32, 3)
+		_draw_ellipse_custom(position + Vector2(2, 19), Vector2(34, 7), Color(0.16, 0.22, 0.13, 0.17))
+		_draw_ellipse_custom(position + Vector2(1, 15), Vector2(25, 3.5), Color(0.25, 0.18, 0.12, 0.20))
+		if lifted:
+			draw_rect(rect.grow(16), VISUAL_PALETTE["target_idle"], false, 3.0)
+		var plank_position := position - Vector2(0, 11) if lifted else position
+		draw_texture_rect(PLANK_ART, Rect2(plank_position - Vector2(40, 27), Vector2(80, 54)), false)
+		return
+	var side_face := PackedVector2Array([
+		rect.position + Vector2(1, rect.size.y - 7), rect.position + Vector2(rect.size.x - 1, rect.size.y - 9),
+		rect.position + Vector2(rect.size.x, rect.size.y - 1), rect.position + Vector2(2, rect.size.y),
+	])
+	draw_colored_polygon(side_face, Color("82583b"))
+	var top_face := PackedVector2Array([
+		rect.position + Vector2(1, 1), rect.position + Vector2(rect.size.x - 4, 0),
+		rect.position + Vector2(rect.size.x - 1, rect.size.y - 9), rect.position + Vector2(2, rect.size.y - 7),
+	])
+	draw_colored_polygon(top_face, color)
+	var outline := PackedVector2Array(top_face)
+	outline.append(top_face[0])
+	draw_polyline(outline, VISUAL_PALETTE["board_outline"], 2.5, true)
+	draw_line(rect.position + Vector2(10, 5), rect.position + Vector2(10, rect.size.y - 9), Color("956744"), 2.0, true)
+	draw_line(rect.position + Vector2(24, 4), rect.position + Vector2(24, rect.size.y - 10), Color("956744"), 2.0, true)
+	draw_line(rect.position + Vector2(5, 5), rect.position + Vector2(rect.size.x - 8, 4), Color("f2d096", 0.80), 1.5, true)
 
 
 func _draw_pond_stone_at(position: Vector2, color: Color, lifted: bool) -> void:

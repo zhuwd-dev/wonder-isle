@@ -125,6 +125,28 @@ def main() -> int:
                 )
                 page.screenshot(path=str(screenshot_path), full_page=True)
 
+                # Capture an actual moving frame so the player walk animation is
+                # checked in the browser, not only by inspecting its draw code.
+                page.keyboard.down("d")
+                page.wait_for_timeout(450)
+                page.screenshot(path=str(artifact_dir / "web-player-walking.png"), full_page=True)
+                page.keyboard.up("d")
+
+                # Check the actual canvas zoom controls and drag-pan path. The
+                # full-map control must restore the default framing afterward.
+                page.mouse.click(726, 52)
+                page.wait_for_timeout(300)
+                page.screenshot(path=str(artifact_dir / "web-map-zoomed.png"), full_page=True)
+                page.mouse.move(600, 420)
+                page.mouse.down()
+                page.mouse.move(660, 450, steps=5)
+                page.mouse.up()
+                page.wait_for_timeout(250)
+                page.screenshot(path=str(artifact_dir / "web-map-panned.png"), full_page=True)
+                page.mouse.click(797, 52)
+                page.wait_for_timeout(250)
+                page.screenshot(path=str(artifact_dir / "web-map-full-view-reset.png"), full_page=True)
+
                 # Exercise the virtual joystick and landscape touch layout before the
                 # story walkthrough, then restart the browser page at its desktop size.
                 page.mouse.move(96, 622)
