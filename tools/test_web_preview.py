@@ -453,10 +453,7 @@ def main() -> int:
                         # Approach the first bloom from the south-west, then
                         # walk east from flower to flower. Keep each pickup a
                         # separate right-thumb action so the test matches play.
-                        for key, duration_ms in (("d", 100), ("w", 120)):
-                            page.keyboard.down(key)
-                            page.wait_for_timeout(duration_ms)
-                            page.keyboard.up(key)
+                        navigator.go(("x", 1028), ("y", 480))
                         page.mouse.click(1_214, 662)
                         page.wait_for_timeout(180)
                         page.screenshot(path=str(turtle_collection_screenshot_path), full_page=True)
@@ -487,22 +484,15 @@ def main() -> int:
 
                         for harvest_step in range(1, 3):
                             expected_count = harvest_step + 1
-                            # Reach the next flower with one short step. For
-                            # the final flower, use the save flags to choose
-                            # which side of the bed still needs harvesting.
-                            if harvest_step == 1:
-                                direction = "d"
-                            else:
-                                remaining_id = next(
-                                    index for index, collected in enumerate(plant_flags) if not collected
-                                )
-                                direction = "d" if remaining_id == 2 else "a"
+                            # Walk to the next uncollected flower with real keys;
+                            # the saved flags choose the target, not elapsed time.
+                            remaining_id = next(
+                                index for index, collected in enumerate(plant_flags) if not collected
+                            )
                             attempts = 1 if harvest_step == 1 else 5
                             harvested_save = {}
                             for _attempt in range(attempts):
-                                page.keyboard.down(direction)
-                                page.wait_for_timeout(150 if harvest_step == 1 else 100)
-                                page.keyboard.up(direction)
+                                navigator.go(("x", (1028, 1080, 1132)[remaining_id]), ("y", 480))
                                 page.mouse.click(1_214, 662)
                                 page.wait_for_timeout(500)
                                 for _ in range(24 if harvest_step == 1 else 6):
@@ -560,10 +550,7 @@ def main() -> int:
                             raise AssertionError("A full harvest must still wait for the turtle delivery interaction")
                         page.screenshot(path=str(turtle_bouquet_screenshot_path), full_page=True)
 
-                        for key, duration_ms in (("d", 500), ("w", 700)):
-                            page.keyboard.down(key)
-                            page.wait_for_timeout(duration_ms)
-                            page.keyboard.up(key)
+                        navigator.go(("x", 1130), ("y", 320))
                         page.screenshot(path=str(artifact_dir / "web-q005-at-turtle.png"), full_page=True)
                         page.mouse.click(1_214, 662)
                         page.wait_for_timeout(180)
