@@ -1,6 +1,7 @@
 extends Control
 
 const GameState = preload("res://scripts/game/game_state.gd")
+const SceneArt = preload("res://scripts/visual/scene_art_registry.gd")
 const UI_FONT = preload("res://assets/fonts/NotoSansCJKsc-GameSubset.otf")
 const MOUSE_ART: Texture2D = preload("res://assets/art/characters/mouse.png")
 const RABBIT_ART: Texture2D = preload("res://assets/art/characters/rabbit.png")
@@ -14,16 +15,22 @@ const CRATE_ART: Texture2D = preload("res://assets/art/props/island-wood-crate.p
 const SAVE_PATH := "user://qxisland_stage2_save.json"
 const WORLD_SIZE := Vector2(1280, 720)
 const PLAYER_SPEED := 260.0
-const PLAYER_RADIUS := 18.0
+const PLAYER_FOOT_OFFSET := Vector2(0, 36)
+const PLAYER_COLLISION_HALF_WIDTH := 9.0
+const PLAYER_COLLISION_HALF_DEPTH := 5.0
+const PLAYER_MOVE_SUBSTEP := 4.0
 const CAMERA_MIN_ZOOM := 1.0
 const CAMERA_MAX_ZOOM := 1.65
 const CAMERA_ZOOM_STEP := 1.2
 const COLLECTION_RADIUS := 72.0
-const RIVER_RECT := Rect2(720, 110, 180, 530)
+const RIVER_RECT := Rect2(700, 110, 220, 530)
 const BRIDGE_RECT := Rect2(760, 330, 120, 90)
-# The walkable lane includes both bridge approaches, so the player's collision
-# box can reach the bridge before it intersects the river.
-const BRIDGE_PASSAGE_RECT := Rect2(702, 330, 216, 90)
+const BRIDGE_CENTER := Vector2(820, 375)
+const BRIDGE_ROTATION := 0.24
+const BRIDGE_COLLISION_ROTATION := -0.035
+const BRIDGE_WALK_HALF_LENGTH := 110.0
+const BRIDGE_WALK_HALF_WIDTH := 26.0
+const BRIDGE_DRAW_SIZE := Vector2(210, 136)
 const BOARD_POSITIONS := [Vector2(350, 250), Vector2(475, 500), Vector2(625, 555)]
 const SEED_POSITION := Vector2(1010, 350)
 const FLOWERBED_POSITION := Vector2(1080, 480)
@@ -31,9 +38,9 @@ const FLOWERBED_INTERACTION_RADIUS := 76.0
 const POND_RECT := Rect2(936, 270, 190, 130)
 const POND_STONE_POSITIONS := [Vector2(945, 470), Vector2(1170, 340), Vector2(1170, 520)]
 const POND_SLOTS := [
-	Rect2(970, 350, 40, 30),
-	Rect2(1018, 350, 40, 30),
-	Rect2(1066, 350, 40, 30),
+	Rect2(970, 325, 40, 30),
+	Rect2(1020, 338, 40, 30),
+	Rect2(1062, 325, 40, 30),
 ]
 const Q005_WATERING_POINT_POSITION := Vector2(976, 520)
 # Give the small garden actions a forgiving touch target at browser/mobile scale.
@@ -53,6 +60,7 @@ const HOUSE_POSITION := Vector2(520, 500)
 const HOUSE_INTERACTION_RADIUS := 88.0
 const HOUSE_RECT := Rect2(448, 442, 144, 116)
 const Q012_RABBIT_POSITION := Vector2(592, 226)
+const RABBIT_HOME_POSITION := Vector2(430, 195)
 const Q006_DECOR_PLOT_RECT := Rect2(928, 544, 288, 30)
 const Q006_DECOR_BOUNDS := Rect2(916, 148, 306, 484)
 const Q006_DECOR_ISLAND_POLYGON := [
@@ -76,7 +84,7 @@ const Q008_PATH_SLOT_RECTS := [
 	Rect2(592, 362, 56, 26),
 	Rect2(652, 362, 56, 26),
 ]
-const Q009_MATERIAL_POSITIONS := [Vector2(240, 570), Vector2(300, 300), Vector2(680, 580)]
+const Q009_MATERIAL_POSITIONS := [Vector2(240, 570), Vector2(300, 300), Vector2(650, 510)]
 const Q009_MATERIAL_LABELS := ["树枝", "羽毛", "草绳"]
 const Q009_BIRDHOUSE_POSITION := Vector2(650, 500)
 const Q009_BIRD_POSITION := Vector2(650, 465)
@@ -98,7 +106,7 @@ const JOYSTICK_RADIUS := 54.0
 const JOYSTICK_DEADZONE := 0.14
 const JOYSTICK_HIT_RADIUS := 88.0
 const INTERACT_BUTTON_SIZE := Vector2(116, 92)
-const INVENTORY_PANEL_RECT := Rect2(890, 558, 264, 138)
+const INVENTORY_PANEL_RECT := Rect2(890, 574, 264, 112)
 const INVENTORY_ORIGIN := Vector2(904, 624)
 const INVENTORY_STEP := 80.0
 const COLLECT_SPARKLE_DURATION := 0.72
@@ -108,9 +116,9 @@ const CELEBRATION_DURATION := 2.4
 const TASK_TRANSITION_DURATION := 1.15
 const POND_INTERACTION_RADIUS := 112.0
 const BRIDGE_SLOTS := [
-	Rect2(789, 367, 16, 18),
-	Rect2(806, 366, 16, 18),
-	Rect2(828, 367, 16, 18),
+	Rect2(785, 362, 24, 14),
+	Rect2(819, 357, 24, 14),
+	Rect2(851, 354, 24, 14),
 ]
 const VISUAL_PALETTE := {
 	"sky": Color("c8edf0"),
@@ -156,6 +164,9 @@ var camera_pan_last_screen := Vector2.ZERO
 var animation_time := 0.0
 var player_walk_phase := 0.0
 var player_is_moving := false
+var test_telemetry_enabled := false
+var test_telemetry_elapsed := 0.0
+var build_revision := "local"
 var collect_sparkle_remaining := 0.0
 var collect_sparkle_position := Vector2.ZERO
 var collect_sparkle_color := Color("fff1a8")
@@ -194,7 +205,15 @@ var message: String = "兔子需要帮助：收集 3 块木板，修好小桥。
 		message = value
 		message_remaining_seconds = 4.0 if not message.is_empty() else 0.0
 var message_color := Color("fff7cf")
-var restart_button: Button
+var menu_button: Button
+var task_card_button: Button
+var game_menu_popup: PopupMenu
+var restart_confirmation: Control
+var restart_confirmation_panel: PanelContainer
+var restart_cancel_button: Button
+var restart_confirm_button: Button
+var task_details_open := false
+var rabbit_dialog_open := true
 var interact_button: Button
 var zoom_out_button: Button
 var zoom_in_button: Button
@@ -208,9 +227,37 @@ var q011_button: Button
 var panel_style_cache: Dictionary = {}
 var soft_panel_style_cache: Dictionary = {}
 var slot_card_style: StyleBoxFlat
+var left_island_walk_polygon := PackedVector2Array([
+	Vector2(58, 204), Vector2(82, 174), Vector2(132, 151), Vector2(224, 141),
+	Vector2(350, 143), Vector2(486, 147), Vector2(590, 159), Vector2(651, 180),
+	Vector2(682, 211), Vector2(710, 258), Vector2(714, 402), Vector2(704, 469), Vector2(686, 512),
+	Vector2(658, 548), Vector2(634, 572), Vector2(601, 586), Vector2(548, 595),
+	Vector2(451, 596), Vector2(350, 593), Vector2(250, 591), Vector2(170, 578),
+	Vector2(116, 550), Vector2(76, 515), Vector2(54, 470), Vector2(43, 410),
+	Vector2(42, 326), Vector2(46, 250),
+])
+var right_island_walk_polygon := PackedVector2Array([
+	Vector2(920, 197), Vector2(944, 170), Vector2(980, 150), Vector2(1056, 143),
+	Vector2(1137, 149), Vector2(1192, 171), Vector2(1222, 211), Vector2(1232, 280),
+	Vector2(1230, 458), Vector2(1211, 514), Vector2(1182, 552), Vector2(1146, 577),
+	Vector2(1080, 589), Vector2(1010, 586), Vector2(958, 573), Vector2(926, 548),
+	Vector2(908, 512), Vector2(903, 288),
+])
+var pond_collision_polygon := PackedVector2Array([
+	Vector2(952, 319), Vector2(973, 308), Vector2(1001, 303), Vector2(1032, 300),
+	Vector2(1065, 303), Vector2(1090, 309), Vector2(1110, 321), Vector2(1118, 340),
+	Vector2(1110, 360), Vector2(1091, 376), Vector2(1063, 386), Vector2(1035, 390),
+	Vector2(1007, 386), Vector2(978, 376), Vector2(957, 360), Vector2(947, 340),
+])
 
 
 func _ready() -> void:
+	test_telemetry_enabled = "--test-telemetry" in OS.get_cmdline_user_args()
+	for arg in OS.get_cmdline_user_args():
+		if str(arg).begins_with("--build-revision="):
+			var revision := str(arg).trim_prefix("--build-revision=")
+			if revision == "local" or (revision.length() == 7 and revision.is_valid_hex_number(false)):
+				build_revision = revision
 	var ui_theme := Theme.new()
 	ui_theme.default_font = UI_FONT
 	theme = ui_theme
@@ -218,6 +265,7 @@ func _ready() -> void:
 	_configure_runtime_inputs()
 	_configure_save_path()
 	_load_game()
+	rabbit_dialog_open = not game_state.is_complete()
 	_create_controls()
 	get_viewport().size_changed.connect(_layout_controls)
 	_layout_controls()
@@ -248,13 +296,16 @@ func _physics_process(delta: float) -> void:
 		direction = direction.normalized()
 	if direction != Vector2.ZERO:
 		player_facing = direction
-		var candidate := player_position + direction * PLAYER_SPEED * delta
-		if _is_walkable(candidate):
-			player_position = candidate
-			player_is_moving = true
+		player_is_moving = _move_player_safely(direction * PLAYER_SPEED * delta)
+		if player_is_moving:
 			player_walk_phase = fposmod(player_walk_phase + delta * TAU * 3.2, TAU)
 	_update_interact_button()
 	_update_interact_button_animation()
+	if test_telemetry_enabled:
+		test_telemetry_elapsed += delta
+		if test_telemetry_elapsed >= 0.033:
+			test_telemetry_elapsed = 0.0
+			print("TEST_POSITION ", JSON.stringify({"x": player_position.x, "y": player_position.y, "action": interaction_button_label, "ready": interaction_button_ready, "bridge": game_state.bridge_repaired, "q005_completed": game_state.is_q005_complete(), "build_revision": build_revision}))
 	queue_redraw()
 
 
@@ -290,6 +341,10 @@ func _tick_transient_message(delta: float) -> void:
 
 
 func _input(event: InputEvent) -> void:
+	# Let modal menu and confirmation controls receive pointer/key input without
+	# forwarding the same event into world movement or collection logic.
+	if (game_menu_popup != null and game_menu_popup.visible) or (restart_confirmation != null and restart_confirmation.visible):
+		return
 	if event is InputEventMouseButton:
 		if event.button_index in [MOUSE_BUTTON_WHEEL_UP, MOUSE_BUTTON_WHEEL_DOWN] and event.pressed:
 			_change_camera_zoom(CAMERA_ZOOM_STEP if event.button_index == MOUSE_BUTTON_WHEEL_UP else 1.0 / CAMERA_ZOOM_STEP, event.position)
@@ -396,6 +451,9 @@ func _input(event: InputEvent) -> void:
 
 func _begin_world_pointer(screen_position: Vector2, touch_index: int) -> void:
 	var world_position := _screen_to_world(screen_position)
+	if _handle_rabbit_dialog_pointer(world_position):
+		get_viewport().set_input_as_handled()
+		return
 	if _can_begin_camera_pan(world_position, screen_position):
 		camera_pan_active = true
 		camera_pan_touch_index = touch_index
@@ -403,6 +461,21 @@ func _begin_world_pointer(screen_position: Vector2, touch_index: int) -> void:
 		get_viewport().set_input_as_handled()
 		return
 	_pointer_down(world_position, screen_position)
+
+
+func _handle_rabbit_dialog_pointer(world_position: Vector2) -> bool:
+	if not _should_show_rabbit_area():
+		return false
+	var dialog_rect := _rabbit_dialog_rect()
+	if rabbit_dialog_open and dialog_rect.has_point(world_position):
+		rabbit_dialog_open = false
+		queue_redraw()
+		return true
+	if world_position.distance_to(_rabbit_position()) <= 58.0:
+		rabbit_dialog_open = not rabbit_dialog_open
+		queue_redraw()
+		return true
+	return false
 
 
 func _can_begin_camera_pan(world_position: Vector2, screen_position: Vector2) -> bool:
@@ -535,7 +608,7 @@ func _is_virtual_joystick_hit(position: Vector2) -> bool:
 
 
 func _is_button_control_position(position: Vector2) -> bool:
-	for control in [restart_button, build_button, remove_decor_button, q011_button, interact_button, zoom_out_button, zoom_in_button, zoom_reset_button]:
+	for control in [menu_button, task_card_button, build_button, remove_decor_button, q011_button, interact_button, zoom_out_button, zoom_in_button, zoom_reset_button]:
 		if control != null and control.visible and control.get_global_rect().has_point(position):
 			return true
 	return false
@@ -631,17 +704,113 @@ func _bind_keys(action_name: String, key_codes: Array) -> void:
 
 
 func _create_controls() -> void:
-	restart_button = Button.new()
-	restart_button.name = "RestartButton"
-	restart_button.text = "重新开始"
-	restart_button.position = Vector2(1060, 24)
-	restart_button.size = Vector2(180, 56)
-	restart_button.add_theme_font_size_override("font_size", 22)
-	restart_button.add_theme_color_override("font_color", Color("253b32"))
-	restart_button.tooltip_text = "清除本关进度并重新开始"
-	restart_button.pressed.connect(_restart_game)
-	add_child(restart_button)
-	_apply_button_style(restart_button, false)
+	menu_button = Button.new()
+	menu_button.name = "MenuButton"
+	menu_button.text = "菜单"
+	menu_button.position = Vector2(1168, 20)
+	menu_button.size = Vector2(96, 48)
+	menu_button.add_theme_font_size_override("font_size", 18)
+	menu_button.add_theme_color_override("font_color", Color("253b32"))
+	menu_button.tooltip_text = "打开游戏菜单"
+	menu_button.pressed.connect(_open_game_menu)
+	add_child(menu_button)
+	_apply_button_style(menu_button, false)
+
+	task_card_button = Button.new()
+	task_card_button.name = "TaskCardButton"
+	task_card_button.position = Vector2(18, 14)
+	task_card_button.size = Vector2(360, 68)
+	task_card_button.tooltip_text = "点击查看当前任务说明"
+	task_card_button.focus_mode = Control.FOCUS_NONE
+	task_card_button.pressed.connect(_toggle_task_details)
+	add_child(task_card_button)
+	var empty_style := StyleBoxEmpty.new()
+	for state in ["normal", "hover", "pressed", "focus", "disabled"]:
+		task_card_button.add_theme_stylebox_override(state, empty_style)
+
+	game_menu_popup = PopupMenu.new()
+	game_menu_popup.name = "GameMenuPopup"
+	game_menu_popup.add_item("继续探索", 0)
+	game_menu_popup.add_separator()
+	game_menu_popup.add_item("重新开始…", 1)
+	game_menu_popup.add_separator()
+	game_menu_popup.add_item("版本 " + build_revision, 2)
+	game_menu_popup.set_item_disabled(game_menu_popup.item_count - 1, true)
+	game_menu_popup.id_pressed.connect(_on_game_menu_item_pressed)
+	add_child(game_menu_popup)
+	var menu_panel_style := StyleBoxFlat.new()
+	menu_panel_style.bg_color = Color("fff9ed")
+	menu_panel_style.border_color = Color("d5bd83")
+	menu_panel_style.set_border_width_all(2)
+	menu_panel_style.set_corner_radius_all(14)
+	menu_panel_style.shadow_color = Color(0.12, 0.18, 0.12, 0.22)
+	menu_panel_style.shadow_size = 8
+	game_menu_popup.add_theme_stylebox_override("panel", menu_panel_style)
+	game_menu_popup.add_theme_color_override("font_color", Color("294438"))
+	game_menu_popup.add_theme_color_override("font_hover_color", Color("294438"))
+	game_menu_popup.add_theme_color_override("font_separator_color", Color("9b8455"))
+
+	restart_confirmation = Control.new()
+	restart_confirmation.name = "RestartConfirmation"
+	restart_confirmation.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	restart_confirmation.mouse_filter = Control.MOUSE_FILTER_STOP
+	restart_confirmation.visible = false
+	restart_confirmation.z_index = 100
+	add_child(restart_confirmation)
+	var confirmation_dimmer := ColorRect.new()
+	confirmation_dimmer.name = "Dimmer"
+	confirmation_dimmer.color = Color(0.08, 0.16, 0.12, 0.52)
+	confirmation_dimmer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	confirmation_dimmer.mouse_filter = Control.MOUSE_FILTER_STOP
+	restart_confirmation.add_child(confirmation_dimmer)
+	restart_confirmation_panel = PanelContainer.new()
+	restart_confirmation_panel.name = "ConfirmationCard"
+	restart_confirmation_panel.position = Vector2((WORLD_SIZE.x - 460.0) * 0.5, (WORLD_SIZE.y - 220.0) * 0.5)
+	restart_confirmation_panel.size = Vector2(460, 220)
+	restart_confirmation.add_child(restart_confirmation_panel)
+	var confirmation_panel_style := StyleBoxFlat.new()
+	confirmation_panel_style.bg_color = Color("fff9ed")
+	confirmation_panel_style.border_color = Color("d5bd83")
+	confirmation_panel_style.set_border_width_all(2)
+	confirmation_panel_style.set_corner_radius_all(20)
+	confirmation_panel_style.shadow_color = Color(0.12, 0.18, 0.12, 0.28)
+	confirmation_panel_style.shadow_size = 12
+	confirmation_panel_style.content_margin_left = 24.0
+	confirmation_panel_style.content_margin_right = 24.0
+	confirmation_panel_style.content_margin_top = 20.0
+	confirmation_panel_style.content_margin_bottom = 20.0
+	restart_confirmation_panel.add_theme_stylebox_override("panel", confirmation_panel_style)
+	var confirmation_content := VBoxContainer.new()
+	confirmation_content.add_theme_constant_override("separation", 10)
+	restart_confirmation_panel.add_child(confirmation_content)
+	var confirmation_title := Label.new()
+	confirmation_title.text = "重新开始？"
+	confirmation_title.add_theme_font_size_override("font_size", 24)
+	confirmation_title.add_theme_color_override("font_color", Color("294438"))
+	confirmation_content.add_child(confirmation_title)
+	var confirmation_text := Label.new()
+	confirmation_text.text = "当前任务进度会清零。确定要从头开始吗？"
+	confirmation_text.add_theme_font_size_override("font_size", 17)
+	confirmation_text.add_theme_color_override("font_color", Color("536b57"))
+	confirmation_text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	confirmation_text.custom_minimum_size = Vector2(400, 44)
+	confirmation_content.add_child(confirmation_text)
+	var confirmation_actions := HBoxContainer.new()
+	confirmation_actions.alignment = BoxContainer.ALIGNMENT_END
+	confirmation_actions.add_theme_constant_override("separation", 12)
+	confirmation_content.add_child(confirmation_actions)
+	restart_cancel_button = Button.new()
+	restart_cancel_button.text = "继续探索"
+	restart_cancel_button.custom_minimum_size = Vector2(132, 46)
+	restart_cancel_button.pressed.connect(_cancel_restart_confirmation)
+	confirmation_actions.add_child(restart_cancel_button)
+	_apply_button_style(restart_cancel_button, false)
+	restart_confirm_button = Button.new()
+	restart_confirm_button.text = "重新开始"
+	restart_confirm_button.custom_minimum_size = Vector2(132, 46)
+	restart_confirm_button.pressed.connect(_restart_game)
+	confirmation_actions.add_child(restart_confirm_button)
+	_apply_button_style(restart_confirm_button, true)
 
 	zoom_out_button = Button.new()
 	zoom_out_button.name = "ZoomOutButton"
@@ -734,11 +903,13 @@ func _create_controls() -> void:
 
 
 func _layout_controls() -> void:
-	if restart_button == null:
+	if menu_button == null:
 		return
 	var visible_size := size
 	var layout_width := maxf(WORLD_SIZE.x, visible_size.x)
-	restart_button.position = Vector2(layout_width - 220.0, 24.0)
+	if restart_confirmation_panel != null:
+		restart_confirmation_panel.position = (visible_size - restart_confirmation_panel.size) * 0.5
+	menu_button.position = Vector2(layout_width - 112.0, 20.0)
 	zoom_out_button.position = Vector2(layout_width - 632.0, 30.0)
 	zoom_in_button.position = Vector2(layout_width - 578.0, 30.0)
 	zoom_reset_button.position = Vector2(layout_width - 524.0, 30.0)
@@ -747,8 +918,38 @@ func _layout_controls() -> void:
 	q011_button.position = Vector2(layout_width - 420.0, 88.0)
 	interact_button.position = Vector2(layout_width - INTERACT_BUTTON_SIZE.x - 8.0, maxf(8.0, visible_size.y - INTERACT_BUTTON_SIZE.y - 12.0))
 	interact_button.pivot_offset = INTERACT_BUTTON_SIZE * 0.5
+	task_card_button.size = Vector2(400.0, 196.0) if task_details_open else Vector2(360.0, 68.0)
+	if game_menu_popup.visible:
+		game_menu_popup.position = Vector2i(roundi(menu_button.position.x), roundi(menu_button.position.y + menu_button.size.y))
 	_update_interact_button()
 	_update_interact_button_animation()
+
+
+func _open_game_menu() -> void:
+	if game_menu_popup == null:
+		return
+	game_menu_popup.position = Vector2i(roundi(menu_button.position.x), roundi(menu_button.position.y + menu_button.size.y))
+	game_menu_popup.popup()
+
+
+func _on_game_menu_item_pressed(item_id: int) -> void:
+	if item_id == 1:
+		game_menu_popup.hide()
+		restart_confirmation.visible = true
+		restart_confirmation_panel.position = (size - restart_confirmation_panel.size) * 0.5
+		restart_confirm_button.grab_focus()
+
+
+func _cancel_restart_confirmation() -> void:
+	if restart_confirmation != null:
+		restart_confirmation.visible = false
+
+
+func _toggle_task_details() -> void:
+	task_details_open = not task_details_open
+	if task_card_button != null:
+		task_card_button.size = Vector2(400, 196) if task_details_open else Vector2(360, 68)
+	queue_redraw()
 
 
 func _update_interact_button_animation() -> void:
@@ -1355,6 +1556,10 @@ func _pointer_up(position: Vector2, _screen_position := Vector2(-1.0, -1.0)) -> 
 		_save_game()
 		if game_state.is_complete():
 			bridge_repair_remaining = BRIDGE_REPAIR_DURATION
+			rabbit_dialog_open = false
+			task_details_open = false
+			if task_card_button != null:
+				task_card_button.size = Vector2(360, 68)
 			_start_task_transition(BRIDGE_RECT.get_center(), "小桥修好了")
 			message = "太棒了！小桥修好了，右侧区域已经开放！"
 			message_color = Color("fff1a8")
@@ -1430,6 +1635,7 @@ func _try_collect_nearby() -> void:
 	if game_state.can_plant_seed():
 		if player_position.distance_to(FLOWERBED_POSITION) <= FLOWERBED_INTERACTION_RADIUS:
 			if game_state.plant_seed():
+				rabbit_dialog_open = false
 				_start_task_transition(FLOWERBED_POSITION, "种子种下了")
 				message = "种植成功！幼苗长出来了！"
 				message_color = Color("d9ffd0")
@@ -1691,15 +1897,102 @@ func _try_collect_board(board_id: int) -> void:
 	queue_redraw()
 
 
-func _is_walkable(position: Vector2) -> bool:
-	if position.x < 70 or position.x > WORLD_SIZE.x - 70 or position.y < 145 or position.y > WORLD_SIZE.y - 50:
+func _move_player_safely(displacement: Vector2) -> bool:
+	var distance := displacement.length()
+	if distance <= 0.001:
 		return false
-	var player_rect := Rect2(position - Vector2.ONE * PLAYER_RADIUS, Vector2.ONE * PLAYER_RADIUS * 2.0)
-	if player_rect.intersects(RIVER_RECT):
-		var bridge_corridor := BRIDGE_PASSAGE_RECT
-		if not game_state.bridge_repaired or not bridge_corridor.intersects(player_rect):
+	var step_count := maxi(1, ceili(distance / PLAYER_MOVE_SUBSTEP))
+	var step := displacement / float(step_count)
+	var moved := false
+	for _step_id in range(step_count):
+		var combined := player_position + step
+		if _is_walkable(combined):
+			player_position = combined
+			moved = true
+			continue
+		# Resolve each axis separately after a blocked diagonal step. This lets
+		# the character slide along shores, the bridge head and building walls.
+		var first_axis := Vector2(step.x, 0) if absf(step.x) >= absf(step.y) else Vector2(0, step.y)
+		var second_axis := Vector2(0, step.y) if absf(step.x) >= absf(step.y) else Vector2(step.x, 0)
+		var first_candidate := player_position + first_axis
+		if first_axis.length_squared() > 0.0 and _is_walkable(first_candidate):
+			player_position = first_candidate
+			moved = true
+		var second_candidate := player_position + second_axis
+		if second_axis.length_squared() > 0.0 and _is_walkable(second_candidate):
+			player_position = second_candidate
+			moved = true
+	return moved
+
+
+func _is_walkable(position: Vector2) -> bool:
+	if game_state == null:
+		return false
+	var foot := position + PLAYER_FOOT_OFFSET
+	var sample_offsets := [
+		Vector2.ZERO,
+		Vector2(-PLAYER_COLLISION_HALF_WIDTH, 0), Vector2(PLAYER_COLLISION_HALF_WIDTH, 0),
+		Vector2(0, -PLAYER_COLLISION_HALF_DEPTH), Vector2(0, PLAYER_COLLISION_HALF_DEPTH),
+		Vector2(-PLAYER_COLLISION_HALF_WIDTH * 0.7, -PLAYER_COLLISION_HALF_DEPTH * 0.7),
+		Vector2(PLAYER_COLLISION_HALF_WIDTH * 0.7, -PLAYER_COLLISION_HALF_DEPTH * 0.7),
+		Vector2(-PLAYER_COLLISION_HALF_WIDTH * 0.7, PLAYER_COLLISION_HALF_DEPTH * 0.7),
+		Vector2(PLAYER_COLLISION_HALF_WIDTH * 0.7, PLAYER_COLLISION_HALF_DEPTH * 0.7),
+	]
+	for offset in sample_offsets:
+		if not _is_ground_support(foot + offset):
 			return false
-	return true
+	return not _player_overlaps_solid_obstacle(foot)
+
+
+func _is_ground_support(point: Vector2) -> bool:
+	if Geometry2D.is_point_in_polygon(point, left_island_walk_polygon):
+		return true
+	if game_state.bridge_repaired and Geometry2D.is_point_in_polygon(point, right_island_walk_polygon):
+		return true
+	return game_state.bridge_repaired and _is_on_bridge_deck(point)
+
+
+func _is_on_bridge_deck(point: Vector2) -> bool:
+	if not game_state.bridge_repaired:
+		return false
+	var bridge_local := (point - BRIDGE_CENTER).rotated(-BRIDGE_COLLISION_ROTATION)
+	return absf(bridge_local.x) <= BRIDGE_WALK_HALF_LENGTH and absf(bridge_local.y) <= BRIDGE_WALK_HALF_WIDTH
+
+
+func _player_overlaps_solid_obstacle(foot: Vector2) -> bool:
+	var foot_rect := Rect2(
+		foot - Vector2(PLAYER_COLLISION_HALF_WIDTH, PLAYER_COLLISION_HALF_DEPTH),
+		Vector2(PLAYER_COLLISION_HALF_WIDTH * 2.0, PLAYER_COLLISION_HALF_DEPTH * 2.0)
+	)
+	for obstacle in SceneArt.BACKGROUND_OBSTACLES:
+		var center: Vector2 = obstacle["center"]
+		var radius: float = obstacle["radius"]
+		if foot.distance_to(center) < radius + PLAYER_COLLISION_HALF_WIDTH:
+			return true
+	if game_state.seed_planted:
+		var house_footprint := Rect2(466, 476, 108, 76)
+		if foot_rect.intersects(house_footprint):
+			return true
+	if game_state.bridge_repaired and Geometry2D.is_point_in_polygon(foot, pond_collision_polygon):
+		return true
+	if game_state.is_q009_complete():
+		# Keep the wall collision on the birdhouse's planted base. The canopy and
+		# roof are artwork; a narrower base preserves the west-side walking lane.
+		var birdhouse_footprint := Rect2(Q009_BIRDHOUSE_POSITION + Vector2(-26, -12), Vector2(52, 44))
+		if foot_rect.intersects(birdhouse_footprint):
+			return true
+	if game_state.is_pond_complete():
+		var turtle_foot := Q005_TURTLE_POSITION + Vector2(0, 53)
+		if foot.distance_to(turtle_foot) < 17.0 + PLAYER_COLLISION_HALF_WIDTH:
+			return true
+	for decor_id in range(GameState.Q006_DECOR_TOTAL):
+		if not game_state.q006_decor_placed[decor_id]:
+			continue
+		var decor_position: Vector2 = game_state.q006_decor_positions[decor_id]
+		var decor_radius := 22.0 if decor_id == 0 else 16.0
+		if foot.distance_to(decor_position) < decor_radius + PLAYER_COLLISION_HALF_WIDTH:
+			return true
+	return false
 
 
 func _board_rect(board_id: int) -> Rect2:
@@ -1852,6 +2145,14 @@ func _drag_target_slot_at(position: Vector2) -> int:
 
 func _restart_game() -> void:
 	game_state.reset()
+	rabbit_dialog_open = true
+	task_details_open = false
+	if game_menu_popup != null:
+		game_menu_popup.hide()
+	if restart_confirmation != null:
+		restart_confirmation.visible = false
+	if task_card_button != null:
+		task_card_button.size = Vector2(360, 68)
 	player_position = Vector2(250, 500)
 	player_facing = Vector2.RIGHT
 	player_walk_phase = 0.0
@@ -2081,17 +2382,41 @@ func _draw_world(font: Font) -> void:
 	_draw_region_area(font)
 	_draw_seed_area(font)
 	_draw_pond_area(font)
+	var player_drawn := false
+	if _player_is_behind_cottage():
+		_draw_player()
+		player_drawn = true
 	_draw_q004_area(font)
 	_draw_q005_area(font)
 	_draw_q006_area(font)
 	if celebration_remaining <= 0.0:
 		_draw_q008_area(font)
 		_draw_q007_area(font)
+	if not player_drawn and _player_is_behind_birdhouse():
+		_draw_player()
+		player_drawn = true
+	if celebration_remaining <= 0.0:
 		_draw_q009_area(font)
 		_draw_q010_area(font)
 		_draw_q011_area(font)
 	_draw_boards(font)
-	_draw_player()
+	if not player_drawn:
+		_draw_player()
+
+
+func _player_is_behind_cottage() -> bool:
+	if not game_state.seed_planted:
+		return false
+	var foot := player_position + PLAYER_FOOT_OFFSET
+	return foot.y < HOUSE_POSITION.y + 52.0 and foot.x >= HOUSE_POSITION.x - 84.0 and foot.x <= HOUSE_POSITION.x + 84.0
+
+
+func _player_is_behind_birdhouse() -> bool:
+	var birdhouse_visible: bool = game_state.is_q009_complete() or int(game_state.q009_material_count()) == GameState.Q009_MATERIAL_TOTAL
+	if not birdhouse_visible:
+		return false
+	var foot := player_position + PLAYER_FOOT_OFFSET
+	return foot.y < Q009_BIRDHOUSE_POSITION.y + 40.0 and foot.x >= Q009_BIRDHOUSE_POSITION.x - 42.0 and foot.x <= Q009_BIRDHOUSE_POSITION.x + 42.0
 
 
 func _draw_environment_glimmers() -> void:
@@ -2275,62 +2600,51 @@ func _main_story_progress() -> int:
 
 
 func _draw_bridge(font: Font) -> void:
-	# Painterly timber art carries the bridge; the three transparent deck gaps
-	# in the texture line up with the interactive repair slots below.
-	var bridge_draw_size := Vector2(164, 105)
-	draw_set_transform(_world_to_screen(BRIDGE_RECT.get_center()), 0.24, Vector2.ONE * _camera_zoom_scale())
-	draw_texture_rect(BRIDGE_ART, Rect2(-bridge_draw_size * 0.5, bridge_draw_size), false)
+	var bridge_texture: Texture2D = BRIDGE_ART if game_state.bridge_repaired else SceneArt.DAMAGED_WOODLAND_BRIDGE
+	draw_set_transform(_world_to_screen(BRIDGE_CENTER), BRIDGE_ROTATION, Vector2.ONE * _camera_zoom_scale())
+	draw_texture_rect(bridge_texture, Rect2(-BRIDGE_DRAW_SIZE * 0.5, BRIDGE_DRAW_SIZE), false)
 	_restore_world_draw_transform()
 
-	for slot_id in range(BRIDGE_SLOTS.size()):
-		var slot: Rect2 = BRIDGE_SLOTS[slot_id]
-		var installed: bool = game_state.placed[slot_id] or game_state.bridge_repaired
-		var plank_points := PackedVector2Array([
-			Vector2(-slot.size.x * 0.5 + 1, -slot.size.y * 0.5 + 2),
-			Vector2(slot.size.x * 0.5 - 2, -slot.size.y * 0.5),
-			Vector2(slot.size.x * 0.5, slot.size.y * 0.5 - 2),
-			Vector2(-slot.size.x * 0.5, slot.size.y * 0.5),
-		])
-		draw_set_transform(_world_to_screen(slot.get_center()), 0.24, Vector2.ONE * _camera_zoom_scale())
-		if installed:
-			draw_colored_polygon(plank_points, Color("d6a76c"))
-			draw_polyline(plank_points, Color("76533d"), 2.0, true)
-			draw_line(Vector2(-slot.size.x * 0.5 + 3, -slot.size.y * 0.5 + 4), Vector2(slot.size.x * 0.5 - 3, -slot.size.y * 0.5 + 4), Color("f1d49d", 0.86), 1.2, true)
-			draw_line(Vector2(-slot.size.x * 0.5 + 5, 0), Vector2(slot.size.x * 0.5 - 5, 0), Color("a5794d", 0.72), 1.0, true)
-		else:
-			# Empty joints glow softly; water remains visible through each gap.
-			var target_color: Color = VISUAL_PALETTE["target_valid"] if _drag_target_slot_at(drag_position) == slot_id else Color("f6dfaa", 0.85)
-			var target_fill: Color = VISUAL_PALETTE["target_valid_fill"] if _drag_target_slot_at(drag_position) == slot_id else Color("f7e7c2", 0.18)
-			draw_colored_polygon(plank_points, target_fill)
-			draw_polyline(plank_points, target_color, 1.5, true)
-		_restore_world_draw_transform()
-		if dragging_board >= 0 and slot_id == dragging_board and game_state.can_place_board(dragging_board):
-			var target_color: Color = VISUAL_PALETTE["target_valid"] if _drag_target_slot_at(drag_position) == slot_id else VISUAL_PALETTE["target_idle"]
-			var target_fill: Color = VISUAL_PALETTE["target_valid_fill"] if _drag_target_slot_at(drag_position) == slot_id else VISUAL_PALETTE["target_idle_fill"]
-			draw_rect(_slot_drop_rect(slot_id), target_fill, true)
-			draw_rect(_slot_drop_rect(slot_id), target_color, false, 4.0)
-	if dragging_board >= 0:
-		var drag_hint := "绿色高亮位置可以松开" if _drag_target_slot_at(drag_position) >= 0 else "把木板移到高亮位置再松开"
-		draw_string(font, Vector2(700, 465), drag_hint, HORIZONTAL_ALIGNMENT_LEFT, -1, 20, VISUAL_PALETTE["ink"])
-	if game_state.bridge_repaired:
-		if bridge_repair_remaining > 0.0:
-			var repair_progress := 1.0 - bridge_repair_remaining / BRIDGE_REPAIR_DURATION
-			var shimmer_x := lerpf(770.0, 870.0, repair_progress)
-			var shimmer_alpha := 1.0 - repair_progress
-			_draw_ellipse_custom(Vector2(shimmer_x, 377), Vector2(18, 34), Color(1.0, 0.91, 0.57, shimmer_alpha * 0.5))
-			draw_line(Vector2(shimmer_x, 345), Vector2(shimmer_x, 408), Color(1.0, 0.98, 0.78, shimmer_alpha), 4.0)
-		_draw_bridge_status(font, _bridge_status_text())
-	else:
-		# The small snapped cord makes the repair state legible without a crude X.
-		draw_line(Vector2(810, 344), Vector2(818, 352), Color("805b3e"), 2.0, true)
-		draw_line(Vector2(818, 352), Vector2(824, 344), Color("805b3e"), 2.0, true)
-		_draw_bridge_status(font, "待修复")
+	if not game_state.bridge_repaired:
+		for slot_id in range(BRIDGE_SLOTS.size()):
+			var slot: Rect2 = BRIDGE_SLOTS[slot_id]
+			if game_state.placed[slot_id]:
+				_draw_bridge_repair_plank(slot.get_center())
+			elif game_state.board_count() > 0 and player_position.distance_to(BRIDGE_CENTER) <= 190.0:
+				var outline_color: Color = VISUAL_PALETTE["target_valid"] if _drag_target_slot_at(drag_position) == slot_id else Color("f6dfaa", 0.72)
+				var outline_rect := Rect2(slot.position - Vector2(2, 2), slot.size + Vector2(4, 4))
+				draw_rect(outline_rect, Color(1.0, 0.91, 0.62, 0.10), true)
+				draw_rect(outline_rect, outline_color, false, 1.6)
+		if dragging_board >= 0:
+			var target_id := _drag_target_slot_at(drag_position)
+			if target_id >= 0:
+				var target_rect: Rect2 = BRIDGE_SLOTS[target_id]
+				draw_rect(target_rect.grow(7.0), Color(0.32, 0.82, 0.47, 0.25), true)
+				draw_rect(target_rect.grow(7.0), Color("48bf69"), false, 3.0)
+			var drag_hint := "松开木板，修好小桥" if target_id >= 0 else "拖到桥面缺口，绿色时松开"
+			var hint_rect := Rect2(BRIDGE_CENTER + Vector2(-112, -102), Vector2(224, 30))
+			_draw_panel(hint_rect, Color("fff8e8", 0.96), Color("a9c885"), 14)
+			draw_string(font, hint_rect.position + Vector2(10, 20), drag_hint, HORIZONTAL_ALIGNMENT_CENTER, hint_rect.size.x - 20, 14, VISUAL_PALETTE["ink"])
+		if game_state.board_count() > 0 and player_position.distance_to(BRIDGE_CENTER) <= 150.0:
+			_draw_bridge_status(font, "修桥 %d/3" % game_state.placed_count())
+	elif bridge_repair_remaining > 0.0:
+		var repair_progress := 1.0 - bridge_repair_remaining / BRIDGE_REPAIR_DURATION
+		var shimmer_x := lerpf(770.0, 870.0, repair_progress)
+		var shimmer_alpha := 1.0 - repair_progress
+		_draw_ellipse_custom(Vector2(shimmer_x, 377), Vector2(18, 34), Color(1.0, 0.91, 0.57, shimmer_alpha * 0.5))
+		draw_line(Vector2(shimmer_x, 345), Vector2(shimmer_x, 408), Color(1.0, 0.98, 0.78, shimmer_alpha), 4.0)
+
+
+func _draw_bridge_repair_plank(position: Vector2) -> void:
+	draw_set_transform(_world_to_screen(position), BRIDGE_ROTATION, Vector2.ONE * _camera_zoom_scale())
+	draw_texture_rect(SceneArt.BRIDGE_REPAIR_PLANK, Rect2(-SceneArt.BRIDGE_REPAIR_PLANK_SIZE * 0.5, SceneArt.BRIDGE_REPAIR_PLANK_SIZE), false)
+	_restore_world_draw_transform()
 
 
 func _draw_bridge_status(font: Font, label: String) -> void:
-	var rect := Rect2(752, 304, 136, 27)
-	_draw_soft_panel(rect, Color("fff7e5", 0.96), Color("d8bd83"), 13, 0.10)
-	draw_string(font, rect.position + Vector2(8, 19), label, HORIZONTAL_ALIGNMENT_CENTER, rect.size.x - 16, 14, Color("536c4c"))
+	var rect := Rect2(BRIDGE_CENTER + Vector2(-58, -83), Vector2(116, 24))
+	_draw_soft_panel(rect, Color("fff7e5", 0.94), Color("d8bd83"), 12, 0.08)
+	draw_string(font, rect.position + Vector2(6, 17), label, HORIZONTAL_ALIGNMENT_CENTER, rect.size.x - 12, 13, Color("536c4c"))
 
 
 func _draw_rabbit_area(font: Font) -> void:
@@ -2338,17 +2652,22 @@ func _draw_rabbit_area(font: Font) -> void:
 		return
 	if _should_show_rabbit_dialog():
 		var bubble_fill := Color("fff7dc")
-		_draw_soft_panel(Rect2(392, 133, 400, 48), bubble_fill, Color("d7a85b"), 16, 0.10)
-		draw_colored_polygon(PackedVector2Array([Vector2(582, 181), Vector2(600, 181), Vector2(592, 197)]), bubble_fill)
-		draw_circle(Vector2(414, 157), 12.0, Color("e8bd62"))
-		draw_string(font, Vector2(436, 163), _rabbit_feedback_text(), HORIZONTAL_ALIGNMENT_LEFT, -1, 20, VISUAL_PALETTE["ink"])
+		var dialog_rect := _rabbit_dialog_rect()
+		_draw_soft_panel(dialog_rect, bubble_fill, Color("d7a85b"), 16, 0.10)
+		var pointer_x := _rabbit_position().x
+		draw_colored_polygon(PackedVector2Array([Vector2(pointer_x - 10, dialog_rect.end.y), Vector2(pointer_x + 8, dialog_rect.end.y), Vector2(pointer_x, dialog_rect.end.y + 19)]), bubble_fill)
+		draw_circle(dialog_rect.position + Vector2(22, 27), 11.0, Color("e8bd62"))
+		draw_string(font, dialog_rect.position + Vector2(42, 34), _rabbit_feedback_text(), HORIZONTAL_ALIGNMENT_LEFT, 276, 18, VISUAL_PALETTE["ink"])
+		# The bubble remains open until the child closes it or taps the rabbit.
+		draw_line(dialog_rect.position + Vector2(338, 14), dialog_rect.position + Vector2(348, 24), Color("947647"), 2.0, true)
+		draw_line(dialog_rect.position + Vector2(348, 14), dialog_rect.position + Vector2(338, 24), Color("947647"), 2.0, true)
 	if game_state.can_start_q012():
 		var pulse := 0.5 + sin(animation_time * 3.0) * 0.5
 		draw_arc(Q012_RABBIT_POSITION, 75.0 + pulse * 5.0, 0.0, TAU, 48, Color(1.0, 0.88, 0.48, 0.58), 4.0)
 		var finale_tag := Rect2(Q012_RABBIT_POSITION + Vector2(-82, -107), Vector2(164, 30))
 		_draw_panel(finale_tag, Color("fff5d9"), Color("d5a45f"), 12)
 		draw_string(font, finale_tag.position + Vector2(10, 20), "主线最后一步 · 庆祝", HORIZONTAL_ALIGNMENT_CENTER, finale_tag.size.x - 20, 14, VISUAL_PALETTE["ink"])
-	_draw_rabbit(Q012_RABBIT_POSITION)
+	_draw_rabbit(_rabbit_position())
 	if game_state.can_start_q012():
 		draw_circle(Q012_RABBIT_POSITION + Vector2(0, -67), 13.0, Color("e8bd62"))
 		draw_string(font, Q012_RABBIT_POSITION + Vector2(-5, -61), "!", HORIZONTAL_ALIGNMENT_LEFT, -1, 19, Color("fff7dc"))
@@ -2356,24 +2675,27 @@ func _draw_rabbit_area(font: Font) -> void:
 
 
 func _should_show_rabbit_dialog() -> bool:
-	return not game_state.is_complete() or not game_state.seed_planted or not game_state.is_q004_complete()
+	return rabbit_dialog_open
 
 
 func _should_show_rabbit_area() -> bool:
-	return _should_show_rabbit_dialog() or game_state.can_start_q012() or game_state.is_q012_complete()
+	return game_state != null
+
+
+func _rabbit_position() -> Vector2:
+	if not game_state.is_complete() or game_state.can_start_q012() or celebration_remaining > 0.0:
+		return Q012_RABBIT_POSITION
+	return RABBIT_HOME_POSITION
+
+
+func _rabbit_dialog_rect() -> Rect2:
+	return Rect2(_rabbit_position() + Vector2(-160, -102), Vector2(360, 54))
 
 
 func _draw_region_area(font: Font) -> void:
-	if not _should_show_region_access_card():
-		return
-	var sign_rect := Rect2(952, 169, 246, 78)
-	_draw_soft_panel(sign_rect, Color("fff5db"), Color("d5b46f"), 18, 0.12)
-	draw_circle(Vector2(977, 194), 15.0, Color("e7c77d"))
-	draw_circle(Vector2(977, 194), 9.0, Color("f9e9bd"))
-	draw_arc(Vector2(977, 194), 5.0, PI, TAU, 12, Color("836a42"), 2.0)
-	draw_rect(Rect2(972, 194, 10, 8), Color("836a42"), true)
-	draw_string(font, Vector2(1002, 194), "桥那边的新天地", HORIZONTAL_ALIGNMENT_LEFT, 184, 17, VISUAL_PALETTE["ink"])
-	draw_string(font, Vector2(1002, 222), "修好小桥，就能去探险", HORIZONTAL_ALIGNMENT_LEFT, 184, 13, Color("607561"))
+	# The locked island is explained in the expandable task card. Bridge repair
+	# already raises a one-shot success message, so no permanent sign is needed.
+	return
 
 
 func _should_show_region_access_card() -> bool:
@@ -2383,12 +2705,7 @@ func _should_show_region_access_card() -> bool:
 func _draw_seed_area(font: Font) -> void:
 	if not game_state.is_complete() or game_state.is_pond_complete():
 		return
-	var bed_rect := Rect2(FLOWERBED_POSITION - Vector2(48, 32), Vector2(96, 64))
-	draw_rect(Rect2(bed_rect.position + Vector2(0, 8), bed_rect.size), Color(0.19, 0.13, 0.10, 0.16))
-	draw_rect(bed_rect, Color("a8784e"))
-	draw_rect(bed_rect, Color("704d35"), false, 4.0)
-	for row_y in [18.0, 34.0, 50.0]:
-		draw_line(bed_rect.position + Vector2(10, row_y), bed_rect.position + Vector2(86, row_y), Color("d09a62"), 2.0)
+	_draw_garden_soil(game_state.seed_planted)
 	if game_state.seed_planted:
 		var seedling_sway := sin(animation_time * 1.45 + 0.7) * 2.2
 		var stem_base := FLOWERBED_POSITION + Vector2(0, 18)
@@ -2412,18 +2729,16 @@ func _draw_seed_area(font: Font) -> void:
 func _draw_pond_area(font: Font) -> void:
 	if not _can_show_pond_area():
 		return
-	var pond_fill := Color("78cbd5") if not game_state.is_pond_complete() else Color("5bbbd0")
-	_draw_panel(POND_RECT, pond_fill, VISUAL_PALETTE["river_edge"], 24)
-	var pond_line_offsets := [34.0, 62.0, 90.0] if game_state.is_pond_complete() else [34.0, 66.0, 98.0]
-	for line_id in range(pond_line_offsets.size()):
-		var y: float = POND_RECT.position.y + pond_line_offsets[line_id]
+	SceneArt.draw_centered(self, SceneArt.NATURAL_POND, POND_RECT.get_center(), SceneArt.POND_SIZE)
+	for line_id in range(2):
+		var y: float = POND_RECT.get_center().y + (float(line_id) - 0.5) * 48.0
 		var wave_phase := animation_time * 0.9 + float(line_id) * 1.2
 		var wave := PackedVector2Array([
-			Vector2(POND_RECT.position.x + 18, y + sin(wave_phase) * 1.2),
+			Vector2(POND_RECT.position.x + 48, y + sin(wave_phase) * 1.2),
 			Vector2(POND_RECT.get_center().x, y + sin(wave_phase + 1.1) * 2.0),
-			Vector2(POND_RECT.end.x - 18, y + sin(wave_phase + 2.2) * 1.2),
+			Vector2(POND_RECT.end.x - 48, y + sin(wave_phase + 2.2) * 1.2),
 		])
-		draw_polyline(wave, Color("a9e3e6"), 3.0, true)
+		draw_polyline(wave, Color("e2fff5", 0.30), 1.4, true)
 	draw_string(font, POND_RECT.position + Vector2(54, -12), "池塘", HORIZONTAL_ALIGNMENT_LEFT, -1, 22, VISUAL_PALETTE["ink"])
 	if game_state.is_pond_complete():
 		draw_string(font, POND_RECT.position + Vector2(34, 118), "池塘已开放", HORIZONTAL_ALIGNMENT_LEFT, -1, 18, Color("fff1a8"))
@@ -2448,37 +2763,14 @@ func _draw_pond_area(font: Font) -> void:
 	if dragging_pond_stone >= 0:
 		var drag_hint := "绿色轮廓可以松开" if _pond_drag_target_at(pond_drag_position) >= 0 else "把石头移到对应轮廓再松开"
 		draw_string(font, Vector2(936, 535), drag_hint, HORIZONTAL_ALIGNMENT_LEFT, -1, 16, VISUAL_PALETTE["ink"])
-
-
 func _draw_q004_area(font: Font) -> void:
 	if not game_state.seed_planted:
 		return
-	var house_fill := Color("d9f0d0") if not game_state.is_q004_complete() else Color("f4e5bd")
-	var house_border := Color("7eae72") if not game_state.is_q004_complete() else Color("bd8b54")
-	_draw_panel(HOUSE_RECT, house_fill, house_border, 18)
-	var roof := PackedVector2Array([
-		Vector2(HOUSE_RECT.position.x + 8, HOUSE_RECT.position.y + 34),
-		Vector2(HOUSE_RECT.position.x + HOUSE_RECT.size.x / 2.0, HOUSE_RECT.position.y - 8),
-		Vector2(HOUSE_RECT.end.x - 8, HOUSE_RECT.position.y + 34),
-	])
-	draw_colored_polygon(roof, Color("d7865d") if not game_state.is_q004_complete() else Color("d96f58"))
-	draw_polyline(PackedVector2Array([roof[0], roof[1], roof[2]]), Color("704d35"), 4.0, true)
-	draw_line(Vector2(HOUSE_RECT.position.x + 24, HOUSE_RECT.position.y + 30), Vector2(HOUSE_POSITION.x, HOUSE_RECT.position.y - 4), Color("efab76"), 2.0)
-	draw_line(Vector2(HOUSE_POSITION.x, HOUSE_RECT.position.y - 4), Vector2(HOUSE_RECT.end.x - 24, HOUSE_RECT.position.y + 30), Color("efab76"), 2.0)
-	var wall_rect := Rect2(HOUSE_RECT.position + Vector2(7, 34), Vector2(HOUSE_RECT.size.x - 14, HOUSE_RECT.size.y - 42))
-	draw_rect(wall_rect, Color("fff1cb"), false, 2.0)
-	for window_x in [HOUSE_RECT.position.x + 20.0, HOUSE_RECT.end.x - 36.0]:
-		var window_rect := Rect2(window_x, HOUSE_POSITION.y - 5, 16, 20)
-		draw_rect(window_rect.grow(2), Color("8b6346"), true)
-		draw_rect(window_rect, Color("b5d7c3"), true)
-		draw_rect(window_rect, Color("fff2c7"), false, 2.0)
-		draw_line(Vector2(window_rect.position.x + 8, window_rect.position.y + 2), Vector2(window_rect.position.x + 8, window_rect.end.y - 2), Color("fff2c7"), 1.5)
-	draw_rect(Rect2(HOUSE_POSITION.x - 24, HOUSE_POSITION.y - 4, 48, 58), Color("c58b55"))
-	draw_rect(Rect2(HOUSE_POSITION.x - 24, HOUSE_POSITION.y - 4, 48, 58), Color("704d35"), false, 3.0)
-	draw_circle(HOUSE_POSITION + Vector2(14, 22), 4.0, Color("ffe59a"))
+	_draw_fox_cottage()
 	if game_state.is_q004_complete():
 		draw_string(font, HOUSE_POSITION + Vector2(-52, 78), "狐狸的小屋", HORIZONTAL_ALIGNMENT_LEFT, -1, 18, VISUAL_PALETTE["ink"])
-		_draw_fox(HOUSE_POSITION + Vector2(0, -42))
+		# Place the fox on the ground in front of the doorway, not over the roof.
+		_draw_fox(HOUSE_POSITION + Vector2(0, 6))
 	else:
 		draw_string(font, HOUSE_POSITION + Vector2(-58, 78), "小屋建造中", HORIZONTAL_ALIGNMENT_LEFT, -1, 18, VISUAL_PALETTE["ink"])
 		draw_string(font, HOUSE_POSITION + Vector2(-54, 98), "交付 %d/3" % game_state.delivered_wood_count(), HORIZONTAL_ALIGNMENT_LEFT, -1, 16, VISUAL_PALETTE["ink"])
@@ -2492,12 +2784,19 @@ func _draw_q004_area(font: Font) -> void:
 		draw_string(font, WOOD_POSITIONS[wood_id] + Vector2(-24, 34), "木材", HORIZONTAL_ALIGNMENT_LEFT, -1, 15, VISUAL_PALETTE["ink"])
 
 
+func _draw_fox_cottage() -> void:
+	var complete: bool = game_state.is_q004_complete()
+	var ground_anchor := HOUSE_POSITION + Vector2(0, 52)
+	var shadow_alpha := 0.18 + sin(animation_time * 1.1) * 0.015
+	_draw_ellipse_custom(ground_anchor + Vector2(2, 5), Vector2(66, 10), Color(0.16, 0.20, 0.12, shadow_alpha))
+	var cottage_texture: Texture2D = SceneArt.FOX_COTTAGE_COMPLETE if complete else SceneArt.FOX_COTTAGE_CONSTRUCTION
+	SceneArt.draw_grounded(self, cottage_texture, ground_anchor, SceneArt.FOX_COTTAGE_SIZE)
+
+
 func _draw_q005_area(font: Font) -> void:
 	if not game_state.is_q004_complete() or not game_state.is_pond_complete():
 		return
-	var garden_fill := Color("b9d98b") if not game_state.q005_watered else Color("9ed477")
-	var garden_border := Color("d5a45f") if not game_state.is_q005_complete() else Color("6cae87")
-	_draw_panel(Q005_GARDEN_RECT, garden_fill, garden_border, 18)
+	_draw_garden_soil(game_state.q005_watered)
 	draw_string(font, Q005_GARDEN_RECT.position + Vector2(18, -12), "乌龟的花园", HORIZONTAL_ALIGNMENT_LEFT, -1, 20, VISUAL_PALETTE["ink"])
 	for plant_id in range(GameState.Q005_PLANT_TOTAL):
 		var plant_position: Vector2 = Q005_PLANT_POSITIONS[plant_id]
@@ -2530,6 +2829,11 @@ func _draw_q005_area(font: Font) -> void:
 		var callout := Rect2(Q005_TURTLE_POSITION + Vector2(-88, -80), Vector2(176, 34))
 		_draw_panel(callout, Color("fff5d9"), Color("d5a45f"), 12)
 		draw_string(font, callout.position + Vector2(12, 22), "花束交给乌龟 →", HORIZONTAL_ALIGNMENT_CENTER, callout.size.x - 24, 15, VISUAL_PALETTE["ink"])
+
+
+func _draw_garden_soil(watered: bool) -> void:
+	var soil_tint := Color("edf2df") if watered else Color.WHITE
+	SceneArt.draw_centered(self, SceneArt.GARDEN_SOIL_BED, Q005_GARDEN_RECT.get_center(), SceneArt.GARDEN_SOIL_SIZE, soil_tint)
 
 
 func _draw_q006_area(font: Font) -> void:
@@ -2653,22 +2957,12 @@ func _q009_action_hint_text() -> String:
 
 
 func _draw_q009_birdhouse_frame(position: Vector2, delivered_count: int) -> void:
-	var base := Color("bd9562")
-	var accent := Color("d5a468")
-	_draw_ellipse_custom(position + Vector2(0, 34), Vector2(38, 8), Color(0.19, 0.13, 0.10, 0.16))
-	draw_line(position + Vector2(-30, 18), position + Vector2(30, 18), base, 6.0)
-	if delivered_count >= 1:
-		draw_line(position + Vector2(-26, 14), position + Vector2(-26, -18), accent, 5.0)
-		draw_line(position + Vector2(26, 14), position + Vector2(26, -18), accent, 5.0)
-	if delivered_count >= 2:
-		draw_line(position + Vector2(-31, -16), position + Vector2(0, -43), Color("d96f58"), 6.0)
-		draw_line(position + Vector2(0, -43), position + Vector2(31, -16), Color("d96f58"), 6.0)
-	if delivered_count >= 3:
-		draw_line(position + Vector2(-29, -14), position + Vector2(29, -14), accent, 5.0)
-		draw_line(position + Vector2(-28, 13), position + Vector2(28, 13), accent, 5.0)
+	var ground_anchor := position + Vector2(0, 40)
+	_draw_ellipse_custom(ground_anchor + Vector2(2, 4), Vector2(25, 6), Color(0.16, 0.20, 0.12, 0.20))
+	SceneArt.draw_grounded(self, SceneArt.BIRDHOUSE_CONSTRUCTION, ground_anchor, SceneArt.BIRDHOUSE_SIZE)
 	for material_id in range(GameState.Q009_MATERIAL_TOTAL):
 		var dot_color := Color("90ca75") if material_id < delivered_count else Color("e4d2ad")
-		draw_circle(position + Vector2(-18 + material_id * 18, 31), 4.0, dot_color)
+		draw_circle(ground_anchor + Vector2(-12 + material_id * 12, 5), 2.7, dot_color)
 
 
 func _draw_q010_area(font: Font) -> void:
@@ -2815,43 +3109,30 @@ func _draw_q009_material_at(position: Vector2, material_id: int) -> void:
 
 
 func _draw_q009_birdhouse(position: Vector2) -> void:
-	_draw_ellipse_custom(position + Vector2(0, 34), Vector2(38, 8), Color(0.19, 0.13, 0.10, 0.16))
-	draw_rect(Rect2(position + Vector2(-34, -22), Vector2(68, 54)), Color("d5a468"))
-	draw_rect(Rect2(position + Vector2(-34, -22), Vector2(68, 54)), Color("704d35"), false, 3.0)
-	var roof := PackedVector2Array([
-		position + Vector2(-42, -20), position + Vector2(0, -52), position + Vector2(42, -20),
-	])
-	draw_colored_polygon(roof, Color("d96f58"))
-	draw_polyline(PackedVector2Array([roof[0], roof[1], roof[2]]), Color("704d35"), 4.0, true)
-	draw_circle(position + Vector2(0, 1), 13.0, Color("704d35"))
-	draw_circle(position + Vector2(0, 1), 8.0, Color("3f5b4a"))
-	draw_line(position + Vector2(0, 28), position + Vector2(0, 40), Color("704d35"), 4.0)
+	var ground_anchor := position + Vector2(0, 40)
+	_draw_ellipse_custom(ground_anchor + Vector2(2, 4), Vector2(25, 6), Color(0.16, 0.20, 0.12, 0.20))
+	SceneArt.draw_grounded(self, SceneArt.BIRDHOUSE_COMPLETE, ground_anchor, SceneArt.BIRDHOUSE_SIZE)
 
 
 func _draw_q009_bird(position: Vector2) -> void:
 	_draw_character_sprite(BIRD_ART, position, 58.0, 0.38, 1.4, 1.1)
 
 func _draw_q006_decor_at(position: Vector2, decor_id: int, lifted: bool) -> void:
-	var shadow_color := Color(0.19, 0.13, 0.10, 0.16)
-	if decor_id == 0:
-		_draw_ellipse_custom(position + Vector2(0, 11), Vector2(29, 6), shadow_color)
-		for post_x in [-20.0, 0.0, 20.0]:
-			draw_rect(Rect2(position + Vector2(post_x - 3, -16), Vector2(6, 28)), Color("9a6940"))
-		for rail_y in [-9.0, 3.0]:
-			draw_line(position + Vector2(-24, rail_y), position + Vector2(24, rail_y), Color("d5a468"), 5.0)
-	elif decor_id == 1:
-		_draw_ellipse_custom(position + Vector2(0, 12), Vector2(24, 6), shadow_color)
-		draw_rect(Rect2(position + Vector2(-18, -8), Vector2(36, 21)), Color("d87862"))
-		draw_rect(Rect2(position + Vector2(-21, -12), Vector2(42, 7)), Color("f2a16f"))
-		draw_line(position + Vector2(0, -12), position + Vector2(0, -27), Color("4f9e55"), 4.0)
-		draw_circle(position + Vector2(-8, -27), 7.0, Color("78c977"))
-		draw_circle(position + Vector2(8, -27), 7.0, Color("9be087"))
-	else:
-		_draw_ellipse_custom(position + Vector2(0, 12), Vector2(23, 6), shadow_color)
-		draw_line(position + Vector2(0, 10), position + Vector2(0, -25), Color("704d35"), 5.0)
-		draw_circle(position + Vector2(0, -29), 11.0, Color("ffe59a"))
-		draw_circle(position + Vector2(0, -29), 7.0, Color("f2c879"))
-		draw_arc(position + Vector2(0, -29), 11.0, 0.0, TAU, 20, Color("704d35"), 3.0)
+	var ground_anchor := position + Vector2(0, 12)
+	var texture: Texture2D
+	var display_size: Vector2
+	match decor_id:
+		0:
+			texture = SceneArt.GARDEN_FENCE
+			display_size = SceneArt.GARDEN_FENCE_SIZE
+		1:
+			texture = SceneArt.TERRACOTTA_PLANTER
+			display_size = SceneArt.TERRACOTTA_PLANTER_SIZE
+		_:
+			texture = SceneArt.GARDEN_LANTERN
+			display_size = SceneArt.GARDEN_LANTERN_SIZE
+	_draw_ellipse_custom(ground_anchor + Vector2(0, 3), Vector2(display_size.x * 0.36, 5.0), Color(0.16, 0.22, 0.13, 0.20))
+	SceneArt.draw_grounded(self, texture, ground_anchor - Vector2(0, 7) if lifted else ground_anchor, display_size)
 	if lifted:
 		draw_arc(position, 31.0, 0.0, TAU, 24, VISUAL_PALETTE["target_idle"], 3.0)
 
@@ -2869,17 +3150,14 @@ func _draw_q007_shell_at(position: Vector2, reward: bool) -> void:
 
 
 func _draw_q008_path_paver_at(position: Vector2, material_id: int, lifted: bool) -> void:
-	var paver_position := position - Vector2(0, 5) if lifted else position
-	var colors := [Color("d5a468"), Color("c4935c"), Color("e0b879")]
-	var paver_color: Color = colors[material_id]
-	_draw_ellipse_custom(paver_position + Vector2(0, 13), Vector2(29, 7), Color(0.19, 0.13, 0.10, 0.16))
+	var ground_anchor := position + Vector2(0, 11)
+	var paver_anchor := ground_anchor - Vector2(0, 8) if lifted else ground_anchor
+	var tint_options := [Color("fff8e9"), Color("f4e6cf"), Color("fff1dc")]
+	var plank_tint: Color = tint_options[clampi(material_id, 0, tint_options.size() - 1)]
+	_draw_ellipse_custom(ground_anchor + Vector2(0, 2), Vector2(25, 5), Color(0.19, 0.13, 0.10, 0.16))
 	if lifted:
-		draw_rect(Rect2(paver_position - Vector2(30, 15), Vector2(60, 30)).grow(4), VISUAL_PALETTE["target_idle"], false, 3.0)
-	draw_rect(Rect2(paver_position - Vector2(28, 13), Vector2(56, 26)), paver_color)
-	draw_rect(Rect2(paver_position - Vector2(28, 13), Vector2(56, 26)), Color("704d35"), false, 3.0)
-	draw_line(paver_position + Vector2(-18, -7), paver_position + Vector2(-9, 7), Color("f0c981"), 2.0)
-	draw_line(paver_position + Vector2(0, -8), paver_position + Vector2(9, 7), Color("f0c981"), 2.0)
-	draw_line(paver_position + Vector2(18, -7), paver_position + Vector2(25, 5), Color("f0c981"), 2.0)
+		draw_rect(Rect2(paver_anchor - Vector2(30, 19), Vector2(60, 40)).grow(4), VISUAL_PALETTE["target_idle"], false, 3.0)
+	SceneArt.draw_grounded(self, PLANK_ART, paver_anchor, Vector2(60, 40), plank_tint)
 
 
 func _draw_q005_plant_at(position: Vector2, grown: bool, appearance_unlocked := false, wilted := false, growth_scale := 1.0) -> void:
@@ -2929,7 +3207,11 @@ func _draw_boards(font: Font) -> void:
 	for board_id in range(GameState.BOARD_TOTAL):
 		if not game_state.collected[board_id]:
 			_draw_board_at(BOARD_POSITIONS[board_id], VISUAL_PALETTE["board"], false)
-			draw_string(font, BOARD_POSITIONS[board_id] + Vector2(-24, 43), "木板", HORIZONTAL_ALIGNMENT_LEFT, -1, 16, VISUAL_PALETTE["ink"])
+			if player_position.distance_to(BOARD_POSITIONS[board_id]) <= COLLECTION_RADIUS:
+				var sparkle_phase := animation_time * 3.2 + float(board_id) * 1.7
+				var sparkle_color := Color(1.0, 0.94, 0.64, 0.45 + sin(sparkle_phase) * 0.22)
+				draw_circle(BOARD_POSITIONS[board_id] + Vector2(-25, -22 + sin(sparkle_phase) * 2.0), 2.2, sparkle_color)
+				draw_circle(BOARD_POSITIONS[board_id] + Vector2(26, -16 + cos(sparkle_phase) * 2.0), 1.7, sparkle_color)
 
 
 func _draw_player() -> void:
@@ -3032,7 +3314,7 @@ func _rabbit_feedback_text() -> String:
 		return "兔子：谢谢你！过桥找发光种子吧！"
 	if not game_state.seed_planted:
 		return "兔子：种子找到了！去花圃种下吧！"
-	return "兔子：去帮狐狸找 3 份木材吧！"
+	return "兔子：你好！祝你今天玩得开心！"
 
 
 func _draw_ellipse_custom(center: Vector2, radius: Vector2, color: Color) -> void:
@@ -3044,87 +3326,64 @@ func _draw_ellipse_custom(center: Vector2, radius: Vector2, color: Color) -> voi
 
 
 func _draw_board_at(position: Vector2, color: Color, lifted: bool) -> void:
-	var rect := Rect2(position - Vector2(28, 14), Vector2(56, 28))
-	if lifted:
-		rect.position -= Vector2(0, 14)
-	if lifted or color == VISUAL_PALETTE["board"]:
-		# Keep the contact shadow attached to the ground even while the plank is
-		# lifted by the drag animation. Grass tucks its edges into the landscape.
-		_draw_grass_cluster(position + Vector2(-38, 18), 0.34, 1)
-		_draw_grass_cluster(position + Vector2(38, 18), 0.32, 3)
-		_draw_ellipse_custom(position + Vector2(2, 19), Vector2(34, 7), Color(0.16, 0.22, 0.13, 0.17))
-		_draw_ellipse_custom(position + Vector2(1, 15), Vector2(25, 3.5), Color(0.25, 0.18, 0.12, 0.20))
-		if lifted:
-			draw_rect(rect.grow(16), VISUAL_PALETTE["target_idle"], false, 3.0)
-		var plank_position := position - Vector2(0, 11) if lifted else position
-		draw_texture_rect(PLANK_ART, Rect2(plank_position - Vector2(40, 27), Vector2(80, 54)), false)
-		return
-	var side_face := PackedVector2Array([
-		rect.position + Vector2(1, rect.size.y - 7), rect.position + Vector2(rect.size.x - 1, rect.size.y - 9),
-		rect.position + Vector2(rect.size.x, rect.size.y - 1), rect.position + Vector2(2, rect.size.y),
-	])
-	draw_colored_polygon(side_face, Color("82583b"))
-	var top_face := PackedVector2Array([
-		rect.position + Vector2(1, 1), rect.position + Vector2(rect.size.x - 4, 0),
-		rect.position + Vector2(rect.size.x - 1, rect.size.y - 9), rect.position + Vector2(2, rect.size.y - 7),
-	])
-	draw_colored_polygon(top_face, color)
-	var outline := PackedVector2Array(top_face)
-	outline.append(top_face[0])
-	draw_polyline(outline, VISUAL_PALETTE["board_outline"], 2.5, true)
-	draw_line(rect.position + Vector2(10, 5), rect.position + Vector2(10, rect.size.y - 9), Color("956744"), 2.0, true)
-	draw_line(rect.position + Vector2(24, 4), rect.position + Vector2(24, rect.size.y - 10), Color("956744"), 2.0, true)
-	draw_line(rect.position + Vector2(5, 5), rect.position + Vector2(rect.size.x - 8, 4), Color("f2d096", 0.80), 1.5, true)
+	var raised_position := position - Vector2(0, 10) if lifted else position
+	if not lifted and color == VISUAL_PALETTE["board"]:
+		_draw_grass_cluster(position + Vector2(-35, 18), 0.30, 1)
+		_draw_grass_cluster(position + Vector2(35, 18), 0.30, 3)
+		_draw_ellipse_custom(position + Vector2(2, 19), Vector2(31, 6.5), Color(0.16, 0.22, 0.13, 0.17))
+		_draw_ellipse_custom(position + Vector2(1, 15), Vector2(24, 3.2), Color(0.25, 0.18, 0.12, 0.18))
+	elif lifted:
+		_draw_ellipse_custom(position + Vector2(2, 17), Vector2(24, 5), Color(0.12, 0.18, 0.12, 0.20))
+		draw_rect(Rect2(position - Vector2(40, 34), Vector2(80, 62)), Color("ffe38a", 0.78), false, 2.0)
+	var texture_size := Vector2(72, 64) if not lifted and color == VISUAL_PALETTE["board"] else Vector2(52, 46)
+	var modulate := Color.WHITE if color == VISUAL_PALETTE["board"] else Color(1.0, 0.98, 0.88)
+	draw_texture_rect(PLANK_ART, Rect2(raised_position - texture_size * 0.5, texture_size), false, modulate)
 
 
 func _draw_pond_stone_at(position: Vector2, color: Color, lifted: bool) -> void:
 	var stone_position := position - Vector2(0, 8) if lifted else position
-	_draw_ellipse_custom(stone_position + Vector2(0, 14), Vector2(24, 8), Color(0.19, 0.13, 0.10, 0.16))
-	_draw_ellipse_custom(stone_position, Vector2(20, 14), color)
-	draw_arc(stone_position, 18.0, 0.0, TAU, 20, Color("596a69"), 3.0)
-	draw_line(stone_position + Vector2(-8, -3), stone_position + Vector2(7, -7), Color("b9c3ba"), 2.0)
+	SceneArt.draw_centered(self, SceneArt.RIVER_STONE, stone_position, SceneArt.RIVER_STONE_SIZE, color if lifted else Color.WHITE)
 	if lifted:
 		draw_arc(stone_position, 25.0, 0.0, TAU, 24, VISUAL_PALETTE["target_idle"], 3.0)
 
 
+
+
+func _draw_task_card(font: Font) -> void:
+	var card_rect := Rect2(18, 14, 360, 68)
+	_draw_soft_panel(card_rect, Color("fff9ed", 0.95), Color("d5bd83", 0.94), 19, 0.12)
+	_draw_board_at(Vector2(52, 48), Color.WHITE, false)
+	var title := "修好小桥" if not game_state.is_complete() else _hud_title_text().replace("奇趣小岛 · ", "")
+	draw_string(font, Vector2(86, 43), title, HORIZONTAL_ALIGNMENT_LEFT, 188, 20, VISUAL_PALETTE["ink"])
+	draw_string(font, Vector2(86, 65), _task_card_progress_text(), HORIZONTAL_ALIGNMENT_LEFT, 238, 14, Color("566d58"))
+	var badge := Rect2(286, 25, 78, 25)
+	_draw_panel(badge, Color("e8efd5"), Color("a8bd85"), 12)
+	draw_string(font, badge.position + Vector2(4, 17), _task_stage_label(), HORIZONTAL_ALIGNMENT_CENTER, badge.size.x - 8, 12, Color("425d48"))
+	draw_line(Vector2(350, 59), Vector2(355, 64), Color("78966b"), 1.8, true)
+	draw_line(Vector2(355, 64), Vector2(360, 59), Color("78966b"), 1.8, true)
+	if not task_details_open:
+		return
+	var details_rect := Rect2(18, 88, 400, 124)
+	_draw_soft_panel(details_rect, Color("fff9ed", 0.96), Color("d5bd83", 0.94), 18, 0.12)
+	draw_string(font, details_rect.position + Vector2(16, 24), "任务说明", HORIZONTAL_ALIGNMENT_LEFT, 110, 14, Color("8a7049"))
+	var detail_text := _task_prompt_text() + "\n" + _task_action_hint_text()
+	draw_multiline_string(font, details_rect.position + Vector2(16, 46), detail_text, HORIZONTAL_ALIGNMENT_LEFT, details_rect.size.x - 32, 13, 4, VISUAL_PALETTE["ink"])
+
+
+func _task_card_progress_text() -> String:
+	if not game_state.is_complete():
+		if game_state.board_count() < GameState.BOARD_TOTAL:
+			return "收集木板 %d/3" % game_state.board_count()
+		return "桥面修复 %d/3" % game_state.placed_count()
+	return _hud_summary_text()
+
+
 func _draw_hud(font: Font) -> void:
-	var panel_width := minf(580.0, maxf(350.0, size.x - 250.0))
-	var hud_rect := Rect2(18, 14, panel_width, 84)
-	_draw_soft_panel(hud_rect, Color("fff9ed", 0.91), Color("d5bd83", 0.92), 20, 0.15)
-	var emblem_center := Vector2(48, 43)
-	draw_circle(emblem_center + Vector2(0, 2), 16.0, Color(0.28, 0.35, 0.23, 0.13))
-	draw_circle(emblem_center, 14.0, Color("ecd18e"))
-	draw_circle(emblem_center, 10.0, Color("fff1c9"))
-	_draw_ellipse_custom(emblem_center + Vector2(-3, 1), Vector2(2.8, 5.4), Color("6d9c62"))
-	_draw_ellipse_custom(emblem_center + Vector2(3, -1), Vector2(2.8, 5.4), Color("91b875"))
-	draw_circle(emblem_center, 1.8, Color("fffaf0"))
-	draw_arc(emblem_center, 17.0, -2.55, -0.65, 12, Color("fffaf0", 0.78), 1.3)
-	var title := _hud_title_text().replace("奇趣小岛 · ", "")
-	draw_string(font, Vector2(72, 48), title, HORIZONTAL_ALIGNMENT_LEFT, panel_width - 224.0, 22, VISUAL_PALETTE["ink"])
-	var badge_fill := Color("e8efd5") if not game_state.can_start_q012() else Color("f7e5b4")
-	var badge_border := Color("a8bd85") if not game_state.can_start_q012() else Color("d6aa5d")
-	var badge_rect := Rect2(hud_rect.end.x - 132.0, 25, 112, 27)
-	_draw_soft_panel(badge_rect, badge_fill, badge_border, 13, 0.07)
-	draw_string(font, badge_rect.position + Vector2(8, 19), _task_stage_label(), HORIZONTAL_ALIGNMENT_CENTER, badge_rect.size.x - 16, 13, Color("425d48"))
-	draw_string(font, Vector2(72, 70), _hud_summary_text(), HORIZONTAL_ALIGNMENT_LEFT, panel_width - 94.0, 14, Color("506858"))
-	var progress_count := _main_story_progress()
-	var progress_x := 72.0
-	var progress_y := 86.0
-	var available_progress_width := panel_width - 94.0
-	var segment_gap := 5.0
-	var segment_width := (available_progress_width - segment_gap * 6.0) / 7.0
-	for step_id in range(7):
-		var x0 := progress_x + float(step_id) * (segment_width + segment_gap)
-		var segment_color := Color("6c9b66") if step_id < progress_count else Color("dce2cc")
-		if step_id == progress_count and progress_count < 7:
-			segment_color = Color("dbb66e")
-		draw_line(Vector2(x0, progress_y), Vector2(x0 + segment_width, progress_y), segment_color, 3.0, true)
+	_draw_task_card(font)
 	var show_inventory: bool = q011_mode or build_mode or game_state.can_start_q004() or not game_state.is_complete() or (_can_use_q008_side_task() and not game_state.is_q008_complete())
 	if not show_inventory:
 		return
 	_draw_soft_panel(INVENTORY_PANEL_RECT, Color("f7edd8", 0.97), Color("ad8a5f"), 18, 0.15)
-	draw_rect(INVENTORY_PANEL_RECT.grow(-5.0), Color("fffaf0", 0.18), false, 1.0, true)
-	draw_rect(Rect2(INVENTORY_PANEL_RECT.position + Vector2(14, 16), Vector2(3, 20)), Color("6c9a65"), true)
 	if q011_mode:
 		_draw_q011_inventory(font)
 	elif build_mode:
@@ -3134,9 +3393,9 @@ func _draw_hud(font: Font) -> void:
 	elif _can_use_q008_side_task() and not game_state.is_q008_complete():
 		_draw_q008_inventory(font)
 	else:
-		draw_string(font, Vector2(928, 602), "小桥修缮 · 木板", HORIZONTAL_ALIGNMENT_LEFT, 158, 16, Color("425d48"))
+		draw_string(font, Vector2(910, 600), "木板", HORIZONTAL_ALIGNMENT_LEFT, 80, 15, Color("425d48"))
 		var board_count_label := "%d/3" % game_state.board_count()
-		draw_string(font, Vector2(1082, 602), board_count_label, HORIZONTAL_ALIGNMENT_RIGHT, 48, 14, Color("8a714c"))
+		draw_string(font, Vector2(1080, 600), board_count_label, HORIZONTAL_ALIGNMENT_RIGHT, 52, 13, Color("8a714c"))
 		for board_id in range(GameState.BOARD_TOTAL):
 			var rect := _inventory_rect(board_id)
 			if game_state.collected[board_id] and not game_state.placed[board_id] and dragging_board != board_id:
@@ -3224,18 +3483,25 @@ func _draw_check_badge(center: Vector2) -> void:
 
 func _draw_touch_hint(font: Font) -> void:
 	var visible_height := size.y
-	var hint_y := minf(644.0, maxf(8.0, visible_height - 76.0))
+	var hint_y := minf(664.0, maxf(8.0, visible_height - 52.0))
 	var joystick_center := _virtual_joystick_center()
-	_draw_soft_panel(Rect2(160, hint_y, 720, 50), Color("fff8e8"), Color("bfca99"), 18, 0.16)
-	draw_circle(Vector2(185, hint_y + 25), 11.0, Color("e8cc88"))
-	draw_circle(Vector2(185, hint_y + 25), 5.0, Color("fff4d3"))
-	draw_string(font, Vector2(207, hint_y + 31.0), "接下来", HORIZONTAL_ALIGNMENT_LEFT, 64, 13, Color("718065"))
-	draw_line(Vector2(277, hint_y + 12), Vector2(277, hint_y + 38), Color("d6d9bf"), 1.0, true)
-	draw_string(font, Vector2(295, hint_y + 31.0), _task_action_hint_text(), HORIZONTAL_ALIGNMENT_LEFT, 570, 15, Color("334c3d"))
+	var hint_rect := Rect2(170, hint_y, 640, 42)
+	_draw_soft_panel(hint_rect, Color("fff8e8", 0.96), Color("bfca99"), 15, 0.11)
+	draw_circle(Vector2(192, hint_y + 21), 9.0, Color("e8cc88"))
+	draw_circle(Vector2(192, hint_y + 21), 4.0, Color("fff4d3"))
+	draw_string(font, Vector2(210, hint_y + 27.0), _compact_action_hint_text(), HORIZONTAL_ALIGNMENT_LEFT, 580, 14, Color("334c3d"))
 	var move_hint := Rect2(24, joystick_center.y - 82.0, 142, 26)
 	_draw_panel(move_hint, Color("fff8e8", 0.92), Color("c4c998"), 12)
 	draw_string(font, move_hint.position + Vector2(9, 18), "拖动圆盘移动", HORIZONTAL_ALIGNMENT_LEFT, 126, 13, Color("4e6953"))
 	_draw_virtual_joystick()
+
+
+func _compact_action_hint_text() -> String:
+	if not game_state.is_complete():
+		if game_state.board_count() < GameState.BOARD_TOTAL:
+			return "靠近木板，按 E 或右下角「收木板」"
+		return "拖动托盘里的木板到桥面缺口"
+	return _task_action_hint_text()
 
 
 func _draw_virtual_joystick() -> void:

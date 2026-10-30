@@ -15,6 +15,7 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 from playwright.sync_api import sync_playwright
+from browser_navigation import Navigator
 
 
 SAVE_KEY = "/userfs/godot/app_userdata/奇趣小岛/qxisland_stage2_save.json"
@@ -65,18 +66,24 @@ def main() -> int:
                     launch_options["executable_path"] = chromium_path
                 browser = playwright.chromium.launch(**launch_options)
                 page = browser.new_page(viewport={"width": 1280, "height": 720}, device_scale_factor=1)
+                navigator = Navigator(page, (build_dir / "index.html").read_text(encoding="utf-8"))
                 page.on("console", lambda message: errors.append(message.text) if message.type == "error" else None)
                 page.on("pageerror", lambda error: errors.append(str(error)))
                 page.on(
                     "requestfailed",
                     lambda request: errors.append(f"{request.url}: {request.failure}"),
                 )
-                page.goto(f"http://127.0.0.1:{server.server_port}/index.html", wait_until="load", timeout=60_000)
+                page.goto(f"http://127.0.0.1:{server.server_port}/index.html?test_telemetry=1", wait_until="load", timeout=60_000)
                 page.wait_for_selector("canvas", timeout=60_000)
                 page.wait_for_timeout(2_500)
-                # Create the WebFS save record in the running engine before replacing it.
-                page.mouse.click(1_150, 50)
-                page.wait_for_timeout(700)
+                # Create the WebFS save through the current menu flow before
+                # replacing it with an isolated post-story fixture.
+                page.mouse.click(1_216, 44)
+                page.wait_for_timeout(300)
+                page.mouse.click(1_216, 124)
+                page.wait_for_timeout(500)
+                page.mouse.click(775, 392)
+                page.wait_for_timeout(900)
 
                 page.evaluate(
                     """async ({key, payload}) => new Promise((resolve, reject) => {
@@ -160,7 +167,6 @@ def main() -> int:
                 def approach_and_interact(direction: str, label: str, condition, steps: int = 20) -> dict[str, object]:
                     latest: dict[str, object] = {}
                     for _ in range(steps):
-                        move(direction, 120)
                         interact()
                         # Avoid issuing another physical tap while the browser
                         # has not yet flushed Godot's save into IndexedDB.
@@ -171,6 +177,7 @@ def main() -> int:
                                 print(f"PASS {label}", flush=True)
                                 return latest
                             page.wait_for_timeout(200)
+                        move(direction, 120)
                     raise AssertionError(f"{label}; latest save: {json.dumps(latest, ensure_ascii=False)}")
 
                 def drag(source: tuple[int, int], target: tuple[int, int], screenshot: str | None = None) -> None:
@@ -191,28 +198,32 @@ def main() -> int:
                 snap("web-q007-optional-unlocked.png")
 
                 # Cross the repaired bridge, reach the shell, and collect it.
-                move("w", 650)
-                move("d", 2_000)
-                move("s", 211)
-                approach_and_interact(
-                    "d",
-                    "Q007 collect shell and unlock reward",
+                # The shell route enters the bridge from its north edge; keep
+                # the low-FPS browser avatar aligned with the walking lane.
+                navigator.go(("y", 339), ("x", 930), ("y", 400))
+                print(f"Q007 shell approach: {navigator.position()}", flush=True)
+                snap("web-q007-before-shell-interaction.png")
+                page.keyboard.press("e")
+                page.wait_for_timeout(650)
+                verify(
                     lambda save: save.get("q007_shell_collected") is True and save.get("q007_reward_unlocked") is True,
+                    "Q007 collect shell and unlock reward",
                 )
                 snap("web-q007-shell-collected.png")
 
                 # Return across the bridge and gather all birdhouse materials.
-                # Q007 ends beside the bridge at its south entrance. Keep the
-                # avatar on that lane while crossing west, then head south to
-                # the rope on the west bank. Stepping north first leaves the
-                # bridge lane and makes the river correctly block movement.
-                move("a", 1_200)
-                move("s", 700)
-                move("d", 450)
+                # Move north onto the bridge deck, cross to the west bank, then
+                # head south to the rope on the cottage side of the river.
+                navigator.go(("y", 339), ("x", 650))
+                snap("web-q009-return-aligned.png")
+                navigator.go(("y", 460))
+                snap("web-q009-return-west-bank.png")
                 snap("web-q009-before-rope.png")
                 interact()
                 verify(lambda save: save.get("q009_materials_collected") == [False, False, True], "Q009 collect rope at west shore")
-                move("a", 1_600)
+                # Go around the fox cottage rather than crossing its solid
+                # footprint on the way to the branch at the island's south-west.
+                navigator.go(("y", 400), ("x", 290), ("y", 525))
                 snap("web-q009-at-branch.png")
                 # The westbound return path ends inside this branch's radius;
                 # interact immediately instead of walking past it.
@@ -221,12 +232,7 @@ def main() -> int:
                     lambda save: save.get("q009_materials_collected") == [True, False, True],
                     "Q009 collect branch by west shore",
                 )
-                move("w", 1_077)
-                move("d", 230)
-                # The feather sits near the edge of the interaction radius on
-                # the timed route above. Step a little closer so slower browser
-                # frames cannot leave the avatar just outside pickup range.
-                move("s", 130)
+                navigator.go(("y", 340), ("x", 300))
                 interact()
                 collected_materials = verify(
                     lambda save: save.get("q009_materials_collected") == [True, True, True]
@@ -239,19 +245,7 @@ def main() -> int:
 
                 # Take the materials to the birdhouse and hand them over one by
                 # one so each interaction visibly advances construction.
-                move("d", 1_360)
-                move("a", 200)
-                # Align with the birdhouse before walking south. At this
-                # viewport, the player can otherwise remain just outside its
-                # circular interaction radius or meet the river edge. Step
-                # back onto the west bank, then follow the shore south.
-                move("d", 180)
-                move("a", 200)
-                # The walk from the river lane can stop slightly west of the
-                # birdhouse because terrain blocks the diagonal approach.
-                # Align with the house before heading south to deliver.
-                move("d", 350)
-                move("a", 250)
+                navigator.go(("y", 400), ("x", 650), ("y", 440))
                 snap("web-q009-at-birdhouse.png")
                 delivery_save = approach_and_interact(
                     "s",
@@ -282,32 +276,37 @@ def main() -> int:
                 snap("web-q009-birdhouse-complete.png")
 
                 # The greeting is optional, but it should work once materials are gathered.
-                move("w", 135)
+                navigator.go(("y", 420))
                 interact()
                 snap("web-q009-bird-greeting.png")
 
-                # The birdhouse sits nearly level with the red seed. Head west
-                # in one straight run so frame timing cannot leave us above or
-                # below its interaction radius, and stop before the gold seed.
-                move("a", 1_800)
+                # Go north of the cottage footprint before heading west to the
+                # red seed, then stop before the gold seed.
+                navigator.go(("y", 380))
+                # Stop just east of the southwest tree so the downhill path
+                # to the red seed stays clear of its trunk collider.
+                navigator.go(("x", 180), ("y", 430))
                 snap("web-q010-before-red-seed.png")
-                interact()
-                verify(
-                    lambda save: save.get("q010_seeds_collected") == [True, False, False],
-                    "Q010 collect red seed",
-                )
-                move("d", 320)
-                snap("web-q010-before-gold-seed.png")
                 approach_and_interact(
-                    "d",
+                    "s",
+                    "Q010 collect red seed",
+                    lambda save: save.get("q010_seeds_collected") == [True, False, False],
+                )
+                navigator.go(("x", 260))
+                snap("web-q010-before-gold-seed.png")
+                print(f"Q010 gold seed approach: {navigator.position()}", flush=True)
+                approach_and_interact(
+                    "a",
                     "Q010 collect gold seed",
                     lambda save: save.get("q010_seeds_collected") == [True, False, True],
                 )
                 snap("web-q010-after-gold-seed.png")
-                move("w", 350)
-                move("d", 1_135)
-                interact()
-                verify(lambda save: save.get("q010_seeds_collected") == [True, True, True], "Q010 collect all three seeds")
+                navigator.go(("y", 300), ("x", 550))
+                approach_and_interact(
+                    "d",
+                    "Q010 collect all three seeds",
+                    lambda save: save.get("q010_seeds_collected") == [True, True, True],
+                )
                 snap("web-q010-seeds-complete.png")
 
                 # Lay the three path pavers, checking the first live drag target.

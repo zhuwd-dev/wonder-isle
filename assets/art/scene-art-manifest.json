@@ -1,0 +1,149 @@
+{
+  "schema_version": 1,
+  "world_reference": {
+    "background": "assets/art/environment/floating-garden-bg.jpg",
+    "source_size": [1280, 720],
+    "camera": "soft elevated three-quarter, child-friendly 2.5D",
+    "light_direction": "upper-left",
+    "palette": ["sunlit yellow-green grass", "turquoise water", "warm stone", "terracotta wood accents"],
+    "asset_source_policy": "project-owned or authorized generation only"
+  },
+  "assets": [
+    {
+      "id": "woodland_footbridge",
+      "quest": "Q001",
+      "states": {
+        "damaged": "assets/art/environment/bridge/woodland-footbridge-damaged.png",
+        "complete": "assets/art/environment/woodland-footbridge.png",
+        "repair_plank": "assets/art/environment/bridge/bridge-deck-plank.png"
+      },
+      "source": "OpenAI Image Generation, 2026-10-30; edited to match the existing project-owned footbridge",
+      "source_ids": {
+        "damaged": "exec-aa70cc74-2dd6-40b9-bd4c-2c47da7cd3cc",
+        "repair_plank": "exec-c946157a-7fb7-4e76-abb3-3ff357c7aebd"
+      },
+      "format": "PNG RGBA transparent cutouts",
+      "source_size": [1560, 1008],
+      "game_size": {"bridge": [210, 136], "repair_plank": [24, 18]},
+      "anchor": {"type": "center", "world": [820, 375]},
+      "progress_rendering": "0/3 uses damaged bridge art, 1/3 and 2/3 place matching plank sprites, 3/3 uses the existing complete bridge",
+      "collision": "existing Q001 bridge unlock rule; no gameplay condition changed"
+    },
+    {
+      "id": "fox_cottage",
+      "quest": "Q004",
+      "states": {
+        "construction": "assets/art/environment/buildings/fox-cottage-construction.png",
+        "complete": "assets/art/environment/buildings/fox-cottage-complete.png"
+      },
+      "source": "OpenAI Image Generation, 2026-10-30; referenced project background, bridge and fox",
+      "source_ids": {"construction": "exec-5da47dc0-71fa-4610-b4ea-38553e54a540", "complete": "exec-13cbc290-a86c-4787-8a80-92ae95f434f2"},
+      "format": "PNG RGBA, transparent isolated cutout",
+      "source_sizes": {"construction": [1355, 1160], "complete": [1355, 1161]},
+      "game_size": [154, 140],
+      "anchor": {"type": "bottom_center", "world": [520, 552]},
+      "collision": {"type": "rect", "world_rect": [466, 476, 108, 76]},
+      "occlusion": {"type": "foot_y_sort", "implemented": true, "foot_anchor_y": 552}
+    },
+    {
+      "id": "birdhouse",
+      "quest": "Q009",
+      "states": {
+        "construction": "assets/art/environment/buildings/birdhouse-construction.png",
+        "complete": "assets/art/environment/buildings/birdhouse-complete.png"
+      },
+      "source": "OpenAI Image Generation, 2026-10-30; referenced project background, bridge and cottage",
+      "source_ids": {"construction": "exec-4fb68a5f-4cba-4af7-bb20-2fb98404cff4", "complete": "exec-bfb3f813-68cd-48b4-8afd-5c2da79fe48c"},
+      "format": "PNG RGBA, transparent isolated cutout",
+      "source_sizes": {"construction": [1122, 1402], "complete": [1122, 1402]},
+      "game_size": [76, 102],
+      "anchor": {"type": "bottom_center", "world": [650, 540]},
+      "collision": {"type": "rect", "world_rect": [624, 488, 52, 44], "purpose": "planted base only; keep west-side exit lane open"},
+      "occlusion": {"type": "foot_y_sort", "implemented": true, "foot_anchor_y": 540}
+    },
+    {
+      "id": "garden_soil_bed",
+      "quest": "Q002/Q005",
+      "states": {"dry_or_watered": "assets/art/environment/farmland/garden-soil-bed.png"},
+      "source": "OpenAI Image Generation, 2026-10-30; referenced project background and bridge",
+      "source_id": "exec-f195548c-1344-4af9-baec-42c01cd9a6f3",
+      "format": "PNG RGBA, transparent ground layer",
+      "source_size": [1774, 887],
+      "game_size": [204, 75],
+      "anchor": {"type": "center", "world": [1080, 480]},
+      "collision": {"type": "none", "plants": "remain separate stateful objects"},
+      "occlusion": {"type": "ground_layer", "implemented": true}
+    },
+    {
+      "id": "natural_pond",
+      "quest": "Q003",
+      "states": {"shore_and_water": "assets/art/environment/pond/natural-pond.png"},
+      "source": "OpenAI Image Generation, 2026-10-30; referenced project background, bridge and garden soil",
+      "source_id": "exec-56391675-e26c-4180-8284-2bbfe84ba02e",
+      "format": "PNG RGBA, transparent terrain cutout",
+      "source_size": [1492, 1054],
+      "game_size": [210, 124],
+      "anchor": {"type": "center", "world": [1031, 335]},
+      "collision": {"type": "polygon", "space": "water only", "stone_targets": "POND_SLOTS align to shallow water marks"},
+      "occlusion": {"type": "terrain_layer", "implemented": true}
+    },
+    {
+      "id": "river_stone",
+      "quest": "Q003",
+      "states": {"normal": "assets/art/props/river-stone.png"},
+      "source": "OpenAI Image Generation, 2026-10-30; referenced project background and bridge",
+      "source_id": "exec-c06ef0c3-fc6c-4ce1-b58e-cbe5ad94f894",
+      "format": "PNG RGBA, transparent item cutout",
+      "source_size": [1448, 1086],
+      "game_size": [32, 23],
+      "anchor": {"type": "center", "world": "existing stone positions / active drag position"},
+      "collision": {"type": "none", "interactive_bounds": "existing pond item logic"},
+      "occlusion": {"type": "drawn at ground layer, lifted while dragged", "implemented": true}
+    },
+    {
+      "id": "garden_decorations",
+      "quest": "Q006",
+      "states": {
+        "wood_fence": "assets/art/decorations/garden-fence.png",
+        "terracotta_planter": "assets/art/decorations/terracotta-planter.png",
+        "garden_lantern": "assets/art/decorations/garden-lantern.png"
+      },
+      "source": "OpenAI Image Generation, 2026-10-30; referenced project background and woodland-footbridge",
+      "source_id": "exec-66ced742-a53f-4ea6-9fca-531b78c0c765",
+      "source_size": [2046, 768],
+      "format": "separate PNG RGBA transparent cutouts cropped from generated asset sheet",
+      "game_sizes": {
+        "wood_fence": [64, 40],
+        "terracotta_planter": [42, 56],
+        "garden_lantern": [42, 58]
+      },
+      "anchor": {"type": "bottom_center", "world": "free placement point + (0, 12)"},
+      "collision": {"type": "none", "interactive_bounds": "existing free-placement validation"},
+      "occlusion": {"type": "grounded cutout, lifted while dragged", "implemented": true}
+    },
+    {
+      "id": "weathered_planks",
+      "quest": "Q001/Q008",
+      "states": {"normal": "assets/art/props/weathered-planks.png"},
+      "source": "Existing project-owned game asset; reused without modification",
+      "source_size": [320, 287],
+      "format": "PNG RGBA transparent cutout",
+      "game_sizes": {"bridge_board": [80, 54], "path_board": [60, 40]},
+      "anchor": {"type": "bottom_center"},
+      "collision": {"type": "none", "interactive_bounds": "existing bridge/path placement logic"},
+      "occlusion": {"type": "drawn at ground layer, lifted while dragged", "implemented": true}
+    }
+  ],
+  "background_obstacle_source": "scripts/visual/scene_art_registry.gd",
+  "background_obstacles": [
+    {"id": "northwest_cherry_trunk", "kind": "tree_trunk", "center": [118, 180], "radius": 13, "root_y": 181},
+    {"id": "west_meadow_boulder", "kind": "rock", "center": [112, 226], "radius": 18, "root_y": 246},
+    {"id": "southwest_cherry_trunk", "kind": "tree_trunk", "center": [126, 520], "radius": 12, "root_y": 533},
+    {"id": "southwest_shore_rock", "kind": "rock", "center": [246, 562], "radius": 15, "root_y": 581},
+    {"id": "south_meadow_rock", "kind": "rock", "center": [584, 558], "radius": 16, "root_y": 576},
+    {"id": "northeast_cherry_trunk", "kind": "tree_trunk", "center": [1182, 171], "radius": 12, "root_y": 191},
+    {"id": "east_shore_boulder", "kind": "rock", "center": [950, 257], "radius": 16, "root_y": 280},
+    {"id": "southeast_cliff_rock", "kind": "rock", "center": [1177, 528], "radius": 17, "root_y": 554}
+  ],
+  "background_occlusion_limit": "The source island JPEG is flattened; tree-canopy and rock foreground cutouts are not available. Background trunk/rock collision is registered separately, but those image regions are not yet Y-sorted overlays."
+}

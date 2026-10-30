@@ -5,6 +5,8 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
+import re
 import sys
 from pathlib import Path
 
@@ -76,6 +78,9 @@ def main() -> int:
     except json.JSONDecodeError:
         print("Godot Web startup configuration is not valid JSON.", file=sys.stderr)
         return 1
+    commit = os.environ.get("GITHUB_SHA", "")
+    version = commit[:7].lower() if re.fullmatch(r"[0-9a-fA-F]{40}", commit) else "local"
+    config["args"] = ["--", f"--build-revision={version}"]
     config["executable"] = executable
     config["fileSizes"] = {
         f"{executable}.{extension}": config["fileSizes"][f"index.{extension}"]
@@ -89,6 +94,12 @@ def main() -> int:
             return 1
         html = html.replace(OLD_LANGUAGE, NEW_LANGUAGE, 1)
         html = html.replace(OLD_NOTICE, NEW_NOTICE, 1)
+    version_badge = (f'<div id="build-version" aria-label="游戏版本" '
+                     f'style="position:fixed;top:2px;left:50%;transform:translateX(-50%);'
+                     f'z-index:10;pointer-events:none;font:11px sans-serif;color:#36574a;'
+                     f'background:rgba(255,249,237,.85);border-radius:5px;padding:1px 6px">'
+                     f'版本 {version}</div>')
+    html = html.replace("</body>", version_badge + "\n</body>", 1)
     index_file.write_text(html, encoding="utf-8")
 
     # Remove payloads from earlier exports in a reused local build directory.

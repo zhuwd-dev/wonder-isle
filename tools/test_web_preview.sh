@@ -51,4 +51,5 @@ if [[ -n "$CHROMIUM_PATH" ]]; then
 fi
 
 "$python_bin" "$project_root/tools/test_web_preview.py" "$build_dir"
+"$python_bin" "$project_root/tools/test_story_browser.py" "$build_dir"
 "$python_bin" "$project_root/tools/test_optional_quest_browser.py" "$build_dir"

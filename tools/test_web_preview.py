@@ -16,11 +16,44 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 from playwright.sync_api import sync_playwright
+from browser_navigation import Navigator
 
 
 class QuietHandler(SimpleHTTPRequestHandler):
     def log_message(self, _format: str, *_args: object) -> None:
         pass
+
+
+def inject_save_fixture(page, save_key: str, fixture_path: Path) -> None:
+    fixture_base64 = base64.b64encode(fixture_path.read_bytes()).decode("ascii")
+    page.evaluate(
+        """async ({key, payload}) => new Promise((resolve, reject) => {
+            const binary = atob(payload);
+            const contents = new Int8Array(binary.length);
+            for (let index = 0; index < binary.length; index++) {
+                contents[index] = binary.charCodeAt(index);
+            }
+            const opening = indexedDB.open('/userfs');
+            opening.onerror = () => reject(opening.error);
+            opening.onsuccess = () => {
+                const transaction = opening.result.transaction('FILE_DATA', 'readwrite');
+                const store = transaction.objectStore('FILE_DATA');
+                const existing = store.get(key);
+                existing.onsuccess = () => {
+                    const record = existing.result || {};
+                    record.timestamp = new Date();
+                    record.contents = contents;
+                    store.put(record, key);
+                };
+                transaction.oncomplete = resolve;
+                transaction.onerror = () => reject(transaction.error);
+            };
+        })""",
+        {"key": save_key, "payload": fixture_base64},
+    )
+    page.reload(wait_until="load", timeout=60_000)
+    page.wait_for_selector("canvas", timeout=60_000)
+    page.wait_for_timeout(4_500)
 
 
 def main() -> int:
@@ -51,6 +84,13 @@ def main() -> int:
     artifact_dir = Path(os.environ.get("WEB_TEST_ARTIFACTS", default_artifact_dir)).resolve()
     artifact_dir.mkdir(parents=True, exist_ok=True)
     screenshot_path = artifact_dir / "web-preview.png"
+    q001_initial_screenshot_path = artifact_dir / "web-q001-initial.png"
+    q001_collected_screenshot_path = artifact_dir / "web-q001-collected-1.png"
+    q001_bridge_1_screenshot_path = artifact_dir / "web-q001-bridge-1-of-3.png"
+    q001_bridge_2_screenshot_path = artifact_dir / "web-q001-bridge-2-of-3.png"
+    q001_bridge_3_screenshot_path = artifact_dir / "web-q001-bridge-3-of-3.png"
+    q001_task_details_screenshot_path = artifact_dir / "web-q001-task-details.png"
+    q001_restart_confirmation_screenshot_path = artifact_dir / "web-q001-restart-confirmation.png"
     seed_planted_screenshot_path = artifact_dir / "web-q002-seed-planted.png"
     turtle_garden_screenshot_path = artifact_dir / "web-q005-turtle-garden.png"
     turtle_growth_screenshot_path = artifact_dir / "web-q005-watered-growth.png"
@@ -186,6 +226,7 @@ def main() -> int:
 
                 # Use a fresh engine instance at desktop size for deterministic game input.
                 page = browser.new_page(viewport={"width": 1280, "height": 720}, device_scale_factor=1)
+                navigator = Navigator(page, index_html)
                 page.on(
                     "console",
                     lambda message: result["console_errors"].append(message.text)
@@ -200,12 +241,75 @@ def main() -> int:
                     ),
                 )
                 page.goto(
-                    f"http://127.0.0.1:{server.server_port}/index.html",
+                    f"http://127.0.0.1:{server.server_port}/index.html?test_telemetry=1",
                     wait_until="load",
                     timeout=60_000,
                 )
                 page.wait_for_selector("canvas", timeout=60_000)
                 page.wait_for_timeout(3_000)
+
+                # Build isolated Q001 fixtures to verify each visual state in the
+                # current Web export without touching a real browser save.
+                with tempfile.TemporaryDirectory(prefix="wonder-isle-q001-visual-") as temp_dir:
+                    fixture_directory = Path(temp_dir)
+                    subprocess.run(
+                        [
+                            godot_bin,
+                            "--headless",
+                            "--path",
+                            str(Path(__file__).resolve().parent.parent),
+                            "--script",
+                            "tests/create_q001_visual_saves.gd",
+                            "--",
+                            str(fixture_directory),
+                        ],
+                        check=True,
+                        capture_output=True,
+                        text=True,
+                    )
+                    save_key = "/userfs/godot/app_userdata/奇趣小岛/qxisland_stage2_save.json"
+                    fixture_paths = {
+                        stage: fixture_directory / f"q001-{stage}.json"
+                        for stage in ("initial", "collected-1", "bridge-1", "bridge-2", "bridge-3")
+                    }
+                    # Capture the real fresh opening state before creating an isolated
+                    # IndexedDB save; the restart confirmation also initializes the
+                    # browser filesystem entry that later fixture reloads replace.
+                    page.screenshot(path=str(q001_initial_screenshot_path), full_page=True)
+                    page.mouse.click(180, 45)
+                    page.wait_for_timeout(250)
+                    page.screenshot(path=str(q001_task_details_screenshot_path), full_page=True)
+                    page.mouse.click(180, 45)
+                    page.wait_for_timeout(250)
+                    page.mouse.click(1216, 44)
+                    page.wait_for_timeout(300)
+                    page.mouse.click(1216, 124)
+                    page.wait_for_timeout(500)
+                    page.screenshot(path=str(q001_restart_confirmation_screenshot_path), full_page=True)
+                    page.mouse.click(775, 392)
+                    page.wait_for_timeout(4_500)
+
+                    for stage in ("collected-1", "bridge-1", "bridge-2", "bridge-3"):
+                        inject_save_fixture(page, save_key, fixture_paths[stage])
+                        if stage == "collected-1":
+                            page.screenshot(path=str(q001_collected_screenshot_path), full_page=True)
+                        elif stage == "bridge-1":
+                            page.screenshot(path=str(q001_bridge_1_screenshot_path), full_page=True)
+                        elif stage == "bridge-2":
+                            page.screenshot(path=str(q001_bridge_2_screenshot_path), full_page=True)
+                        else:
+                            page.screenshot(path=str(q001_bridge_3_screenshot_path), full_page=True)
+                    result.update(
+                        {
+                            "q001_initial_screenshot": str(q001_initial_screenshot_path),
+                            "q001_collected_screenshot": str(q001_collected_screenshot_path),
+                            "q001_bridge_1_screenshot": str(q001_bridge_1_screenshot_path),
+                            "q001_bridge_2_screenshot": str(q001_bridge_2_screenshot_path),
+                            "q001_bridge_3_screenshot": str(q001_bridge_3_screenshot_path),
+                            "q001_task_details_screenshot": str(q001_task_details_screenshot_path),
+                            "q001_restart_confirmation_screenshot": str(q001_restart_confirmation_screenshot_path),
+                        }
+                    )
 
                 with tempfile.TemporaryDirectory(prefix="wonder-isle-seed-planted-") as temp_dir:
                     fixture_path = Path(temp_dir) / "seed-planted-save.json"
@@ -224,38 +328,7 @@ def main() -> int:
                         capture_output=True,
                         text=True,
                     )
-                    fixture_base64 = base64.b64encode(fixture_path.read_bytes()).decode("ascii")
-                    save_key = "/userfs/godot/app_userdata/奇趣小岛/qxisland_stage2_save.json"
-                    page.mouse.click(1150, 50)
-                    page.wait_for_timeout(700)
-                    page.evaluate(
-                        """async ({key, payload}) => new Promise((resolve, reject) => {
-                            const binary = atob(payload);
-                            const contents = new Int8Array(binary.length);
-                            for (let index = 0; index < binary.length; index++) {
-                                contents[index] = binary.charCodeAt(index);
-                            }
-                            const opening = indexedDB.open('/userfs');
-                            opening.onerror = () => reject(opening.error);
-                            opening.onsuccess = () => {
-                                const transaction = opening.result.transaction('FILE_DATA', 'readwrite');
-                                const store = transaction.objectStore('FILE_DATA');
-                                const existing = store.get(key);
-                                existing.onsuccess = () => {
-                                    const record = existing.result || {};
-                                    record.timestamp = new Date();
-                                    record.contents = contents;
-                                    store.put(record, key);
-                                };
-                                transaction.oncomplete = resolve;
-                                transaction.onerror = () => reject(transaction.error);
-                            };
-                        })""",
-                        {"key": save_key, "payload": fixture_base64},
-                    )
-                    page.reload(wait_until="load", timeout=60_000)
-                    page.wait_for_selector("canvas", timeout=60_000)
-                    page.wait_for_timeout(3_000)
+                    inject_save_fixture(page, save_key, fixture_path)
                     seed_stage_save = page.evaluate(
                         """async key => new Promise((resolve, reject) => {
                             const opening = indexedDB.open('/userfs');
@@ -349,11 +422,9 @@ def main() -> int:
                         # carry the bouquet to the turtle and deliver it.
                         # Cross at the center of the bridge, then approach the
                         # watering point from the south with timing margin for WebGL.
-                        page.mouse.click(800, 600)
-                        for key, duration_ms in (("w", 600), ("d", 3_000), ("s", 650), ("a", 350)):
-                            page.keyboard.down(key)
-                            page.wait_for_timeout(duration_ms)
-                            page.keyboard.up(key)
+                        print(f"Q005 start: {navigator.position()}", flush=True)
+                        navigator.go(("y", 339), ("x", 930), ("y", 500), ("x", 975))
+                        print(f"Q005 watering point: {navigator.position()}", flush=True)
                         page.screenshot(path=str(artifact_dir / "web-q005-at-watering-point.png"), full_page=True)
                         page.mouse.click(1_214, 662)
                         page.wait_for_timeout(180)
@@ -379,9 +450,10 @@ def main() -> int:
                             page.wait_for_timeout(500)
                         if watered_save.get("q005_watered") is not True:
                             raise AssertionError("The bottom-right control did not water the Q005 garden")
-                        # Move into the first bloom's small pickup radius; each
-                        # flower remains a distinct action rather than overlapping.
-                        for key, duration_ms in (("d", 250), ("w", 250), ("s", 150), ("d", 220)):
+                        # Approach the first bloom from the south-west, then
+                        # walk east from flower to flower. Keep each pickup a
+                        # separate right-thumb action so the test matches play.
+                        for key, duration_ms in (("d", 100), ("w", 120)):
                             page.keyboard.down(key)
                             page.wait_for_timeout(duration_ms)
                             page.keyboard.up(key)
@@ -414,35 +486,50 @@ def main() -> int:
                             raise AssertionError("Harvesting must leave the flower in its bed and wait for bouquet delivery")
 
                         for harvest_step in range(1, 3):
-                            direction = "d" if harvest_step == 1 else "a"
-                            page.keyboard.down(direction)
-                            page.wait_for_timeout(200 if harvest_step == 1 else 400)
-                            page.keyboard.up(direction)
-                            page.mouse.click(1_214, 662)
-                            page.wait_for_timeout(500)
+                            expected_count = harvest_step + 1
+                            # Reach the next flower with one short step. For
+                            # the final flower, use the save flags to choose
+                            # which side of the bed still needs harvesting.
+                            if harvest_step == 1:
+                                direction = "d"
+                            else:
+                                remaining_id = next(
+                                    index for index, collected in enumerate(plant_flags) if not collected
+                                )
+                                direction = "d" if remaining_id == 2 else "a"
+                            attempts = 1 if harvest_step == 1 else 5
+                            harvested_save = {}
+                            for _attempt in range(attempts):
+                                page.keyboard.down(direction)
+                                page.wait_for_timeout(150 if harvest_step == 1 else 100)
+                                page.keyboard.up(direction)
+                                page.mouse.click(1_214, 662)
+                                page.wait_for_timeout(500)
+                                for _ in range(24 if harvest_step == 1 else 6):
+                                    harvested_save = page.evaluate(
+                                        """async key => new Promise((resolve, reject) => {
+                                            const opening = indexedDB.open('/userfs');
+                                            opening.onerror = () => reject(opening.error);
+                                            opening.onsuccess = () => {
+                                                const transaction = opening.result.transaction('FILE_DATA', 'readonly');
+                                                const request = transaction.objectStore('FILE_DATA').get(key);
+                                                request.onsuccess = () => resolve(JSON.parse(new TextDecoder().decode(new Uint8Array(request.result.contents))));
+                                                request.onerror = () => reject(request.error);
+                                            };
+                                        })""",
+                                        save_key,
+                                    )
+                                    plant_flags = harvested_save.get("q005_plants_collected", [])
+                                    if isinstance(plant_flags, list) and sum(bool(flag) for flag in plant_flags) >= expected_count:
+                                        break
+                                    page.wait_for_timeout(500)
+                                plant_flags = harvested_save.get("q005_plants_collected", [])
+                                if isinstance(plant_flags, list) and sum(bool(flag) for flag in plant_flags) >= expected_count:
+                                    break
                             page.screenshot(
                                 path=str(artifact_dir / f"web-q005-harvest-{harvest_step + 1}.png"),
                                 full_page=True,
                             )
-                            expected_count = harvest_step + 1
-                            for _ in range(24):
-                                harvested_save = page.evaluate(
-                                    """async key => new Promise((resolve, reject) => {
-                                        const opening = indexedDB.open('/userfs');
-                                        opening.onerror = () => reject(opening.error);
-                                        opening.onsuccess = () => {
-                                            const transaction = opening.result.transaction('FILE_DATA', 'readonly');
-                                            const request = transaction.objectStore('FILE_DATA').get(key);
-                                            request.onsuccess = () => resolve(JSON.parse(new TextDecoder().decode(new Uint8Array(request.result.contents))));
-                                            request.onerror = () => reject(request.error);
-                                        };
-                                    })""",
-                                    save_key,
-                                )
-                                plant_flags = harvested_save.get("q005_plants_collected", [])
-                                if isinstance(plant_flags, list) and sum(bool(flag) for flag in plant_flags) >= expected_count:
-                                    break
-                                page.wait_for_timeout(500)
                             plant_flags = harvested_save.get("q005_plants_collected", [])
                             if not isinstance(plant_flags, list) or sum(bool(flag) for flag in plant_flags) < expected_count:
                                 raise AssertionError(f"The browser must collect flower {expected_count}/3; latest save: " + json.dumps(harvested_save, ensure_ascii=False))
@@ -507,9 +594,6 @@ def main() -> int:
                         result["q005_bouquet_screenshot"] = str(turtle_bouquet_screenshot_path)
                         result["q005_delivery_screenshot"] = str(turtle_delivery_screenshot_path)
 
-                    page.mouse.click(1150, 50)
-                    page.wait_for_timeout(1_000)
-
                 with tempfile.TemporaryDirectory(prefix="wonder-isle-q012-") as temp_dir:
                     fixture_path = Path(temp_dir) / "q012-ending-save.json"
                     subprocess.run(
@@ -568,24 +652,20 @@ def main() -> int:
                     page.screenshot(path=str(ending_screenshot_path), full_page=True)
 
                     page.mouse.click(800, 600)
-                    for key, duration_ms in (("w", 600), ("d", 1_400), ("w", 550)):
+                    # Walk around the cottage on the left island, then approach
+                    # the rabbit from the north. The former eastward sweep
+                    # relied on crossing the river directly, which the
+                    # production collision map correctly prevents.
+                    for key, duration_ms in (("w", 380), ("d", 1_300), ("w", 650)):
                         page.keyboard.down(key)
                         page.wait_for_timeout(duration_ms)
                         page.keyboard.up(key)
-                    # Low-FPS software rendering can make the timed approach
-                    # undershoot by over 70px. Sweep east across the rabbit's
-                    # interaction radius and tap the same right-thumb action
-                    # a player would use; repeated taps are harmless after the
-                    # one-shot ending state has been saved.
-                    page.keyboard.down("a")
-                    page.wait_for_timeout(350)
-                    page.keyboard.up("a")
-                    for _ in range(28):
-                        page.keyboard.down("d")
-                        page.wait_for_timeout(160)
-                        page.keyboard.up("d")
+                    # Retry the right-thumb interaction in place to tolerate
+                    # small browser frame-rate differences without walking
+                    # away from the target.
+                    for _ in range(6):
                         page.mouse.click(1_214, 662)
-                        page.wait_for_timeout(100)
+                        page.wait_for_timeout(350)
                     page.screenshot(path=str(artifact_dir / "web-q012-at-rabbit.png"), full_page=True)
                     page.wait_for_timeout(1_500)
                     page.screenshot(path=str(artifact_dir / "web-q012-after-interact.png"), full_page=True)

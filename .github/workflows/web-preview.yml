@@ -125,10 +125,10 @@ jobs:
 
   deploy-preview:
     if: >-
-      github.event_name == 'push' ||
+      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
       (github.event_name == 'workflow_dispatch' &&
       (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/work'))
-    needs: web-preview
+    needs: [web-preview, regression-tests]
     runs-on: ubuntu-latest
     permissions:
       pages: write
