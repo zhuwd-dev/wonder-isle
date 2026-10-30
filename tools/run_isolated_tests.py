@@ -103,6 +103,22 @@ def main() -> int:
     Path(env["XDG_CONFIG_HOME"]).mkdir(parents=True, exist_ok=True)
     (Path(env["XDG_CACHE_HOME"]) / "fontconfig").mkdir(parents=True, exist_ok=True)
 
+    # A fresh CI checkout has no .godot/imported files. Script-mode Godot
+    # does not import PNGs or fonts automatically, so prepare resources before
+    # starting any test rather than letting preload failures hang each case.
+    import_command = [str(godot), "--headless", "--editor", "--path", str(ROOT), "--import"]
+    try:
+        imported = subprocess.run(import_command, cwd=ROOT, env=env, text=True,
+                                  stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=300)
+    except subprocess.TimeoutExpired:
+        print("Godot resource import timed out after 300 seconds", file=sys.stderr)
+        return 1
+    (test_root / "resource-import.log").write_text(imported.stdout)
+    if imported.returncode != 0 or ERROR_MARKER.search(imported.stdout):
+        print(f"Godot resource import failed (exit {imported.returncode}):\n{imported.stdout}", file=sys.stderr)
+        return 1
+    print("Godot project resources imported", flush=True)
+
     failures: list[tuple[str, int, str]] = []
     base_command = [str(godot), "--headless", "--path", str(ROOT)]
     cases = regression_cases(save_path)
