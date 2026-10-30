@@ -223,7 +223,7 @@ def main() -> int:
                 verify(lambda save: save.get("q009_materials_collected") == [False, False, True], "Q009 collect rope at west shore")
                 # Go around the fox cottage rather than crossing its solid
                 # footprint on the way to the branch at the island's south-west.
-                navigator.go(("y", 400), ("x", 290), ("y", 525))
+                navigator.go(("y", 400), ("x", 280), ("y", 525))
                 snap("web-q009-at-branch.png")
                 # The westbound return path ends inside this branch's radius;
                 # interact immediately instead of walking past it.
@@ -333,9 +333,13 @@ def main() -> int:
                 snap("web-q011-all-optional-complete.png")
 
                 page.reload(wait_until="load", timeout=60_000)
+                navigator.state = None
                 page.wait_for_selector("canvas", timeout=60_000)
                 page.wait_for_timeout(2_500)
                 verify(lambda save: save.get("q011_slot_occupants") == [0, 1, 2], "Q007–Q011 progress survives browser refresh")
+                restored = navigator.position()
+                if not restored.get("q010_completed") or not restored.get("q011_completed"):
+                    raise AssertionError(f"The game did not restore Q010–Q011 progress: {restored}")
                 snap("web-q011-after-refresh.png")
 
                 # Re-enter decoration mode after the story and move a placed

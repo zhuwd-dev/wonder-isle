@@ -82,7 +82,7 @@ def main():
                 drag(source, target)
                 verify(lambda s, i=index: s['placed'][i], f"Q001 repair {index + 1}/3")
             page.screenshot(path=str(artifacts / "web-story-bridge-complete.png"))
-            nav.go(('y', 339), ('x', 930), ('y', 400), ('x', 965))
+            nav.go(('y', 339), ('x', 930), ('y', 400), ('x', 980))
             interact()
             verify(lambda s: s['seed_collected'], "Q002 collect seed after crossing")
             nav.go(('y', 450), ('x', 1030))
@@ -116,8 +116,8 @@ def main():
             interact()
             verify(lambda s: s['q005_completed'], "Q005 deliver bouquet")
             page.screenshot(path=str(artifacts / "web-story-q005-complete.png"))
-            nav.state = None
             page.reload(wait_until="load")
+            nav.state = None
             loaded = nav.position()
             if not loaded.get('q005_completed'):
                 raise AssertionError(f"The engine did not restore Q005 completion: {loaded}")
