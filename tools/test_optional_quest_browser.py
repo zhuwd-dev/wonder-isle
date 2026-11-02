@@ -200,7 +200,7 @@ def main() -> int:
                 # Cross the repaired bridge, reach the shell, and collect it.
                 # The shell route enters the bridge from its north edge; keep
                 # the low-FPS browser avatar aligned with the walking lane.
-                navigator.go(("y", 339), ("x", 930), ("y", 400))
+                navigator.go(("y", 339), ("x", 960), ("y", 400))
                 print(f"Q007 shell approach: {navigator.position()}", flush=True)
                 snap("web-q007-before-shell-interaction.png")
                 page.keyboard.press("e")
@@ -223,7 +223,8 @@ def main() -> int:
                 verify(lambda save: save.get("q009_materials_collected") == [False, False, True], "Q009 collect rope at west shore")
                 # Go around the fox cottage rather than crossing its solid
                 # footprint on the way to the branch at the island's south-west.
-                navigator.go(("y", 400), ("x", 280), ("y", 525))
+                navigator.go(("y", 400), ("x", 260))
+                navigator.move_until_ready("s", "收材料")
                 snap("web-q009-at-branch.png")
                 # The westbound return path ends inside this branch's radius;
                 # interact immediately instead of walking past it.

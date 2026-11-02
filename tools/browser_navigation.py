@@ -33,7 +33,7 @@ class Navigator:
             raise AssertionError("Game did not emit read-only test coordinates")
         return dict(self.state)
 
-    def axis(self, axis, target, tolerance=8):
+    def axis(self, axis, target, tolerance=12):
         self.page.mouse.click(800, 600)
         deadline = time.monotonic() + 20
         while time.monotonic() < deadline:
@@ -72,3 +72,17 @@ class Navigator:
     def go(self, *waypoints):
         for axis, target in waypoints:
             self.axis(axis, target)
+
+    def move_until_ready(self, key, expected_action):
+        """Approach an interaction using normal input and the game's own readiness."""
+        deadline = time.monotonic() + 15
+        self.page.keyboard.down(key)
+        try:
+            while time.monotonic() < deadline:
+                state = self.position()
+                if state['ready'] and state['action'] == expected_action:
+                    return
+                self.page.wait_for_timeout(40)
+        finally:
+            self.page.keyboard.up(key)
+        raise AssertionError(f"Interaction {expected_action} did not become ready: {self.position()}")

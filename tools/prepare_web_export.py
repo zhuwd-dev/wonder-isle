@@ -17,13 +17,28 @@ OLD_NOTICE = (
     "const missingMsg = 'Error\\nThe following features required to run Godot projects on the Web are missing:\\n';\n"
     "\t\t\tdisplayFailureNotice(missingMsg + missing.join('\\n'));"
 )
-NEW_NOTICE = """const missingMsg = '启动失败：当前浏览器环境缺少运行游戏所需的功能：\\n';
-\t\t\tdisplayFailureNotice(missingMsg + missing.map((feature) =>
-\t\t\t\tfeature.startsWith('WebGL2') ? 'WebGL2（浏览器图形加速）' : feature
-\t\t\t).join('\\n') + '\\n\\n请使用最新版 Chrome 或 Edge。\\n' +
-\t\t\t'Chrome：chrome://settings/system；Edge：edge://settings/system\\n' +
-\t\t\t'开启“使用图形加速（如果可用）”后完全重启浏览器。\\n' +
-\t\t\t'仍无法启动时，请在 chrome://gpu 或 edge://gpu 中检查 WebGL2 状态。');"""
+NEW_NOTICE = """const missingWebGL = missing.some((feature) => feature.startsWith('WebGL2'));
+\t\t\tconst hasWebGLInterface = typeof window.WebGL2RenderingContext !== 'undefined';
+\t\t\tconst webglMessage = hasWebGLInterface
+\t\t\t\t? 'WebGL2（浏览器图形加速）本次未能创建图形上下文，可能是显卡资源暂时不可用或图形加速被禁用。'
+\t\t\t\t: '当前浏览器不提供 WebGL2（浏览器图形加速）接口，无法运行游戏。';
+\t\t\tconst details = missing.filter((feature) => !feature.startsWith('WebGL2')).join('\\n');
+\t\t\tdisplayFailureNotice((missingWebGL ? webglMessage + '\\n' : '') + details +
+\t\t\t\t'\\n请检查 chrome://gpu 或 edge://gpu；在 chrome://settings/system 或 edge://settings/system 开启“使用图形加速”，然后重启浏览器。');
+\t\t\tif (missingWebGL && hasWebGLInterface) {
+\t\t\t\tlet attempts = 2;
+\t\t\t\ttry { attempts = Number(sessionStorage.getItem('wonder-webgl-retries') || 0); } catch (_) {}
+\t\t\t\tif (attempts < 2) {
+\t\t\t\t\tconst retry = document.createElement('button');
+\t\t\t\t\tretry.textContent = '重新尝试';
+\t\t\t\t\tretry.onclick = () => {
+\t\t\t\t\t\tretry.disabled = true;
+\t\t\t\t\t\ttry { sessionStorage.setItem('wonder-webgl-retries', String(attempts + 1)); } catch (_) { return; }
+\t\t\t\t\t\twindow.location.reload();
+\t\t\t\t\t};
+\t\t\t\t\tstatusNotice.appendChild(retry);
+\t\t\t\t}
+\t\t\t}"""
 
 
 def main() -> int:
@@ -66,6 +81,8 @@ def main() -> int:
 
     html = index_file.read_text(encoding="utf-8")
     html = html.replace('src="index.js"', f'src="{executable}.js"', 1)
+    # Clear the bounded retry counter only after a successful engine startup.
+    html = html.replace("setStatusMode('hidden');", "try { sessionStorage.removeItem('wonder-webgl-retries'); } catch (_) {}\n\t\t\tsetStatusMode('hidden');", 1)
     config_prefix = "const GODOT_CONFIG = "
     config_start = html.find(config_prefix)
     config_end = html.find(";", config_start)

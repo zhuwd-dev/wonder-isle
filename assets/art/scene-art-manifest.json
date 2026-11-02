@@ -14,19 +14,20 @@
       "quest": "Q001",
       "states": {
         "damaged": "assets/art/environment/bridge/woodland-footbridge-damaged.png",
-        "complete": "assets/art/environment/woodland-footbridge.png",
+        "complete": "assets/art/environment/bridge/woodland-footbridge-complete.png",
         "repair_plank": "assets/art/environment/bridge/bridge-deck-plank.png"
       },
       "source": "OpenAI Image Generation, 2026-10-30; edited to match the existing project-owned footbridge",
       "source_ids": {
         "damaged": "exec-aa70cc74-2dd6-40b9-bd4c-2c47da7cd3cc",
-        "repair_plank": "exec-c946157a-7fb7-4e76-abb3-3ff357c7aebd"
+        "repair_plank": "exec-c946157a-7fb7-4e76-abb3-3ff357c7aebd",
+        "complete": "exec-6bc46ac4-9d30-4711-9086-331183717239"
       },
       "format": "PNG RGBA transparent cutouts",
       "source_size": [1560, 1008],
       "game_size": {"bridge": [210, 136], "repair_plank": [24, 18]},
       "anchor": {"type": "center", "world": [820, 375]},
-      "progress_rendering": "0/3 uses damaged bridge art, 1/3 and 2/3 place matching plank sprites, 3/3 uses the existing complete bridge",
+      "progress_rendering": "0/3 uses damaged bridge art, 1/3 and 2/3 place matching plank sprites, 3/3 uses the repaired full-deck bridge",
       "collision": "existing Q001 bridge unlock rule; no gameplay condition changed"
     },
     {

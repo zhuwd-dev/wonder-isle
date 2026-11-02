@@ -423,7 +423,7 @@ def main() -> int:
                         # Cross at the center of the bridge, then approach the
                         # watering point from the south with timing margin for WebGL.
                         print(f"Q005 start: {navigator.position()}", flush=True)
-                        navigator.go(("y", 339), ("x", 930), ("y", 500), ("x", 975))
+                        navigator.go(("y", 339), ("x", 960), ("y", 500), ("x", 975))
                         print(f"Q005 watering point: {navigator.position()}", flush=True)
                         page.screenshot(path=str(artifact_dir / "web-q005-at-watering-point.png"), full_page=True)
                         page.mouse.click(1_214, 662)

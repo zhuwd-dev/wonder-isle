@@ -49,6 +49,7 @@ func _run() -> void:
 	main._pointer_down(inventory_center)
 	_expect(main.dragging_board == 0, "one collected board must be draggable")
 	_expect(main._drag_target_slot_at(slot_center) == 0, "the matching slot must be the active drag target")
+	_expect(main._drag_target_slot_at(main.BRIDGE_SLOTS[2].get_center()) == 0, "any bridge opening must accept the first board")
 	_expect(main._drag_target_slot_at(Vector2(600, 400)) == -1, "an unrelated position must not be a drag target")
 	main._pointer_up(Vector2(600, 400))
 	_expect(main.dragging_board == -1, "invalid release must clear drag state")
@@ -67,7 +68,7 @@ func _run() -> void:
 	_expect(main.game_state.placed[1], "the second board must be placeable before the third is collected")
 	_expect(not main.game_state.is_complete(), "placing two boards must not complete the bridge")
 	main.game_state.collect_board(2)
-	_expect(main._task_prompt_text() == "木板已集齐，已放置 2/3 块；把剩余木板拖到桥面高亮位置。", "收集三块后应进入放置引导")
+	_expect(main._task_prompt_text() == "木板已集齐，已放置 2/3 块；把剩余木板拖到桥面缺口。", "收集三块后应进入放置引导")
 	var inventory_center_2: Vector2 = main._inventory_rect(2).position + main._inventory_rect(2).size / 2.0
 	var slot_center_2: Vector2 = main.BRIDGE_SLOTS[2].position + main.BRIDGE_SLOTS[2].size / 2.0
 	var touch_down := InputEventScreenTouch.new()
@@ -76,13 +77,13 @@ func _run() -> void:
 	main._input(touch_down)
 	_expect(main.dragging_board == 2, "the third collected board must be draggable immediately")
 	var touch_drag := InputEventScreenDrag.new()
-	touch_drag.position = slot_center_2
+	touch_drag.position = slot_center
 	main._input(touch_drag)
 	var touch_up := InputEventScreenTouch.new()
-	touch_up.position = slot_center_2
+	touch_up.position = slot_center
 	touch_up.pressed = false
 	main._input(touch_up)
-	_expect(main.game_state.placed[2], "the third board must support touch placement")
+	_expect(main.game_state.placed[2], "touch placement must accept another board's former slot")
 	_expect(main._drag_target_slot_at(slot_center_2) == -1, "placed board must no longer have an active target")
 	_expect(main.game_state.is_complete(), "placing the third board must complete the bridge")
 	_expect(main._task_prompt_text() == "下一步：过桥到右侧寻找发光的种子。", "完成修桥后应明确指出唯一的下一步")

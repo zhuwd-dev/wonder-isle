@@ -9,7 +9,7 @@ const FOX_ART: Texture2D = preload("res://assets/art/characters/fox.png")
 const TURTLE_ART: Texture2D = preload("res://assets/art/characters/turtle.png")
 const BIRD_ART: Texture2D = preload("res://assets/art/characters/bird.png")
 const ISLAND_BACKGROUND: Texture2D = preload("res://assets/art/environment/floating-garden-bg.jpg")
-const BRIDGE_ART: Texture2D = preload("res://assets/art/environment/woodland-footbridge.png")
+const BRIDGE_ART: Texture2D = preload("res://assets/art/environment/bridge/woodland-footbridge-complete.png")
 const PLANK_ART: Texture2D = preload("res://assets/art/props/weathered-planks.png")
 const CRATE_ART: Texture2D = preload("res://assets/art/props/island-wood-crate.png")
 const SAVE_PATH := "user://qxisland_stage2_save.json"
@@ -1436,7 +1436,7 @@ func _pointer_down(position: Vector2, screen_position := Vector2(-1.0, -1.0)) ->
 		if game_state.can_place_board(board_id) and _inventory_rect(board_id).has_point(screen_position):
 			dragging_board = board_id
 			drag_position = position
-			message = "拖动木板到桥上的高亮位置，绿色时松开。"
+			message = "拖动木板到桥面缺口，松手放下。"
 			message_color = Color("fff7cf")
 			queue_redraw()
 			return
@@ -1550,7 +1550,7 @@ func _pointer_up(position: Vector2, _screen_position := Vector2(-1.0, -1.0)) -> 
 	var target_slot := _drag_target_slot_at(position)
 	dragging_board = -1
 	if target_slot >= 0 and game_state.place_board(board_id, target_slot):
-		_start_collect_sparkles(BRIDGE_SLOTS[target_slot].get_center(), Color("fff1a8"))
+		_start_collect_sparkles(BRIDGE_SLOTS[game_state.placed_count() - 1].get_center(), Color("fff1a8"))
 		message = "桥板放好 %d/3！" % game_state.placed_count()
 		message_color = Color("d9ffd0")
 		_save_game()
@@ -1564,7 +1564,7 @@ func _pointer_up(position: Vector2, _screen_position := Vector2(-1.0, -1.0)) -> 
 			message = "太棒了！小桥修好了，右侧区域已经开放！"
 			message_color = Color("fff1a8")
 	else:
-		message = "还差一点：请把木板拖到它对应的桥上空位。木板没有丢失。"
+		message = "还差一点：把木板拖到桥面缺口，松手放下。木板没有丢失。"
 		message_color = Color("ffe1b8")
 	queue_redraw()
 
@@ -1892,7 +1892,7 @@ func _try_collect_board(board_id: int) -> void:
 		message_color = Color("d9ffd0")
 		_save_game()
 	if game_state.board_count() == GameState.BOARD_TOTAL:
-		message = "木板集齐了！拖动下方木板到桥上的对应空位。"
+		message = "木板集齐了！拖动下方木板到桥面缺口。"
 		message_color = Color("fff1a8")
 	queue_redraw()
 
@@ -2138,9 +2138,10 @@ func _slot_drop_rect(slot_id: int) -> Rect2:
 func _drag_target_slot_at(position: Vector2) -> int:
 	if dragging_board < 0 or not game_state.can_place_board(dragging_board):
 		return -1
-	if dragging_board >= BRIDGE_SLOTS.size():
-		return -1
-	return dragging_board if _slot_drop_rect(dragging_board).has_point(position) else -1
+	# The save format associates each placed flag with its inventory board.
+	# Accept the whole damaged deck while retaining those existing flags.
+	var drop_area := Rect2(Vector2(773, 335), Vector2(115, 69))
+	return dragging_board if drop_area.has_point(position) else -1
 
 
 func _restart_game() -> void:
@@ -2608,20 +2609,14 @@ func _draw_bridge(font: Font) -> void:
 	if not game_state.bridge_repaired:
 		for slot_id in range(BRIDGE_SLOTS.size()):
 			var slot: Rect2 = BRIDGE_SLOTS[slot_id]
-			if game_state.placed[slot_id]:
+			if slot_id < game_state.placed_count():
 				_draw_bridge_repair_plank(slot.get_center())
-			elif game_state.board_count() > 0 and player_position.distance_to(BRIDGE_CENTER) <= 190.0:
-				var outline_color: Color = VISUAL_PALETTE["target_valid"] if _drag_target_slot_at(drag_position) == slot_id else Color("f6dfaa", 0.72)
-				var outline_rect := Rect2(slot.position - Vector2(2, 2), slot.size + Vector2(4, 4))
-				draw_rect(outline_rect, Color(1.0, 0.91, 0.62, 0.10), true)
-				draw_rect(outline_rect, outline_color, false, 1.6)
 		if dragging_board >= 0:
 			var target_id := _drag_target_slot_at(drag_position)
 			if target_id >= 0:
-				var target_rect: Rect2 = BRIDGE_SLOTS[target_id]
-				draw_rect(target_rect.grow(7.0), Color(0.32, 0.82, 0.47, 0.25), true)
-				draw_rect(target_rect.grow(7.0), Color("48bf69"), false, 3.0)
-			var drag_hint := "松开木板，修好小桥" if target_id >= 0 else "拖到桥面缺口，绿色时松开"
+				_draw_ellipse_custom(Vector2(831, 366), Vector2(50, 14), Color(1.0, 0.83, 0.44, 0.18))
+				_draw_ellipse_custom(Vector2(831, 366), Vector2(35, 8), Color(1.0, 0.94, 0.70, 0.14))
+			var drag_hint := "松开木板，修好小桥" if target_id >= 0 else "拖到桥面缺口，再松手"
 			var hint_rect := Rect2(BRIDGE_CENTER + Vector2(-112, -102), Vector2(224, 30))
 			_draw_panel(hint_rect, Color("fff8e8", 0.96), Color("a9c885"), 14)
 			draw_string(font, hint_rect.position + Vector2(10, 20), drag_hint, HORIZONTAL_ALIGNMENT_CENTER, hint_rect.size.x - 20, 14, VISUAL_PALETTE["ink"])
@@ -3230,15 +3225,15 @@ func _draw_player() -> void:
 		var print_alpha := 0.12 + planted * 0.10
 		_draw_ellipse_custom(foot_anchor + Vector2(-7.0 + left_step * 4.0, -left_lift), Vector2(3.6, 2.0), Color(0.46, 0.31, 0.22, print_alpha))
 		_draw_ellipse_custom(foot_anchor + Vector2(7.0 + right_step * 4.0, -right_lift), Vector2(3.6, 2.0), Color(0.46, 0.31, 0.22, print_alpha))
-	var bob := absf(stride) * 6.0 if player_is_moving else 0.0
+	var bob := absf(stride) * 0.8 if player_is_moving else 0.0
 	var breath := 1.0 + sin(animation_time * 2.2) * 0.003
-	var stride_squash := absf(stride) * 0.06 if player_is_moving else 0.0
+	var stride_squash := absf(stride) * 0.005 if player_is_moving else 0.0
 	var sprite_height := 68.0 * breath * (1.0 - stride_squash)
 	var sprite_width := sprite_height * MOUSE_ART.get_width() / MOUSE_ART.get_height()
-	var lean := player_facing.x * 0.04 + stride * 0.16 if player_is_moving else sin(animation_time * 1.15) * 0.004
-	var width_scale := 1.0 + (sin(player_walk_phase) * 0.07 if player_is_moving else 0.0)
+	var lean := player_facing.x * 0.012 + stride * 0.012 if player_is_moving else sin(animation_time * 1.15) * 0.004
+	var width_scale := 1.0
 	var facing_scale := -1.0 if player_facing.x < -0.1 else 1.0
-	var body_sway := sin(player_walk_phase) * 1.4 if player_is_moving else 0.0
+	var body_sway := sin(player_walk_phase) * 0.2 if player_is_moving else 0.0
 	draw_set_transform(_world_to_screen(player_position + Vector2(body_sway, -bob)), lean, Vector2(width_scale * facing_scale * _camera_zoom_scale(), _camera_zoom_scale()))
 	draw_texture_rect(MOUSE_ART, Rect2(Vector2(-sprite_width * 0.5, -sprite_height * 0.42), Vector2(sprite_width, sprite_height)), false)
 	_restore_world_draw_transform()
@@ -3334,7 +3329,6 @@ func _draw_board_at(position: Vector2, color: Color, lifted: bool) -> void:
 		_draw_ellipse_custom(position + Vector2(1, 15), Vector2(24, 3.2), Color(0.25, 0.18, 0.12, 0.18))
 	elif lifted:
 		_draw_ellipse_custom(position + Vector2(2, 17), Vector2(24, 5), Color(0.12, 0.18, 0.12, 0.20))
-		draw_rect(Rect2(position - Vector2(40, 34), Vector2(80, 62)), Color("ffe38a", 0.78), false, 2.0)
 	var texture_size := Vector2(72, 64) if not lifted and color == VISUAL_PALETTE["board"] else Vector2(52, 46)
 	var modulate := Color.WHITE if color == VISUAL_PALETTE["board"] else Color(1.0, 0.98, 0.88)
 	draw_texture_rect(PLANK_ART, Rect2(raised_position - texture_size * 0.5, texture_size), false, modulate)
@@ -3594,7 +3588,7 @@ func _task_prompt_text() -> String:
 			if placed_count > 0:
 				return "已收集 %d/3 块，还要 %d 块；已放置 %d/3 块。" % [collected_count, GameState.BOARD_TOTAL - collected_count, placed_count]
 			return "已收集 %d/3 块木板，还要 %d 块。" % [collected_count, GameState.BOARD_TOTAL - collected_count]
-		return "木板已集齐，已放置 %d/3 块；把剩余木板拖到桥面高亮位置。" % placed_count
+		return "木板已集齐，已放置 %d/3 块；把剩余木板拖到桥面缺口。" % placed_count
 	if not game_state.seed_collected:
 		return "下一步：过桥到右侧寻找发光的种子。"
 	if not game_state.seed_planted:
@@ -3694,7 +3688,7 @@ func _task_action_hint_text() -> String:
 	if not game_state.is_complete():
 		if game_state.board_count() < GameState.BOARD_TOTAL:
 			return "靠近木板，按 E、点右下角按钮，或直接点击木板。"
-		return "拖动右下角已收集木板到桥上高亮位置。"
+		return "拖动右下角木板到桥面缺口，松手放下。"
 	if not game_state.seed_collected:
 		return "过桥到右侧靠近发光种子，按 E 或点右下角按钮。"
 	if not game_state.seed_planted:
