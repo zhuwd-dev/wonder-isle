@@ -60,9 +60,11 @@ def main():
                 nav.axis('y', 360, tolerance=8)
                 nav.axis('x', 680)
                 # Different heights exercise both sides of both entrance seams.
-                for crossing in range(10):
-                    lane = (320, 330, 339, 350, 358)[crossing % 5]
+                for crossing in range(20):
+                    lane = (320, 339, 360, 380, 390)[crossing % 5]
                     nav.axis('y', lane, tolerance=8)
+                    if crossing < 5 and lane >= 380:
+                        page.screenshot(path=str(artifacts / f'bridge-lower-left-{lane}.png'))
                     if crossing == 0:
                         nav.axis('x', 820)
                         page.wait_for_timeout(400)
@@ -71,10 +73,22 @@ def main():
                     right = nav.position()
                     assert right['x'] >= 923 and right['bridge'], f'left to right failed: {right}'
                     page.screenshot(path=str(artifacts / f'bridge-right-{crossing % 5}.png')) if crossing < 5 else None
+                    nav.axis('y', lane, tolerance=8)
+                    if crossing < 5 and lane >= 380:
+                        page.screenshot(path=str(artifacts / f'bridge-lower-right-{lane}.png'))
                     nav.axis('x', 680, tolerance=8)
                     left = nav.position()
                     assert left['x'] <= 688 and left['bridge'], f'right to left failed: {left}'
                     print(f'PASS round trip {crossing + 1} lane {lane}: left={left}', flush=True)
+                nav.axis('y', 390, tolerance=8)
+                page.mouse.move(96, 622); page.mouse.down(); page.mouse.move(150, 622, steps=5)
+                import time
+                deadline = time.monotonic() + 20
+                while nav.position()['x'] < 923 and time.monotonic() < deadline:
+                    page.wait_for_timeout(50)
+                page.mouse.up()
+                assert nav.position()['x'] >= 923, f'lower entrance with joystick failed: {nav.position()}'
+                print('PASS lower entrance using the round joystick', nav.position(), flush=True)
                 page.reload(wait_until='load')
                 nav.state = None
                 assert nav.position()['bridge'], 'bridge was not restored after reload'

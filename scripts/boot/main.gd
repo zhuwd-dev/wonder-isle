@@ -318,7 +318,7 @@ func _physics_process(delta: float) -> void:
 		test_telemetry_elapsed += delta
 		if test_telemetry_elapsed >= 0.033:
 			test_telemetry_elapsed = 0.0
-			print("TEST_POSITION ", JSON.stringify({"x": player_position.x, "y": player_position.y, "action": interaction_button_label, "ready": interaction_button_ready, "bridge": game_state.bridge_repaired, "planting_hint": _can_show_planting_hint(), "camera_zoom": camera_zoom, "animation": player_animation.animation, "official_mouse_frames": SceneArt.mouse_enabled() and player_animation.has_complete_set(), "q005_completed": game_state.is_q005_complete(), "q010_completed": game_state.is_q010_complete(), "q011_completed": game_state.is_q011_complete(), "build_revision": build_revision}))
+			print("TEST_POSITION ", JSON.stringify({"x": player_position.x, "y": player_position.y, "action": interaction_button_label, "ready": interaction_button_ready, "bridge": game_state.bridge_repaired, "planting_hint": _can_show_planting_hint(), "camera_zoom": camera_zoom, "animation": player_animation.animation, "official_mouse_frames": SceneArt.mouse_enabled() and player_animation.has_complete_set(), "move_input": [direction.x, direction.y], "right_clear": _is_walkable(player_position + Vector2(4, 0)), "left_clear": _is_walkable(player_position + Vector2(-4, 0)), "q005_completed": game_state.is_q005_complete(), "q010_completed": game_state.is_q010_complete(), "q011_completed": game_state.is_q011_complete(), "build_revision": build_revision}))
 	queue_redraw()
 
 
@@ -1975,11 +1975,29 @@ func _move_player_safely(displacement: Vector2) -> bool:
 	var step := displacement / float(step_count)
 	var moved := false
 	for _step_id in range(step_count):
+		var foot := player_position + PLAYER_FOOT_OFFSET
+		var toward_bridge := (step.x > 0.0 and player_position.x >= 680.0 and player_position.x <= 760.0) or (step.x < 0.0 and player_position.x >= 885.0 and player_position.x <= 945.0)
+		var guide_lower_entry: bool = game_state.bridge_repaired and toward_bridge and step.y <= 0.01 and absf(step.y) <= absf(step.x) and foot.y > 398.0 and foot.y < 442.0
+		if guide_lower_entry:
+			var tangent := Vector2(step.x, -absf(step.x) * 0.65).limit_length(step.length())
+			if _is_walkable(player_position + tangent):
+				player_position += tangent
+				moved = true
+				continue
 		var combined := player_position + step
 		if _is_walkable(combined):
 			player_position = combined
 			moved = true
 			continue
+		# At a lower bridge entrance, a horizontal push can meet the curved
+		# deck before reaching its safe lane. Correct gently uphill on solid
+		# ground only; never steer outward input or assist in the river middle.
+		if guide_lower_entry:
+			var guided := player_position + Vector2(0, -minf(absf(step.x) * 0.65, foot.y - 390.0))
+			if _is_walkable(guided):
+				player_position = guided
+				moved = true
+				continue
 		# Resolve each axis separately after a blocked diagonal step. This lets
 		# the character slide along shores, the bridge head and building walls.
 		var first_axis := Vector2(step.x, 0) if absf(step.x) >= absf(step.y) else Vector2(0, step.y)

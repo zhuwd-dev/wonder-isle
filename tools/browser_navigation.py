@@ -9,6 +9,7 @@ class Navigator:
     def __init__(self, page, index_html):
         self.page = page
         self.state = None
+        self.state_received_at = 0.0
         match = re.search(r"const GODOT_CONFIG = (\{[^;]+\});", index_html)
         if not match:
             raise AssertionError("Cannot enable read-only browser telemetry: export args missing")
@@ -24,6 +25,7 @@ class Navigator:
     def _console(self, message):
         if message.text.startswith("TEST_POSITION "):
             self.state = json.loads(message.text[len("TEST_POSITION "):])
+            self.state_received_at = time.monotonic()
 
     def position(self):
         deadline = time.monotonic() + 15
@@ -31,6 +33,8 @@ class Navigator:
             self.page.wait_for_timeout(50)
         if self.state is None:
             raise AssertionError("Game did not emit read-only test coordinates")
+        if time.monotonic() - self.state_received_at > 3:
+            raise AssertionError(f"Game telemetry stopped updating; cannot diagnose a collision from stale coordinates: {self.state}")
         return dict(self.state)
 
     def axis(self, axis, target, tolerance=12):
