@@ -97,8 +97,10 @@ func _run() -> void:
 	_expect(main._should_show_rabbit_dialog(), "点击兔子应能重新查看当前阶段对白")
 	_expect(main._rabbit_feedback_text() == "兔子：谢谢你！过桥找发光种子吧！", "重新查看时兔子应提示寻找种子")
 	main.player_position = main.SEED_POSITION
+	_expect(not main._can_show_planting_hint(), "without the seed the garden must not show a planting hint")
 	main._try_collect_nearby()
 	_expect(main.game_state.seed_collected, "修桥后靠近种子应能收集")
+	_expect(not main._can_show_planting_hint(), "the garden must not glow while the player is far away")
 	_expect(not main.game_state.seed_planted, "收集种子后不应立即完成种植")
 	_expect(main._task_prompt_text() == "下一步：到右侧花圃种下种子。", "收集种子后应引导前往花圃")
 	_expect(main._rabbit_feedback_text() == "兔子：种子找到了！去花圃种下吧！", "收集种子后兔子对白应随任务更新")
@@ -110,8 +112,10 @@ func _run() -> void:
 	main._pointer_down(main.POND_STONE_POSITIONS[0])
 	_expect(main.dragging_pond_stone == -1, "种植前不能拖动池塘石头")
 	main.player_position = main.FLOWERBED_POSITION
+	_expect(main._can_show_planting_hint(), "the garden should indicate planting when the player is close with the seed")
 	main._try_collect_nearby()
 	_expect(main.game_state.seed_planted, "在花圃范围内应能种植")
+	_expect(not main._can_show_planting_hint(), "the planting hint must disappear after planting")
 	_expect(not main._should_show_rabbit_dialog(), "种下种子后兔子对话应收起")
 	_expect(main._rabbit_position() == main.RABBIT_HOME_POSITION, "兔子应回到日常活动区域")
 	_expect(main._task_prompt_text() == "任务：帮狐狸建小屋。先收集 3 份木材。", "种植完成后应引导狐狸小屋任务")

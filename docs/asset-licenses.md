@@ -26,6 +26,7 @@
 
 | 素材 | 来源 | 许可证/署名 | 使用范围 |
 | --- | --- | --- | --- |
+| `assets/art/props/seed-pouch.png` | OpenAI Image Generation，2026-11-02；以项目自有桥梁素材为风格参考，生成 ID `exec-b7ce044a-1530-44a5-ab35-0ae9a7181232` | 使用条件按图像生成服务条款执行；未使用第三方图库 | Q002 地面种子袋，可缩放和编辑 |
 | `assets/art/environment/bridge/woodland-footbridge-damaged.png`, `assets/art/environment/bridge/bridge-deck-plank.png` | OpenAI Image Generation，2026-10-30；以仓库现有桥梁 PNG 为参考制作损坏态和单块施工板 | 使用条件按图像生成服务条款执行；无第三方素材 | Q001 桥梁 0/3 损坏态及 1/3、2/3 施工补板；原完整桥图未修改 |
 | `assets/art/characters/*.png` | OpenAI Image Generation，为《奇趣小岛》生成；清单见角色目录 README | 使用条件按图像生成服务条款执行；无第三方作者署名要求 | 游戏内角色插画，可裁切、缩放和继续编辑 |
 | `assets/art/environment/buildings/fox-cottage-*.png` | OpenAI Image Generation，2026-10-30；以本项目地图背景、桥梁和狐狸角色为视觉参照 | 使用条件按图像生成服务条款执行；无第三方素材 | Q004 狐狸小屋施工态和完成态 |

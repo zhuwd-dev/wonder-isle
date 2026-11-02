@@ -309,7 +309,7 @@ func _physics_process(delta: float) -> void:
 		test_telemetry_elapsed += delta
 		if test_telemetry_elapsed >= 0.033:
 			test_telemetry_elapsed = 0.0
-			print("TEST_POSITION ", JSON.stringify({"x": player_position.x, "y": player_position.y, "action": interaction_button_label, "ready": interaction_button_ready, "bridge": game_state.bridge_repaired, "q005_completed": game_state.is_q005_complete(), "q010_completed": game_state.is_q010_complete(), "q011_completed": game_state.is_q011_complete(), "build_revision": build_revision}))
+			print("TEST_POSITION ", JSON.stringify({"x": player_position.x, "y": player_position.y, "action": interaction_button_label, "ready": interaction_button_ready, "bridge": game_state.bridge_repaired, "planting_hint": _can_show_planting_hint(), "q005_completed": game_state.is_q005_complete(), "q010_completed": game_state.is_q010_complete(), "q011_completed": game_state.is_q011_complete(), "build_revision": build_revision}))
 	queue_redraw()
 
 
@@ -2666,6 +2666,11 @@ func _draw_rabbit_area(font: Font) -> void:
 		_draw_panel(finale_tag, Color("fff5d9"), Color("d5a45f"), 12)
 		draw_string(font, finale_tag.position + Vector2(10, 20), "主线最后一步 · 庆祝", HORIZONTAL_ALIGNMENT_CENTER, finale_tag.size.x - 20, 14, VISUAL_PALETTE["ink"])
 	_draw_rabbit(_rabbit_position())
+	if not _should_show_rabbit_dialog() and player_position.distance_to(_rabbit_position()) <= COLLECTION_RADIUS:
+		var bubble := _rabbit_position() + Vector2(34, -56)
+		_draw_ellipse_custom(bubble, Vector2(13, 9), Color("fff7df", 0.92))
+		for dot in [-5.0, 0.0, 5.0]:
+			draw_circle(bubble + Vector2(dot, 0), 1.2, Color("876f50"))
 	if game_state.can_start_q012():
 		draw_circle(Q012_RABBIT_POSITION + Vector2(0, -67), 13.0, Color("e8bd62"))
 		draw_string(font, Q012_RABBIT_POSITION + Vector2(-5, -61), "!", HORIZONTAL_ALIGNMENT_LEFT, -1, 19, Color("fff7dc"))
@@ -2704,6 +2709,11 @@ func _draw_seed_area(font: Font) -> void:
 	if not game_state.is_complete() or game_state.is_pond_complete():
 		return
 	_draw_garden_soil(game_state.seed_planted)
+	if _can_show_planting_hint():
+		var pulse := 0.10 + (sin(animation_time * 1.8) + 1.0) * 0.025
+		_draw_ellipse_custom(FLOWERBED_POSITION + Vector2(0, 4), Vector2(55, 18), Color(1.0, 0.86, 0.46, pulse))
+		draw_circle(FLOWERBED_POSITION + Vector2(-27, -3), 2.0, Color(1.0, 0.93, 0.67, 0.60))
+		draw_circle(FLOWERBED_POSITION + Vector2(29, 5), 1.5, Color(1.0, 0.93, 0.67, 0.48))
 	if game_state.seed_planted:
 		var seedling_sway := sin(animation_time * 1.45 + 0.7) * 2.2
 		var stem_base := FLOWERBED_POSITION + Vector2(0, 18)
@@ -2713,15 +2723,15 @@ func _draw_seed_area(font: Font) -> void:
 		draw_line(stem_joint, stem_top, Color("4f9e55"), 5.0)
 		draw_circle(stem_top + Vector2(-10, 0), 9.0, Color("78c977"))
 		draw_circle(stem_top + Vector2(10, 0), 9.0, Color("9be087"))
-		draw_string(font, FLOWERBED_POSITION + Vector2(-30, 48), "幼苗", HORIZONTAL_ALIGNMENT_LEFT, -1, 16, VISUAL_PALETTE["ink"])
-	else:
-		draw_string(font, FLOWERBED_POSITION + Vector2(-30, 48), "空花圃", HORIZONTAL_ALIGNMENT_LEFT, -1, 16, VISUAL_PALETTE["ink"])
 	if not game_state.seed_collected:
-		draw_circle(SEED_POSITION + Vector2(0, 5), 15.0, Color(0.19, 0.13, 0.10, 0.16))
-		draw_circle(SEED_POSITION, 12.0, Color("f2c879"))
-		draw_arc(SEED_POSITION, 12.0, 0.0, TAU, 24, Color("704d35"), 3.0)
-		draw_circle(SEED_POSITION + Vector2(-4, -4), 3.0, Color("fff1a8"))
-		draw_string(font, SEED_POSITION + Vector2(-24, 34), "种子", HORIZONTAL_ALIGNMENT_LEFT, -1, 16, VISUAL_PALETTE["ink"])
+		_draw_ellipse_custom(SEED_POSITION + Vector2(0, 14), Vector2(20, 5), Color(0.19, 0.13, 0.10, 0.18))
+		SceneArt.draw_grounded(self, SceneArt.SEED_POUCH, SEED_POSITION + Vector2(0, 15), Vector2(46, 30))
+		if player_position.distance_to(SEED_POSITION) <= COLLECTION_RADIUS:
+			draw_circle(SEED_POSITION + Vector2(-22, -15), 2.0, Color(1.0, 0.94, 0.68, 0.72))
+
+
+func _can_show_planting_hint() -> bool:
+	return game_state != null and game_state.can_plant_seed() and player_position.distance_to(FLOWERBED_POSITION) <= FLOWERBED_INTERACTION_RADIUS
 
 
 func _draw_pond_area(font: Font) -> void:
@@ -2757,7 +2767,6 @@ func _draw_pond_area(font: Font) -> void:
 	for stone_id in range(GameState.POND_STONE_TOTAL):
 		if not game_state.pond_stones_placed[stone_id]:
 			_draw_pond_stone_at(POND_STONE_POSITIONS[stone_id], Color("8d9a9c"), false)
-			draw_string(font, POND_STONE_POSITIONS[stone_id] + Vector2(-18, 30), "石头", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, VISUAL_PALETTE["ink"])
 	if dragging_pond_stone >= 0:
 		var drag_hint := "绿色轮廓可以松开" if _pond_drag_target_at(pond_drag_position) >= 0 else "把石头移到对应轮廓再松开"
 		draw_string(font, Vector2(936, 535), drag_hint, HORIZONTAL_ALIGNMENT_LEFT, -1, 16, VISUAL_PALETTE["ink"])
@@ -2779,7 +2788,8 @@ func _draw_q004_area(font: Font) -> void:
 		if game_state.wood_collected[wood_id]:
 			continue
 		_draw_wood_at(WOOD_POSITIONS[wood_id])
-		draw_string(font, WOOD_POSITIONS[wood_id] + Vector2(-24, 34), "木材", HORIZONTAL_ALIGNMENT_LEFT, -1, 15, VISUAL_PALETTE["ink"])
+		if player_position.distance_to(WOOD_POSITIONS[wood_id]) <= COLLECTION_RADIUS:
+			draw_circle(WOOD_POSITIONS[wood_id] + Vector2(-24, -23), 2.0, Color(1.0, 0.93, 0.65, 0.72))
 
 
 func _draw_fox_cottage() -> void:
@@ -3377,10 +3387,11 @@ func _task_card_progress_text() -> String:
 
 func _draw_hud(font: Font) -> void:
 	_draw_task_card(font)
-	var show_inventory: bool = q011_mode or build_mode or game_state.can_start_q004() or not game_state.is_complete() or (_can_use_q008_side_task() and not game_state.is_q008_complete())
+	var show_inventory: bool = q011_mode or build_mode or (game_state.can_start_q004() and game_state.wood_count() > 0) or (not game_state.is_complete() and game_state.board_count() > 0) or (_can_use_q008_side_task() and not game_state.is_q008_complete())
 	if not show_inventory:
 		return
-	_draw_soft_panel(INVENTORY_PANEL_RECT, Color("f7edd8", 0.97), Color("ad8a5f"), 18, 0.15)
+	var tray_rect := Rect2(INVENTORY_PANEL_RECT.position + Vector2(0, 10), INVENTORY_PANEL_RECT.size - Vector2(0, 14))
+	_draw_soft_panel(tray_rect, Color("f7edd8", 0.94), Color("ad8a5f"), 18, 0.12)
 	if q011_mode:
 		_draw_q011_inventory(font)
 	elif build_mode:
@@ -3397,20 +3408,20 @@ func _draw_hud(font: Font) -> void:
 			var rect := _inventory_rect(board_id)
 			if game_state.collected[board_id] and not game_state.placed[board_id] and dragging_board != board_id:
 				_draw_board_at(rect.position + rect.size / 2.0, VISUAL_PALETTE["board_collected"], false)
-			else:
-				_draw_slot_card(rect)
+			elif not game_state.placed[board_id]:
+				_draw_ellipse_custom(rect.get_center(), Vector2(8, 3), Color(0.64, 0.51, 0.32, 0.18))
 			if game_state.placed[board_id]:
 				_draw_check_badge(rect.get_center())
 
 
 func _draw_q004_inventory(font: Font) -> void:
-	draw_string(font, Vector2(928, 602), "木材（带到小屋交付）", HORIZONTAL_ALIGNMENT_LEFT, 230, 16, Color("425d48"))
+	draw_string(font, Vector2(928, 602), "木材  %d/3" % game_state.wood_count(), HORIZONTAL_ALIGNMENT_LEFT, 230, 16, Color("425d48"))
 	for wood_id in range(GameState.Q004_WOOD_TOTAL):
 		var rect := _inventory_rect(wood_id)
 		if game_state.wood_collected[wood_id] and not game_state.wood_delivered[wood_id]:
 			_draw_wood_at(rect.position + rect.size / 2.0)
-		else:
-			_draw_slot_card(rect)
+		elif not game_state.wood_delivered[wood_id]:
+			_draw_ellipse_custom(rect.get_center(), Vector2(8, 3), Color(0.64, 0.51, 0.32, 0.18))
 		if game_state.wood_delivered[wood_id]:
 			_draw_check_badge(rect.get_center())
 

@@ -31,6 +31,17 @@
       "collision": "existing Q001 bridge unlock rule; no gameplay condition changed"
     },
     {
+      "id": "seed_pouch",
+      "quest": "Q002",
+      "path": "assets/art/props/seed-pouch.png",
+      "source": "OpenAI Image Generation, referenced project-owned bridge art",
+      "source_id": "exec-b7ce044a-1530-44a5-ab35-0ae9a7181232",
+      "format": "PNG RGBA transparent cutout",
+      "game_size": [46, 30],
+      "anchor": {"type": "bottom_center", "world": [1010, 365]},
+      "collision": "existing Q002 interaction radius; no task condition changed"
+    },
+    {
       "id": "fox_cottage",
       "quest": "Q004",
       "states": {

@@ -98,12 +98,21 @@ def main():
                 verify(lambda s, i=index: s['placed'][i], f"Q001 repair {index + 1}/3")
                 page.screenshot(path=str(artifacts / f"p0-bridge-{sum(bool(x) for x in saved()['placed'])}.png"))
             page.screenshot(path=str(artifacts / "web-story-bridge-complete.png"))
+            page.screenshot(path=str(artifacts / "b-seed-and-garden-before.png"))
             nav.go(('y', 339), ('x', 960), ('y', 385), ('x', 995))
             interact()
             verify(lambda s: s['seed_collected'], "Q002 collect seed after crossing")
+            page.wait_for_timeout(200)
+            assert not nav.position()['planting_hint'], 'distant garden must not glow after collection'
             nav.go(('y', 465), ('x', 1045))
+            page.wait_for_timeout(200)
+            assert nav.position()['planting_hint'], f"nearby planting hint missing: {nav.position()}"
+            page.screenshot(path=str(artifacts / "b-garden-ready.png"))
             interact()
             verify(lambda s: s['seed_planted'], "Q002 plant seed")
+            page.wait_for_timeout(200)
+            assert not nav.position()['planting_hint'], 'planted garden must stop offering the old hint'
+            page.screenshot(path=str(artifacts / "b-garden-planted.png"))
             nav.go(('x', 960), ('y', 339), ('x', 650), ('y', 500), ('x', 620))
             interact()
             verify(lambda s: s['wood_collected'][2], "Q004 collect wood 3")

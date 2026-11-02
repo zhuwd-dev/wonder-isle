@@ -10,6 +10,7 @@ const BIRDHOUSE_CONSTRUCTION: Texture2D = preload("res://assets/art/environment/
 const GARDEN_SOIL_BED: Texture2D = preload("res://assets/art/environment/farmland/garden-soil-bed.png")
 const NATURAL_POND: Texture2D = preload("res://assets/art/environment/pond/natural-pond.png")
 const RIVER_STONE: Texture2D = preload("res://assets/art/props/river-stone.png")
+const SEED_POUCH: Texture2D = preload("res://assets/art/props/seed-pouch.png")
 const GARDEN_FENCE: Texture2D = preload("res://assets/art/decorations/garden-fence.png")
 const TERRACOTTA_PLANTER: Texture2D = preload("res://assets/art/decorations/terracotta-planter.png")
 const GARDEN_LANTERN: Texture2D = preload("res://assets/art/decorations/garden-lantern.png")
