@@ -1,0 +1,351 @@
+{
+  "schema_version": 1,
+  "mouse": {
+    "enabled": false,
+    "canvas": [
+      256,
+      256
+    ],
+    "anchor": [
+      128,
+      232
+    ],
+    "body_height": [
+      208,
+      224
+    ],
+    "world_scale": 0.3,
+    "animations": {
+      "idle_down": {
+        "fps": 1,
+        "loop": true,
+        "frames": [
+          "assets/art/characters/mouse/idle_down/00.png"
+        ]
+      },
+      "idle_up": {
+        "fps": 1,
+        "loop": true,
+        "frames": [
+          "assets/art/characters/mouse/idle_up/00.png"
+        ]
+      },
+      "idle_left": {
+        "fps": 1,
+        "loop": true,
+        "frames": [
+          "assets/art/characters/mouse/idle_left/00.png"
+        ]
+      },
+      "idle_right": {
+        "fps": 1,
+        "loop": true,
+        "frames": [
+          "assets/art/characters/mouse/idle_right/00.png"
+        ]
+      },
+      "walk_down": {
+        "fps": 10,
+        "loop": true,
+        "frames": [
+          "assets/art/characters/mouse/walk_down/00.png",
+          "assets/art/characters/mouse/walk_down/01.png",
+          "assets/art/characters/mouse/walk_down/02.png",
+          "assets/art/characters/mouse/walk_down/03.png",
+          "assets/art/characters/mouse/walk_down/04.png",
+          "assets/art/characters/mouse/walk_down/05.png"
+        ]
+      },
+      "walk_up": {
+        "fps": 10,
+        "loop": true,
+        "frames": [
+          "assets/art/characters/mouse/walk_up/00.png",
+          "assets/art/characters/mouse/walk_up/01.png",
+          "assets/art/characters/mouse/walk_up/02.png",
+          "assets/art/characters/mouse/walk_up/03.png",
+          "assets/art/characters/mouse/walk_up/04.png",
+          "assets/art/characters/mouse/walk_up/05.png"
+        ]
+      },
+      "walk_left": {
+        "fps": 10,
+        "loop": true,
+        "frames": [
+          "assets/art/characters/mouse/walk_left/00.png",
+          "assets/art/characters/mouse/walk_left/01.png",
+          "assets/art/characters/mouse/walk_left/02.png",
+          "assets/art/characters/mouse/walk_left/03.png",
+          "assets/art/characters/mouse/walk_left/04.png",
+          "assets/art/characters/mouse/walk_left/05.png"
+        ]
+      },
+      "walk_right": {
+        "fps": 10,
+        "loop": true,
+        "frames": [
+          "assets/art/characters/mouse/walk_right/00.png",
+          "assets/art/characters/mouse/walk_right/01.png",
+          "assets/art/characters/mouse/walk_right/02.png",
+          "assets/art/characters/mouse/walk_right/03.png",
+          "assets/art/characters/mouse/walk_right/04.png",
+          "assets/art/characters/mouse/walk_right/05.png"
+        ]
+      }
+    }
+  },
+  "items": {
+    "plant_seedling": {
+      "enabled": false,
+      "path": "assets/art/plants/seedling.png",
+      "canvas": [
+        128,
+        128
+      ],
+      "anchor": [
+        64,
+        116
+      ],
+      "world_scale": 0.4,
+      "state_mapping": "Q002 / Q005 before watering"
+    },
+    "plant_growing": {
+      "enabled": false,
+      "path": "assets/art/plants/growing.png",
+      "canvas": [
+        128,
+        128
+      ],
+      "anchor": [
+        64,
+        116
+      ],
+      "world_scale": 0.4,
+      "state_mapping": "Q005 watering transition"
+    },
+    "plant_flowering": {
+      "enabled": false,
+      "path": "assets/art/plants/flowering.png",
+      "canvas": [
+        128,
+        128
+      ],
+      "anchor": [
+        64,
+        116
+      ],
+      "world_scale": 0.4,
+      "state_mapping": "Q005 watered, not harvested"
+    },
+    "plant_harvested": {
+      "enabled": false,
+      "path": "assets/art/plants/harvested.png",
+      "canvas": [
+        128,
+        128
+      ],
+      "anchor": [
+        64,
+        116
+      ],
+      "world_scale": 0.4,
+      "state_mapping": "Q005 harvested; retain living plant"
+    },
+    "shell": {
+      "enabled": false,
+      "path": "assets/art/props/shell.png",
+      "canvas": [
+        128,
+        128
+      ],
+      "anchor": [
+        64,
+        112
+      ],
+      "world_scale": 0.4,
+      "state_mapping": "Q007 collectible"
+    },
+    "shell_reward": {
+      "enabled": false,
+      "path": "assets/art/props/shell-reward.png",
+      "canvas": [
+        128,
+        128
+      ],
+      "anchor": [
+        64,
+        112
+      ],
+      "world_scale": 0.4,
+      "state_mapping": "Q007 reward"
+    },
+    "path_stone": {
+      "enabled": false,
+      "path": "assets/art/props/path-stone.png",
+      "canvas": [
+        128,
+        96
+      ],
+      "anchor": [
+        64,
+        80
+      ],
+      "world_scale": 0.4,
+      "state_mapping": "Q008"
+    },
+    "branch": {
+      "enabled": false,
+      "path": "assets/art/props/branch.png",
+      "canvas": [
+        128,
+        96
+      ],
+      "anchor": [
+        64,
+        80
+      ],
+      "world_scale": 0.4,
+      "state_mapping": "Q009 material 0"
+    },
+    "feather": {
+      "enabled": false,
+      "path": "assets/art/props/feather.png",
+      "canvas": [
+        128,
+        128
+      ],
+      "anchor": [
+        64,
+        112
+      ],
+      "world_scale": 0.4,
+      "state_mapping": "Q009 material 1"
+    },
+    "rope": {
+      "enabled": false,
+      "path": "assets/art/props/rope.png",
+      "canvas": [
+        128,
+        96
+      ],
+      "anchor": [
+        64,
+        80
+      ],
+      "world_scale": 0.4,
+      "state_mapping": "Q009 material 2"
+    },
+    "seed_red": {
+      "enabled": false,
+      "path": "assets/art/props/seed-red.png",
+      "canvas": [
+        96,
+        96
+      ],
+      "anchor": [
+        48,
+        84
+      ],
+      "world_scale": 0.4,
+      "state_mapping": "Q010 seed 0"
+    },
+    "seed_blue": {
+      "enabled": false,
+      "path": "assets/art/props/seed-blue.png",
+      "canvas": [
+        96,
+        96
+      ],
+      "anchor": [
+        48,
+        84
+      ],
+      "world_scale": 0.4,
+      "state_mapping": "Q010 seed 1"
+    },
+    "seed_gold": {
+      "enabled": false,
+      "path": "assets/art/props/seed-gold.png",
+      "canvas": [
+        96,
+        96
+      ],
+      "anchor": [
+        48,
+        84
+      ],
+      "world_scale": 0.4,
+      "state_mapping": "Q010 seed 2"
+    },
+    "tidy_crate": {
+      "enabled": false,
+      "path": "assets/art/props/tidy-crate.png",
+      "canvas": [
+        128,
+        128
+      ],
+      "anchor": [
+        64,
+        112
+      ],
+      "world_scale": 0.4,
+      "state_mapping": "Q011 item 0"
+    },
+    "tidy_bundle": {
+      "enabled": false,
+      "path": "assets/art/props/tidy-bundle.png",
+      "canvas": [
+        128,
+        128
+      ],
+      "anchor": [
+        64,
+        112
+      ],
+      "world_scale": 0.4,
+      "state_mapping": "Q011 item 1"
+    },
+    "tidy_basket": {
+      "enabled": false,
+      "path": "assets/art/props/tidy-basket.png",
+      "canvas": [
+        128,
+        128
+      ],
+      "anchor": [
+        64,
+        112
+      ],
+      "world_scale": 0.4,
+      "state_mapping": "Q011 item 2"
+    },
+    "plant_flowering_unlocked": {
+      "enabled": false,
+      "path": "assets/art/plants/flowering-unlocked.png",
+      "canvas": [
+        128,
+        128
+      ],
+      "anchor": [
+        64,
+        116
+      ],
+      "world_scale": 0.4,
+      "state_mapping": "Q010 appearance reward / Q005 flowering"
+    },
+    "plant_harvested_unlocked": {
+      "enabled": false,
+      "path": "assets/art/plants/harvested-unlocked.png",
+      "canvas": [
+        128,
+        128
+      ],
+      "anchor": [
+        64,
+        116
+      ],
+      "world_scale": 0.4,
+      "state_mapping": "Q010 appearance reward / Q005 harvested"
+    }
+  }
+}

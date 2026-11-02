@@ -142,7 +142,10 @@ func _run() -> void:
 	main.touch_direction = Vector2.RIGHT
 	main._physics_process(0.1)
 	_expect(main.player_is_moving and main.player_walk_phase > 0.0, "moving with the virtual stick must advance the walk cycle")
+	_expect(main.player_animation.animation == "walk_right", "actual world displacement should drive animation independently of quests")
 	main.touch_direction = Vector2.ZERO
+	main._physics_process(0.1)
+	_expect(main.player_animation.animation == "idle_right", "stopping world movement should keep the standing direction")
 	main.player_position = Vector2(250, 500)
 
 	# Q001: collect all boards through the proximity interaction path.

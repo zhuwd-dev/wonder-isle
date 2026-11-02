@@ -105,3 +105,34 @@ static func draw_centered(canvas: CanvasItem, texture: Texture2D, center: Vector
 static func draw_grounded(canvas: CanvasItem, texture: Texture2D, ground_anchor: Vector2, size: Vector2, modulate := Color.WHITE) -> void:
 	var rect := Rect2(ground_anchor - Vector2(size.x * 0.5, size.y), size)
 	canvas.draw_texture_rect(texture, rect, false, modulate)
+
+static var production_spec: Dictionary = {}
+static var production_textures: Dictionary = {}
+
+static func specification() -> Dictionary:
+	if production_spec.is_empty():
+		var parsed = JSON.parse_string(FileAccess.get_file_as_string("res://assets/art/production-art.json"))
+		if parsed is Dictionary:
+			production_spec = parsed
+	return production_spec
+
+static func mouse_enabled() -> bool:
+	return bool(specification().get("mouse", {}).get("enabled", false))
+
+static func draw_optional(canvas: CanvasItem, key: String, ground: Vector2, modulate := Color.WHITE, scale_factor := 1.0) -> bool:
+	var entry: Dictionary = specification().get("items", {}).get(key, {})
+	if not entry.get("enabled", false):
+		return false
+	if not production_textures.has(key):
+		var path := "res://" + str(entry.get("path", ""))
+		if not ResourceLoader.exists(path):
+			return false
+		production_textures[key] = load(path)
+	var texture = production_textures[key]
+	if not texture is Texture2D:
+		return false
+	var dimensions: Array = entry["canvas"]
+	var anchor: Array = entry["anchor"]
+	var factor := float(entry["world_scale"]) * scale_factor
+	canvas.draw_texture_rect(texture, Rect2(ground - Vector2(anchor[0], anchor[1]) * factor, Vector2(dimensions[0], dimensions[1]) * factor), false, modulate)
+	return true

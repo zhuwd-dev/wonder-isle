@@ -3,6 +3,8 @@ extends Control
 const GameState = preload("res://scripts/game/game_state.gd")
 const SceneArt = preload("res://scripts/visual/scene_art_registry.gd")
 const UI_FONT = preload("res://assets/fonts/NotoSansCJKsc-GameSubset.otf")
+const PlayerAnimation = preload("res://scripts/visual/player_animation.gd")
+const MOUSE_FRAMES: SpriteFrames = preload("res://assets/art/animation/mouse-frames.tres")
 const MOUSE_ART: Texture2D = preload("res://assets/art/characters/mouse.png")
 const RABBIT_ART: Texture2D = preload("res://assets/art/characters/rabbit.png")
 const FOX_ART: Texture2D = preload("res://assets/art/characters/fox.png")
@@ -160,6 +162,7 @@ var game_state
 var save_path := SAVE_PATH
 var player_position := Vector2(250, 500)
 var player_facing := Vector2.RIGHT
+var player_animation := PlayerAnimation.new(MOUSE_FRAMES)
 var camera_center := WORLD_SIZE * 0.5
 var camera_zoom := 1.0
 var camera_pan_active := false
@@ -296,6 +299,7 @@ func _physics_process(delta: float) -> void:
 	if Input.is_action_just_pressed("interact"):
 		_try_collect_nearby()
 
+	var position_before_move := player_position
 	var direction := Input.get_vector("move_left", "move_right", "move_up", "move_down")
 	if touch_direction != Vector2.ZERO:
 		direction = touch_direction
@@ -307,13 +311,14 @@ func _physics_process(delta: float) -> void:
 		if player_is_moving:
 			player_walk_phase = fposmod(player_walk_phase + delta * TAU * 3.2, TAU)
 			_keep_player_in_view(delta)
+	player_animation.update(player_position - position_before_move, delta)
 	_update_interact_button()
 	_update_interact_button_animation()
 	if test_telemetry_enabled:
 		test_telemetry_elapsed += delta
 		if test_telemetry_elapsed >= 0.033:
 			test_telemetry_elapsed = 0.0
-			print("TEST_POSITION ", JSON.stringify({"x": player_position.x, "y": player_position.y, "action": interaction_button_label, "ready": interaction_button_ready, "bridge": game_state.bridge_repaired, "planting_hint": _can_show_planting_hint(), "camera_zoom": camera_zoom, "q005_completed": game_state.is_q005_complete(), "q010_completed": game_state.is_q010_complete(), "q011_completed": game_state.is_q011_complete(), "build_revision": build_revision}))
+			print("TEST_POSITION ", JSON.stringify({"x": player_position.x, "y": player_position.y, "action": interaction_button_label, "ready": interaction_button_ready, "bridge": game_state.bridge_repaired, "planting_hint": _can_show_planting_hint(), "camera_zoom": camera_zoom, "animation": player_animation.animation, "official_mouse_frames": SceneArt.mouse_enabled() and player_animation.has_complete_set(), "q005_completed": game_state.is_q005_complete(), "q010_completed": game_state.is_q010_complete(), "q011_completed": game_state.is_q011_complete(), "build_revision": build_revision}))
 	queue_redraw()
 
 
@@ -2789,14 +2794,15 @@ func _draw_seed_area(font: Font) -> void:
 		draw_circle(FLOWERBED_POSITION + Vector2(-27, -3), 2.0, Color(1.0, 0.93, 0.67, 0.60))
 		draw_circle(FLOWERBED_POSITION + Vector2(29, 5), 1.5, Color(1.0, 0.93, 0.67, 0.48))
 	if game_state.seed_planted:
-		var seedling_sway := sin(animation_time * 1.45 + 0.7) * 2.2
-		var stem_base := FLOWERBED_POSITION + Vector2(0, 18)
-		var stem_joint := FLOWERBED_POSITION + Vector2(seedling_sway * 0.35, 2)
-		var stem_top := FLOWERBED_POSITION + Vector2(seedling_sway, -14)
-		draw_line(stem_base, stem_joint, Color("4f9e55"), 5.0)
-		draw_line(stem_joint, stem_top, Color("4f9e55"), 5.0)
-		draw_circle(stem_top + Vector2(-10, 0), 9.0, Color("78c977"))
-		draw_circle(stem_top + Vector2(10, 0), 9.0, Color("9be087"))
+		if not SceneArt.draw_optional(self, "plant_seedling", FLOWERBED_POSITION + Vector2(0, 18)):
+			var seedling_sway := sin(animation_time * 1.45 + 0.7) * 2.2
+			var stem_base := FLOWERBED_POSITION + Vector2(0, 18)
+			var stem_joint := FLOWERBED_POSITION + Vector2(seedling_sway * 0.35, 2)
+			var stem_top := FLOWERBED_POSITION + Vector2(seedling_sway, -14)
+			draw_line(stem_base, stem_joint, Color("4f9e55"), 5.0)
+			draw_line(stem_joint, stem_top, Color("4f9e55"), 5.0)
+			draw_circle(stem_top + Vector2(-10, 0), 9.0, Color("78c977"))
+			draw_circle(stem_top + Vector2(10, 0), 9.0, Color("9be087"))
 	if not game_state.seed_collected:
 		_draw_ellipse_custom(SEED_POSITION + Vector2(0, 14), Vector2(20, 5), Color(0.19, 0.13, 0.10, 0.18))
 		SceneArt.draw_grounded(self, SceneArt.SEED_POUCH, SEED_POSITION + Vector2(0, 15), Vector2(46, 30))
@@ -2887,7 +2893,6 @@ func _draw_q005_area(font: Font) -> void:
 			var growth_progress := clampf(1.0 - q005_growth_remaining / Q005_GROWTH_DURATION, 0.0, 1.0)
 			var eased_growth := growth_progress * growth_progress * (3.0 - 2.0 * growth_progress)
 			plant_scale = lerpf(0.35, 1.0, eased_growth)
-			plant_position.y -= eased_growth * 9.0
 		var harvested: bool = game_state.q005_plants_collected[plant_id]
 		_draw_ellipse_custom(Q005_PLANT_POSITIONS[plant_id] + Vector2(0, 14), Vector2(21, 6), Color(0.20, 0.39, 0.19, 0.18))
 		_draw_q005_plant_at(plant_position, harvested, game_state.is_q010_complete(), not game_state.q005_watered and not harvested, plant_scale)
@@ -3108,6 +3113,8 @@ func _draw_q011_area(font: Font) -> void:
 
 
 func _draw_q011_item_at(position: Vector2, item_id: int, lifted: bool) -> void:
+	if SceneArt.draw_optional(self, ["tidy_crate", "tidy_bundle", "tidy_basket"][item_id], position + Vector2(0, 12 if not lifted else 4)):
+		return
 	var item_position := position - Vector2(0, 7) if lifted else position
 	_draw_ellipse_custom(item_position + Vector2(0, 13), Vector2(19, 5), Color(0.19, 0.13, 0.10, 0.16))
 	if lifted:
@@ -3156,6 +3163,8 @@ func _q010_action_hint_text() -> String:
 
 
 func _draw_q010_seed_at(position: Vector2, seed_id: int) -> void:
+	if SceneArt.draw_optional(self, ["seed_red", "seed_blue", "seed_gold"][seed_id], position + Vector2(0, 12)):
+		return
 	var colors := [Color("e96b70"), Color("67a9dc"), Color("f0c85e")]
 	var accent_colors := [Color("ffd0a8"), Color("d5f2ff"), Color("fff3ad")]
 	_draw_ellipse_custom(position + Vector2(0, 12), Vector2(18, 6), Color(0.19, 0.13, 0.10, 0.16))
@@ -3172,6 +3181,8 @@ func _draw_q010_seed_at(position: Vector2, seed_id: int) -> void:
 
 
 func _draw_q009_material_at(position: Vector2, material_id: int) -> void:
+	if SceneArt.draw_optional(self, ["branch", "feather", "rope"][material_id], position + Vector2(0, 15)):
+		return
 	_draw_ellipse_custom(position + Vector2(0, 15), Vector2(25, 6), Color(0.19, 0.13, 0.10, 0.16))
 	if material_id == 0:
 		draw_line(position + Vector2(-22, 8), position + Vector2(22, -8), Color("8e5d3c"), 8.0)
@@ -3220,6 +3231,8 @@ func _draw_q006_decor_at(position: Vector2, decor_id: int, lifted: bool) -> void
 
 
 func _draw_q007_shell_at(position: Vector2, reward: bool) -> void:
+	if SceneArt.draw_optional(self, "shell_reward" if reward else "shell", position + Vector2(0, 15)):
+		return
 	_draw_ellipse_custom(position + Vector2(0, 12), Vector2(24, 7), Color(0.19, 0.13, 0.10, 0.16))
 	var shell_color := Color("f0b7a4") if reward else Color("d89a87")
 	_draw_ellipse_custom(position, Vector2(23, 15), shell_color)
@@ -3232,6 +3245,8 @@ func _draw_q007_shell_at(position: Vector2, reward: bool) -> void:
 
 
 func _draw_q008_path_paver_at(position: Vector2, material_id: int, lifted: bool) -> void:
+	if SceneArt.draw_optional(self, "path_stone", position + Vector2(0, 3 if lifted else 11)):
+		return
 	var ground_anchor := position + Vector2(0, 11)
 	var paver_anchor := ground_anchor - Vector2(0, 8) if lifted else ground_anchor
 	var tint_options := [Color("fff8e9"), Color("f4e6cf"), Color("fff1dc")]
@@ -3243,6 +3258,10 @@ func _draw_q008_path_paver_at(position: Vector2, material_id: int, lifted: bool)
 
 
 func _draw_q005_plant_at(position: Vector2, grown: bool, appearance_unlocked := false, wilted := false, growth_scale := 1.0) -> void:
+	var state := "seedling" if wilted else ("harvested" if grown else ("growing" if growth_scale < 0.99 else "flowering"))
+	var key := "plant_" + state + ("_unlocked" if appearance_unlocked and state in ["harvested", "flowering"] else "")
+	if SceneArt.draw_optional(self, key, position + Vector2(0, 12), Color.WHITE, growth_scale):
+		return
 	var stem_color := Color("8a9866") if wilted else Color("4f9e55")
 	if wilted:
 		draw_line(position + Vector2(0, 12) * growth_scale, position, stem_color, 4.0 * growth_scale)
@@ -3297,33 +3316,16 @@ func _draw_boards(font: Font) -> void:
 
 
 func _draw_player() -> void:
-	var foot_anchor := player_position + Vector2(0.0, 36.0)
-	var stride := sin(player_walk_phase) if player_is_moving else 0.0
-	var foot_lift := absf(stride)
-	var planted := 1.0 - foot_lift
-	var shadow_alpha := 0.22 + planted * 0.14
-	_draw_ellipse_custom(foot_anchor + Vector2(2, 3), Vector2(21.0 - foot_lift * 4.0, 5.8 - foot_lift), Color(0.19, 0.15, 0.11, shadow_alpha))
-	_draw_ellipse_custom(foot_anchor + Vector2(0, 2), Vector2(14.0 - foot_lift * 2.5, 3.6 - foot_lift * 0.6), Color(0.28, 0.34, 0.19, 0.14 + planted * 0.07))
-	if player_is_moving:
-		var left_step := stride
-		var right_step := sin(player_walk_phase + PI)
-		var left_lift := maxf(left_step, 0.0) * 3.0
-		var right_lift := maxf(right_step, 0.0) * 3.0
-		var print_alpha := 0.12 + planted * 0.10
-		_draw_ellipse_custom(foot_anchor + Vector2(-7.0 + left_step * 4.0, -left_lift), Vector2(3.6, 2.0), Color(0.46, 0.31, 0.22, print_alpha))
-		_draw_ellipse_custom(foot_anchor + Vector2(7.0 + right_step * 4.0, -right_lift), Vector2(3.6, 2.0), Color(0.46, 0.31, 0.22, print_alpha))
-	var bob := absf(stride) * 0.8 if player_is_moving else 0.0
-	var breath := 1.0 + sin(animation_time * 2.2) * 0.003
-	var stride_squash := absf(stride) * 0.005 if player_is_moving else 0.0
-	var sprite_height := 68.0 * breath * (1.0 - stride_squash)
-	var sprite_width := sprite_height * MOUSE_ART.get_width() / MOUSE_ART.get_height()
-	var lean := player_facing.x * 0.012 + stride * 0.012 if player_is_moving else sin(animation_time * 1.15) * 0.004
-	var width_scale := 1.0
-	var facing_scale := -1.0 if player_facing.x < -0.1 else 1.0
-	var body_sway := sin(player_walk_phase) * 0.2 if player_is_moving else 0.0
-	draw_set_transform(_world_to_screen(player_position + Vector2(body_sway, -bob)), lean, Vector2(width_scale * facing_scale * _camera_zoom_scale(), _camera_zoom_scale()))
-	draw_texture_rect(MOUSE_ART, Rect2(Vector2(-sprite_width * 0.5, -sprite_height * 0.42), Vector2(sprite_width, sprite_height)), false)
-	_restore_world_draw_transform()
+	var foot_anchor := player_position + PLAYER_FOOT_OFFSET
+	_draw_ellipse_custom(foot_anchor + Vector2(2, 3), Vector2(21, 5.8), Color(0.19, 0.15, 0.11, 0.28))
+	var texture: Texture2D = player_animation.current_texture() if SceneArt.mouse_enabled() else null
+	if texture != null:
+		# All production frames share one canvas and foot anchor.
+		draw_texture_rect(texture, Rect2(foot_anchor - Vector2(128, 232) * 0.30, Vector2(256, 256) * 0.30), false)
+	else:
+		# Static safe fallback: no invented front/back pose or simulated steps.
+		var height := 68.0
+		SceneArt.draw_grounded(self, MOUSE_ART, foot_anchor, Vector2(height * MOUSE_ART.get_width() / MOUSE_ART.get_height(), height))
 
 
 func _draw_character_sprite(texture: Texture2D, anchor: Vector2, height: float, face_ratio: float, phase: float, bob_amount: float) -> void:
