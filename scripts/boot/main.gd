@@ -27,9 +27,13 @@ const RIVER_RECT := Rect2(700, 110, 220, 530)
 const BRIDGE_RECT := Rect2(760, 330, 120, 90)
 const BRIDGE_CENTER := Vector2(820, 375)
 const BRIDGE_ROTATION := 0.24
-const BRIDGE_COLLISION_ROTATION := -0.035
-const BRIDGE_WALK_HALF_LENGTH := 110.0
-const BRIDGE_WALK_HALF_WIDTH := 26.0
+# Foot-level bridge deck, including the overlapping approaches at both banks.
+# The polygon follows the visible planks, rather than the ornamental railing.
+var bridge_walk_polygon := PackedVector2Array([
+	Vector2(690, 337), Vector2(744, 343), Vector2(820, 342),
+	Vector2(900, 338), Vector2(940, 332), Vector2(940, 414),
+	Vector2(900, 413), Vector2(820, 414), Vector2(744, 415), Vector2(690, 414),
+])
 const BRIDGE_DRAW_SIZE := Vector2(210, 136)
 const BOARD_POSITIONS := [Vector2(350, 250), Vector2(475, 500), Vector2(625, 555)]
 const SEED_POSITION := Vector2(1010, 350)
@@ -1955,8 +1959,7 @@ func _is_ground_support(point: Vector2) -> bool:
 func _is_on_bridge_deck(point: Vector2) -> bool:
 	if not game_state.bridge_repaired:
 		return false
-	var bridge_local := (point - BRIDGE_CENTER).rotated(-BRIDGE_COLLISION_ROTATION)
-	return absf(bridge_local.x) <= BRIDGE_WALK_HALF_LENGTH and absf(bridge_local.y) <= BRIDGE_WALK_HALF_WIDTH
+	return Geometry2D.is_point_in_polygon(point, bridge_walk_polygon)
 
 
 func _player_overlaps_solid_obstacle(foot: Vector2) -> bool:
