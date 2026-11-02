@@ -48,6 +48,11 @@ class Navigator:
             previous = current
             last_progress = time.monotonic()
             try:
+                # Near a waypoint, sample after a short input pulse instead of
+                # reversing a long hold based on delayed browser telemetry.
+                if abs(distance) <= 35:
+                    self.page.wait_for_timeout(35)
+                    continue
                 while time.monotonic() < deadline:
                     self.page.wait_for_timeout(25)
                     state = self.position()
@@ -61,7 +66,7 @@ class Navigator:
                         raise AssertionError(f"Blocked while walking to {axis}={target}: {state}")
             finally:
                 self.page.keyboard.up(key)
-            self.page.wait_for_timeout(100)
+                self.page.wait_for_timeout(150)
         raise AssertionError(f"Timed out walking to {axis}={target}: {self.position()}")
 
     def go(self, *waypoints):
