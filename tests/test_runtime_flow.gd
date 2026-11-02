@@ -69,6 +69,41 @@ func _run() -> void:
 	_expect(main.camera_center != center_before_pan, "dragging the zoomed map must move its camera center")
 	main._reset_camera()
 	_expect(main.camera_zoom == 1.0 and main.camera_center == main.WORLD_SIZE * 0.5, "the full-map control must restore the complete island view")
+	_expect(main.zoom_reset_button.text == "全景", "the full-map button must not show a permanent zoom percentage")
+	var pinch_first := InputEventScreenTouch.new()
+	pinch_first.index = 7
+	pinch_first.position = Vector2(400, 380)
+	pinch_first.pressed = true
+	main._input(pinch_first)
+	var pinch_second := InputEventScreenTouch.new()
+	pinch_second.index = 8
+	pinch_second.position = Vector2(600, 380)
+	pinch_second.pressed = true
+	main._input(pinch_second)
+	_expect(main.camera_pinch_active, "two free world touches should start a pinch")
+	var pinch_move := InputEventScreenDrag.new()
+	pinch_move.index = 8
+	pinch_move.position = Vector2(680, 380)
+	main._input(pinch_move)
+	_expect(main.camera_zoom > 1.0 and main.camera_zoom <= main.CAMERA_MAX_ZOOM, "pinch should zoom within the image quality limit")
+	pinch_second.pressed = false
+	main._input(pinch_second)
+	pinch_first.pressed = false
+	main._input(pinch_first)
+	_expect(not main.camera_pinch_active and main.camera_touch_points.is_empty(), "releasing both fingers should end the pinch")
+	_expect(main.game_state.board_count() == 0, "pinching empty ground must not collect or place resources")
+	main._reset_camera()
+	main._zoom_in()
+	_expect(main._world_to_screen(main._rabbit_dialog_rect().position).y >= 95.9, "zoomed rabbit dialogue must stay below fixed toolbar controls")
+	var player_screen: Vector2 = main._world_to_screen(main.player_position)
+	_expect(player_screen.x >= 0 and player_screen.x <= main.WORLD_SIZE.x and player_screen.y >= 0 and player_screen.y <= main.WORLD_SIZE.y, "zoom buttons should leave the player visible")
+	var original_player: Vector2 = main.player_position
+	main.player_position = Vector2(1050, 500)
+	var center_before_follow: Vector2 = main.camera_center
+	main._keep_player_in_view(0.1)
+	_expect(main.camera_center.x > center_before_follow.x, "moving near the view edge should bring the camera toward the player")
+	main.player_position = original_player
+	main._reset_camera()
 	_expect(main.interact_button.position == Vector2(1156, 616), "the interaction control must sit in the bottom-right thumb zone")
 	_expect(main.interact_button.size == Vector2(116, 92), "the bottom-right interaction control must be large enough for touch")
 	_expect(not main.INVENTORY_PANEL_RECT.intersects(Rect2(main.interact_button.position, main.interact_button.size)), "the interaction control must not overlap the inventory tray")

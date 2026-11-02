@@ -20,7 +20,7 @@ const PLAYER_COLLISION_HALF_WIDTH := 9.0
 const PLAYER_COLLISION_HALF_DEPTH := 5.0
 const PLAYER_MOVE_SUBSTEP := 4.0
 const CAMERA_MIN_ZOOM := 1.0
-const CAMERA_MAX_ZOOM := 1.65
+const CAMERA_MAX_ZOOM := 1.35
 const CAMERA_ZOOM_STEP := 1.2
 const COLLECTION_RADIUS := 72.0
 const RIVER_RECT := Rect2(700, 110, 220, 530)
@@ -165,6 +165,9 @@ var camera_zoom := 1.0
 var camera_pan_active := false
 var camera_pan_touch_index := -1
 var camera_pan_last_screen := Vector2.ZERO
+var camera_touch_points := {}
+var camera_pinch_consumed := {}
+var camera_pinch_active := false
 var animation_time := 0.0
 var player_walk_phase := 0.0
 var player_is_moving := false
@@ -303,13 +306,14 @@ func _physics_process(delta: float) -> void:
 		player_is_moving = _move_player_safely(direction * PLAYER_SPEED * delta)
 		if player_is_moving:
 			player_walk_phase = fposmod(player_walk_phase + delta * TAU * 3.2, TAU)
+			_keep_player_in_view(delta)
 	_update_interact_button()
 	_update_interact_button_animation()
 	if test_telemetry_enabled:
 		test_telemetry_elapsed += delta
 		if test_telemetry_elapsed >= 0.033:
 			test_telemetry_elapsed = 0.0
-			print("TEST_POSITION ", JSON.stringify({"x": player_position.x, "y": player_position.y, "action": interaction_button_label, "ready": interaction_button_ready, "bridge": game_state.bridge_repaired, "planting_hint": _can_show_planting_hint(), "q005_completed": game_state.is_q005_complete(), "q010_completed": game_state.is_q010_complete(), "q011_completed": game_state.is_q011_complete(), "build_revision": build_revision}))
+			print("TEST_POSITION ", JSON.stringify({"x": player_position.x, "y": player_position.y, "action": interaction_button_label, "ready": interaction_button_ready, "bridge": game_state.bridge_repaired, "planting_hint": _can_show_planting_hint(), "camera_zoom": camera_zoom, "q005_completed": game_state.is_q005_complete(), "q010_completed": game_state.is_q010_complete(), "q011_completed": game_state.is_q011_complete(), "build_revision": build_revision}))
 	queue_redraw()
 
 
@@ -348,6 +352,10 @@ func _input(event: InputEvent) -> void:
 	# Let modal menu and confirmation controls receive pointer/key input without
 	# forwarding the same event into world movement or collection logic.
 	if (game_menu_popup != null and game_menu_popup.visible) or (restart_confirmation != null and restart_confirmation.visible):
+		if event is InputEventScreenTouch and not event.pressed:
+			camera_touch_points.erase(event.index)
+			camera_pinch_consumed.erase(event.index)
+			camera_pinch_active = false
 		return
 	if event is InputEventMouseButton:
 		if event.button_index in [MOUSE_BUTTON_WHEEL_UP, MOUSE_BUTTON_WHEEL_DOWN] and event.pressed:
@@ -404,6 +412,10 @@ func _input(event: InputEvent) -> void:
 			queue_redraw()
 	elif event is InputEventScreenTouch:
 		if event.pressed:
+			if camera_pinch_active:
+				camera_pinch_consumed[event.index] = true
+				get_viewport().set_input_as_handled()
+				return
 			if _handle_interact_button_pointer(event.position, true):
 				return
 			if not virtual_joystick_active and _is_virtual_joystick_hit(event.position) and _begin_virtual_joystick(event.position, event.index, false):
@@ -411,8 +423,23 @@ func _input(event: InputEvent) -> void:
 				return
 			if _is_button_control_position(event.position):
 				return
+			if not virtual_joystick_active and not _is_world_drag_active() and _can_begin_camera_pan(_screen_to_world(event.position), event.position, true) and _screen_to_world(event.position).distance_to(_rabbit_position()) > 75.0:
+				camera_touch_points[event.index] = event.position
+				if camera_touch_points.size() == 2:
+					_end_camera_pan()
+					camera_pinch_active = true
+					for index in camera_touch_points:
+						camera_pinch_consumed[index] = true
+					get_viewport().set_input_as_handled()
+					return
 			_begin_world_pointer(event.position, event.index)
 		else:
+			camera_touch_points.erase(event.index)
+			if camera_pinch_consumed.has(event.index):
+				camera_pinch_consumed.erase(event.index)
+				camera_pinch_active = false
+				get_viewport().set_input_as_handled()
+				return
 			if camera_pan_active and camera_pan_touch_index == event.index:
 				_end_camera_pan()
 				get_viewport().set_input_as_handled()
@@ -427,6 +454,12 @@ func _input(event: InputEvent) -> void:
 				return
 			_pointer_up(_screen_to_world(event.position), event.position)
 	elif event is InputEventScreenDrag:
+		if camera_touch_points.has(event.index):
+			if camera_pinch_active and camera_touch_points.size() == 2:
+				_update_camera_pinch(event.index, event.position)
+				get_viewport().set_input_as_handled()
+				return
+			camera_touch_points[event.index] = event.position
 		if virtual_joystick_active and not virtual_joystick_mouse_active and virtual_joystick_touch_index == event.index:
 			_update_virtual_joystick(event.position)
 			get_viewport().set_input_as_handled()
@@ -482,8 +515,8 @@ func _handle_rabbit_dialog_pointer(world_position: Vector2) -> bool:
 	return false
 
 
-func _can_begin_camera_pan(world_position: Vector2, screen_position: Vector2) -> bool:
-	if camera_zoom <= CAMERA_MIN_ZOOM + 0.01:
+func _can_begin_camera_pan(world_position: Vector2, screen_position: Vector2, allow_at_full_view := false) -> bool:
+	if not allow_at_full_view and camera_zoom <= CAMERA_MIN_ZOOM + 0.01:
 		return false
 	# Fixed trays remain usable while the world is zoomed. A drag beginning on
 	# one of these cards should always pick up its item, never move the map.
@@ -551,31 +584,56 @@ func _change_camera_zoom(factor: float, screen_anchor: Vector2) -> void:
 	camera_zoom = clampf(camera_zoom * factor, CAMERA_MIN_ZOOM, CAMERA_MAX_ZOOM)
 	camera_center = world_anchor - (screen_anchor - _camera_viewport_size() * 0.5) / _camera_zoom_scale()
 	_clamp_camera_center()
-	if zoom_reset_button != null:
-		zoom_reset_button.text = "%d%%" % roundi(camera_zoom * 100.0)
 	queue_redraw()
 
 
 func _zoom_in() -> void:
-	_change_camera_zoom(CAMERA_ZOOM_STEP, _camera_viewport_size() * 0.5)
+	_change_camera_zoom(CAMERA_ZOOM_STEP, _world_to_screen(player_position))
 
 
 func _zoom_out() -> void:
-	_change_camera_zoom(1.0 / CAMERA_ZOOM_STEP, _camera_viewport_size() * 0.5)
+	_change_camera_zoom(1.0 / CAMERA_ZOOM_STEP, _world_to_screen(player_position))
 
 
 func _reset_camera() -> void:
 	camera_zoom = CAMERA_MIN_ZOOM
 	camera_center = WORLD_SIZE * 0.5
-	if zoom_reset_button != null:
-		zoom_reset_button.text = "100%"
 	queue_redraw()
+
+
+func _keep_player_in_view(delta: float) -> void:
+	if camera_zoom <= CAMERA_MIN_ZOOM + 0.01:
+		return
+	var viewport_size := _camera_viewport_size()
+	var player_screen := _world_to_screen(player_position)
+	var safe_min := viewport_size * Vector2(0.18, 0.20)
+	var safe_max := viewport_size * Vector2(0.82, 0.80)
+	var target_screen := Vector2(clampf(player_screen.x, safe_min.x, safe_max.x), clampf(player_screen.y, safe_min.y, safe_max.y))
+	camera_center += (player_screen - target_screen) / _camera_zoom_scale() * minf(delta * 8.0, 1.0)
+	_clamp_camera_center()
+
+
+func _update_camera_pinch(index: int, position: Vector2) -> void:
+	var indices := camera_touch_points.keys()
+	var old_a: Vector2 = camera_touch_points[indices[0]]
+	var old_b: Vector2 = camera_touch_points[indices[1]]
+	var old_distance := old_a.distance_to(old_b)
+	var old_midpoint := (old_a + old_b) * 0.5
+	camera_touch_points[index] = position
+	var new_a: Vector2 = camera_touch_points[indices[0]]
+	var new_b: Vector2 = camera_touch_points[indices[1]]
+	var new_midpoint := (new_a + new_b) * 0.5
+	if old_distance > 8.0:
+		_change_camera_zoom(new_a.distance_to(new_b) / old_distance, old_midpoint)
+		camera_center -= (new_midpoint - old_midpoint) / _camera_zoom_scale()
+		_clamp_camera_center()
+		queue_redraw()
 
 
 func _clamp_camera_center() -> void:
 	var half_view := _camera_viewport_size() * 0.5 / _camera_zoom_scale()
-	camera_center.x = clampf(camera_center.x, half_view.x, WORLD_SIZE.x - half_view.x)
-	camera_center.y = clampf(camera_center.y, half_view.y, WORLD_SIZE.y - half_view.y)
+	camera_center.x = WORLD_SIZE.x * 0.5 if half_view.x >= WORLD_SIZE.x * 0.5 else clampf(camera_center.x, half_view.x, WORLD_SIZE.x - half_view.x)
+	camera_center.y = WORLD_SIZE.y * 0.5 if half_view.y >= WORLD_SIZE.y * 0.5 else clampf(camera_center.y, half_view.y, WORLD_SIZE.y - half_view.y)
 
 
 func _update_camera_pan(screen_position: Vector2) -> void:
@@ -649,9 +707,12 @@ func _end_virtual_joystick() -> void:
 
 
 func _notification(what: int) -> void:
-	if what == NOTIFICATION_WM_WINDOW_FOCUS_OUT and (virtual_joystick_active or camera_pan_active or _is_world_drag_active()):
+	if what == NOTIFICATION_WM_WINDOW_FOCUS_OUT and (virtual_joystick_active or camera_pan_active or not camera_touch_points.is_empty() or camera_pinch_active or _is_world_drag_active()):
 		_end_virtual_joystick()
 		_end_camera_pan()
+		camera_touch_points.clear()
+		camera_pinch_consumed.clear()
+		camera_pinch_active = false
 		dragging_board = -1
 		drag_position = Vector2.ZERO
 		dragging_pond_stone = -1
@@ -842,7 +903,7 @@ func _create_controls() -> void:
 
 	zoom_reset_button = Button.new()
 	zoom_reset_button.name = "ZoomResetButton"
-	zoom_reset_button.text = "100%"
+	zoom_reset_button.text = "全景"
 	zoom_reset_button.position = Vector2(756, 30)
 	zoom_reset_button.size = Vector2(82, 44)
 	zoom_reset_button.add_theme_font_size_override("font_size", 14)
@@ -2653,7 +2714,10 @@ func _draw_rabbit_area(font: Font) -> void:
 		var dialog_rect := _rabbit_dialog_rect()
 		_draw_soft_panel(dialog_rect, bubble_fill, Color("d7a85b"), 16, 0.10)
 		var pointer_x := _rabbit_position().x
-		draw_colored_polygon(PackedVector2Array([Vector2(pointer_x - 10, dialog_rect.end.y), Vector2(pointer_x + 8, dialog_rect.end.y), Vector2(pointer_x, dialog_rect.end.y + 19)]), bubble_fill)
+		if dialog_rect.position.y > _rabbit_position().y:
+			draw_colored_polygon(PackedVector2Array([Vector2(pointer_x - 10, dialog_rect.position.y), Vector2(pointer_x + 8, dialog_rect.position.y), Vector2(pointer_x, dialog_rect.position.y - 15)]), bubble_fill)
+		else:
+			draw_colored_polygon(PackedVector2Array([Vector2(pointer_x - 10, dialog_rect.end.y), Vector2(pointer_x + 8, dialog_rect.end.y), Vector2(pointer_x, dialog_rect.end.y + 19)]), bubble_fill)
 		draw_circle(dialog_rect.position + Vector2(22, 27), 11.0, Color("e8bd62"))
 		draw_string(font, dialog_rect.position + Vector2(42, 34), _rabbit_feedback_text(), HORIZONTAL_ALIGNMENT_LEFT, 276, 18, VISUAL_PALETTE["ink"])
 		# The bubble remains open until the child closes it or taps the rabbit.
@@ -2692,7 +2756,17 @@ func _rabbit_position() -> Vector2:
 
 
 func _rabbit_dialog_rect() -> Rect2:
-	return Rect2(_rabbit_position() + Vector2(-160, -102), Vector2(360, 54))
+	var rect := Rect2(_rabbit_position() + Vector2(-160, -102), Vector2(360, 54))
+	var screen_position := _world_to_screen(rect.position)
+	var screen_width := rect.size.x * _camera_zoom_scale()
+	screen_position.x = clampf(screen_position.x, 12.0, maxf(12.0, _camera_viewport_size().x - screen_width - 12.0))
+	screen_position.y = maxf(screen_position.y, 220.0 if task_details_open else 96.0)
+	var rabbit_screen := _world_to_screen(_rabbit_position())
+	var rabbit_top := rabbit_screen.y - 43.0 * _camera_zoom_scale()
+	if screen_position.y + rect.size.y * _camera_zoom_scale() > rabbit_top:
+		screen_position.y = maxf(screen_position.y, rabbit_screen.y + 56.0 * _camera_zoom_scale())
+	rect.position = _screen_to_world(screen_position)
+	return rect
 
 
 func _draw_region_area(font: Font) -> void:
