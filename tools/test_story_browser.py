@@ -68,6 +68,14 @@ def main():
             def interact():
                 page.keyboard.press("e")
 
+            def capture_sizes(label):
+                for width, height in ((1630, 870), (844, 390)):
+                    page.set_viewport_size({'width': width, 'height': height})
+                    page.wait_for_timeout(300)
+                    page.screenshot(path=str(artifacts / f'{label}-{width}x{height}.png'))
+                page.set_viewport_size({'width': 1280, 'height': 720})
+                page.wait_for_timeout(300)
+
             def drag(source, target):
                 page.mouse.move(*source)
                 page.mouse.down()
@@ -104,16 +112,29 @@ def main():
             verify(lambda s: s['seed_collected'], "Q002 collect seed after crossing")
             page.wait_for_timeout(200)
             assert not nav.position()['planting_hint'], 'distant garden must not glow after collection'
+            nav.go(('y', 430), ('x', 995))
+            page.wait_for_timeout(500)
+            assert 0.2 < nav.position()['garden_focus'] < 0.7, nav.position()
+            page.screenshot(path=str(artifacts / 'experience-garden-approach.png'))
             nav.go(('y', 465), ('x', 1045))
-            page.wait_for_timeout(200)
+            page.wait_for_timeout(500)
             assert nav.position()['planting_hint'], f"nearby planting hint missing: {nav.position()}"
+            assert nav.position()['garden_focus'] > 0.8, nav.position()
             page.screenshot(path=str(artifacts / "b-garden-ready.png"))
+            capture_sizes('experience-garden-ready')
             interact()
             verify(lambda s: s['seed_planted'], "Q002 plant seed")
-            page.wait_for_timeout(200)
+            page.wait_for_timeout(500)
             assert not nav.position()['planting_hint'], 'planted garden must stop offering the old hint'
+            assert nav.position()['garden_focus'] < 0.02 and not nav.position()['house_delivery'], nav.position()
             page.screenshot(path=str(artifacts / "b-garden-planted.png"))
-            nav.go(('x', 960), ('y', 339), ('x', 650), ('y', 500), ('x', 620))
+            nav.go(('x', 960), ('y', 339), ('x', 650), ('y', 260), ('x', 440), ('y', 220))
+            page.mouse.click(430, 195)
+            page.wait_for_timeout(300)
+            assert nav.position()['guide_stage'] == 'q004_collect', nav.position()
+            page.screenshot(path=str(artifacts / 'experience-rabbit-find-wood.png'))
+            page.mouse.click(430, 195)
+            nav.go(('y', 339), ('x', 650), ('y', 500), ('x', 620))
             interact()
             verify(lambda s: s['wood_collected'][2], "Q004 collect wood 3")
             nav.go(('y', 400), ('x', 360))
@@ -122,10 +143,24 @@ def main():
             nav.go(('y', 330), ('x', 160))
             interact()
             verify(lambda s: s['wood_collected'][0], "Q004 collect wood 1")
+            nav.go(('y', 260), ('x', 440), ('y', 220))
+            page.mouse.click(430, 195)
+            page.wait_for_timeout(500)
+            assert nav.position()['guide_stage'] == 'q004_deliver' and nav.position()['house_delivery'], nav.position()
+            page.screenshot(path=str(artifacts / 'experience-rabbit-deliver-wood.png'))
+            capture_sizes('experience-rabbit-deliver')
+            page.mouse.click(430, 195)
             nav.go(('x', 520), ('y', 430))
+            page.wait_for_timeout(500)
+            assert nav.position()['house_focus'] > 0.8, nav.position()
+            page.screenshot(path=str(artifacts / 'experience-house-ready.png'))
+            capture_sizes('experience-house-ready')
             for index in range(3):
                 interact()
                 verify(lambda s, i=index: s['wood_delivered'][i], f"Q004 deliver {index + 1}/3")
+                page.wait_for_timeout(400)
+                page.screenshot(path=str(artifacts / f'experience-house-delivery-{index + 1}.png'))
+            assert not nav.position()['house_delivery'] and nav.position()['house_focus'] < 0.02, nav.position()
             for index, (source, target) in enumerate((((945, 470), (990, 340)), ((1170, 340), (1040, 353)), ((1170, 520), (1082, 340)))):
                 drag(source, target)
                 verify(lambda s, i=index: s['pond_stones_placed'][i], f"Q003 pond stone {index + 1}/3")

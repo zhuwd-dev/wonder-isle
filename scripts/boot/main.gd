@@ -1,6 +1,8 @@
 extends Control
 
 const GameState = preload("res://scripts/game/game_state.gd")
+const IslandGuidance = preload("res://scripts/game/island_guidance.gd")
+const GroundFocus = preload("res://scripts/visual/ground_focus.gd")
 const SceneArt = preload("res://scripts/visual/scene_art_registry.gd")
 const UI_FONT = preload("res://assets/fonts/NotoSansCJKsc-GameSubset.otf")
 const PlayerAnimation = preload("res://scripts/visual/player_animation.gd")
@@ -223,6 +225,14 @@ var restart_confirmation_panel: PanelContainer
 var restart_cancel_button: Button
 var restart_confirm_button: Button
 var task_details_open := false
+var garden_focus: Node2D
+var house_focus: Node2D
+var help_focus: Node2D
+var garden_focus_level := 0.0
+var house_focus_level := 0.0
+var rabbit_target_remaining := 0.0
+var rabbit_intro_remaining := 0.0
+var rabbit_help_requested := false
 var rabbit_dialog_open := true
 var interact_button: Button
 var zoom_out_button: Button
@@ -276,6 +286,7 @@ func _ready() -> void:
 	_configure_save_path()
 	_load_game()
 	rabbit_dialog_open = not game_state.is_complete()
+	_create_environment_focus()
 	_create_controls()
 	get_viewport().size_changed.connect(_layout_controls)
 	_layout_controls()
@@ -288,6 +299,8 @@ func _ready() -> void:
 
 func _physics_process(delta: float) -> void:
 	animation_time += delta
+	rabbit_target_remaining = maxf(0.0, rabbit_target_remaining - delta)
+	rabbit_intro_remaining = maxf(0.0, rabbit_intro_remaining - delta)
 	collect_sparkle_remaining = maxf(collect_sparkle_remaining - delta, 0.0)
 	q005_growth_remaining = maxf(q005_growth_remaining - delta, 0.0)
 	bridge_repair_remaining = maxf(bridge_repair_remaining - delta, 0.0)
@@ -312,13 +325,14 @@ func _physics_process(delta: float) -> void:
 			player_walk_phase = fposmod(player_walk_phase + delta * TAU * 3.2, TAU)
 			_keep_player_in_view(delta)
 	player_animation.update(player_position - position_before_move, delta)
+	_update_environment_focus(delta)
 	_update_interact_button()
 	_update_interact_button_animation()
 	if test_telemetry_enabled:
 		test_telemetry_elapsed += delta
 		if test_telemetry_elapsed >= 0.033:
 			test_telemetry_elapsed = 0.0
-			print("TEST_POSITION ", JSON.stringify({"x": player_position.x, "y": player_position.y, "action": interaction_button_label, "ready": interaction_button_ready, "bridge": game_state.bridge_repaired, "planting_hint": _can_show_planting_hint(), "camera_zoom": camera_zoom, "animation": player_animation.animation, "official_mouse_frames": SceneArt.mouse_enabled() and player_animation.has_complete_set(), "move_input": [direction.x, direction.y], "right_clear": _is_walkable(player_position + Vector2(4, 0)), "left_clear": _is_walkable(player_position + Vector2(-4, 0)), "q005_completed": game_state.is_q005_complete(), "q010_completed": game_state.is_q010_complete(), "q011_completed": game_state.is_q011_complete(), "build_revision": build_revision}))
+			print("TEST_POSITION ", JSON.stringify({"x": player_position.x, "y": player_position.y, "action": interaction_button_label, "ready": interaction_button_ready, "bridge": game_state.bridge_repaired, "planting_hint": _can_show_planting_hint(), "garden_focus": garden_focus_level, "house_delivery": _house_delivery_available(), "house_focus": house_focus_level, "guide_stage": IslandGuidance.stage(game_state, build_mode, q011_mode), "camera_zoom": camera_zoom, "animation": player_animation.animation, "official_mouse_frames": SceneArt.mouse_enabled() and player_animation.has_complete_set(), "move_input": [direction.x, direction.y], "right_clear": _is_walkable(player_position + Vector2(4, 0)), "left_clear": _is_walkable(player_position + Vector2(-4, 0)), "q005_completed": game_state.is_q005_complete(), "q010_completed": game_state.is_q010_complete(), "q011_completed": game_state.is_q011_complete(), "build_revision": build_revision}))
 	queue_redraw()
 
 
@@ -515,6 +529,10 @@ func _handle_rabbit_dialog_pointer(world_position: Vector2) -> bool:
 		return true
 	if world_position.distance_to(_rabbit_position()) <= 58.0:
 		rabbit_dialog_open = not rabbit_dialog_open
+		if rabbit_dialog_open:
+			rabbit_help_requested = true
+			rabbit_target_remaining = 6.0
+			rabbit_intro_remaining = 0.0
 		queue_redraw()
 		return true
 	return false
@@ -1626,6 +1644,8 @@ func _pointer_up(position: Vector2, _screen_position := Vector2(-1.0, -1.0)) -> 
 		_save_game()
 		if game_state.is_complete():
 			bridge_repair_remaining = BRIDGE_REPAIR_DURATION
+			if not rabbit_help_requested:
+				rabbit_intro_remaining = 12.0
 			rabbit_dialog_open = false
 			task_details_open = false
 			if task_card_button != null:
@@ -1841,6 +1861,7 @@ func _try_turtle_interaction() -> bool:
 func _try_q004_interaction() -> void:
 	if player_position.distance_to(HOUSE_POSITION) <= HOUSE_INTERACTION_RADIUS:
 		if game_state.deliver_next_wood():
+			_start_collect_sparkles(HOUSE_POSITION + Vector2(0, 38), Color("fff1a8"))
 			_save_game()
 			if game_state.is_q004_complete():
 				_start_task_transition(HOUSE_POSITION, "狐狸搬进新家")
@@ -2233,6 +2254,11 @@ func _drag_target_slot_at(position: Vector2) -> int:
 
 func _restart_game() -> void:
 	game_state.reset()
+	garden_focus_level = 0.0
+	house_focus_level = 0.0
+	rabbit_target_remaining = 0.0
+	rabbit_intro_remaining = 0.0
+	rabbit_help_requested = false
 	rabbit_dialog_open = true
 	task_details_open = false
 	if game_menu_popup != null:
@@ -2737,12 +2763,21 @@ func _draw_rabbit_area(font: Font) -> void:
 		var dialog_rect := _rabbit_dialog_rect()
 		_draw_soft_panel(dialog_rect, bubble_fill, Color("d7a85b"), 16, 0.10)
 		var pointer_x := _rabbit_position().x
-		if dialog_rect.position.y > _rabbit_position().y:
+		if dialog_rect.end.x < pointer_x - 10.0:
+			var pointer_y := clampf(_rabbit_position().y, dialog_rect.position.y + 15.0, dialog_rect.end.y - 15.0)
+			draw_colored_polygon(PackedVector2Array([Vector2(dialog_rect.end.x, pointer_y - 8), Vector2(dialog_rect.end.x, pointer_y + 8), Vector2(dialog_rect.end.x + 15, pointer_y)]), bubble_fill)
+		elif dialog_rect.position.y > _rabbit_position().y:
 			draw_colored_polygon(PackedVector2Array([Vector2(pointer_x - 10, dialog_rect.position.y), Vector2(pointer_x + 8, dialog_rect.position.y), Vector2(pointer_x, dialog_rect.position.y - 15)]), bubble_fill)
 		else:
 			draw_colored_polygon(PackedVector2Array([Vector2(pointer_x - 10, dialog_rect.end.y), Vector2(pointer_x + 8, dialog_rect.end.y), Vector2(pointer_x, dialog_rect.end.y + 19)]), bubble_fill)
 		draw_circle(dialog_rect.position + Vector2(22, 27), 11.0, Color("e8bd62"))
-		draw_string(font, dialog_rect.position + Vector2(42, 34), _rabbit_feedback_text(), HORIZONTAL_ALIGNMENT_LEFT, 276, 18, VISUAL_PALETTE["ink"])
+		draw_string(font, dialog_rect.position + Vector2(42, 34), _rabbit_feedback_text(), HORIZONTAL_ALIGNMENT_LEFT, 300, 15, VISUAL_PALETTE["ink"])
+		var guide := _guidance_details()
+		_draw_guide_icon(guide["source"], Rect2(dialog_rect.position + Vector2(80, 45), Vector2(52, 32)))
+		_draw_guide_icon(guide["destination"], Rect2(dialog_rect.position + Vector2(210, 41), Vector2(60, 38)))
+		draw_line(dialog_rect.position + Vector2(156, 62), dialog_rect.position + Vector2(184, 62), Color("b79550"), 2.0, true)
+		draw_line(dialog_rect.position + Vector2(178, 56), dialog_rect.position + Vector2(184, 62), Color("b79550"), 2.0, true)
+		draw_line(dialog_rect.position + Vector2(178, 68), dialog_rect.position + Vector2(184, 62), Color("b79550"), 2.0, true)
 		# The bubble remains open until the child closes it or taps the rabbit.
 		draw_line(dialog_rect.position + Vector2(338, 14), dialog_rect.position + Vector2(348, 24), Color("947647"), 2.0, true)
 		draw_line(dialog_rect.position + Vector2(348, 14), dialog_rect.position + Vector2(338, 24), Color("947647"), 2.0, true)
@@ -2753,7 +2788,7 @@ func _draw_rabbit_area(font: Font) -> void:
 		_draw_panel(finale_tag, Color("fff5d9"), Color("d5a45f"), 12)
 		draw_string(font, finale_tag.position + Vector2(10, 20), "主线最后一步 · 庆祝", HORIZONTAL_ALIGNMENT_CENTER, finale_tag.size.x - 20, 14, VISUAL_PALETTE["ink"])
 	_draw_rabbit(_rabbit_position())
-	if not _should_show_rabbit_dialog() and player_position.distance_to(_rabbit_position()) <= COLLECTION_RADIUS:
+	if not _should_show_rabbit_dialog() and (player_position.distance_to(_rabbit_position()) <= COLLECTION_RADIUS or rabbit_intro_remaining > 0.0):
 		var bubble := _rabbit_position() + Vector2(34, -56)
 		_draw_ellipse_custom(bubble, Vector2(13, 9), Color("fff7df", 0.92))
 		for dot in [-5.0, 0.0, 5.0]:
@@ -2779,7 +2814,7 @@ func _rabbit_position() -> Vector2:
 
 
 func _rabbit_dialog_rect() -> Rect2:
-	var rect := Rect2(_rabbit_position() + Vector2(-160, -102), Vector2(360, 54))
+	var rect := Rect2(_rabbit_position() + Vector2(-160, -132), Vector2(360, 84))
 	var screen_position := _world_to_screen(rect.position)
 	var screen_width := rect.size.x * _camera_zoom_scale()
 	screen_position.x = clampf(screen_position.x, 12.0, maxf(12.0, _camera_viewport_size().x - screen_width - 12.0))
@@ -2787,7 +2822,11 @@ func _rabbit_dialog_rect() -> Rect2:
 	var rabbit_screen := _world_to_screen(_rabbit_position())
 	var rabbit_top := rabbit_screen.y - 43.0 * _camera_zoom_scale()
 	if screen_position.y + rect.size.y * _camera_zoom_scale() > rabbit_top:
-		screen_position.y = maxf(screen_position.y, rabbit_screen.y + 56.0 * _camera_zoom_scale())
+		var left_position := rabbit_screen.x - screen_width - 65.0 * _camera_zoom_scale()
+		if left_position >= 12.0:
+			screen_position.x = left_position
+		else:
+			screen_position.y = maxf(screen_position.y, rabbit_screen.y + 56.0 * _camera_zoom_scale())
 	rect.position = _screen_to_world(screen_position)
 	return rect
 
@@ -2806,11 +2845,6 @@ func _draw_seed_area(font: Font) -> void:
 	if not game_state.is_complete() or game_state.is_pond_complete():
 		return
 	_draw_garden_soil(game_state.seed_planted)
-	if _can_show_planting_hint():
-		var pulse := 0.10 + (sin(animation_time * 1.8) + 1.0) * 0.025
-		_draw_ellipse_custom(FLOWERBED_POSITION + Vector2(0, 4), Vector2(55, 18), Color(1.0, 0.86, 0.46, pulse))
-		draw_circle(FLOWERBED_POSITION + Vector2(-27, -3), 2.0, Color(1.0, 0.93, 0.67, 0.60))
-		draw_circle(FLOWERBED_POSITION + Vector2(29, 5), 1.5, Color(1.0, 0.93, 0.67, 0.48))
 	if game_state.seed_planted:
 		if not SceneArt.draw_optional(self, "plant_seedling", FLOWERBED_POSITION + Vector2(0, 18)):
 			var seedling_sway := sin(animation_time * 1.45 + 0.7) * 2.2
@@ -2873,12 +2907,13 @@ func _draw_q004_area(font: Font) -> void:
 		return
 	_draw_fox_cottage()
 	if game_state.is_q004_complete():
-		draw_string(font, HOUSE_POSITION + Vector2(-52, 78), "狐狸的小屋", HORIZONTAL_ALIGNMENT_LEFT, -1, 18, VISUAL_PALETTE["ink"])
-		# Place the fox on the ground in front of the doorway, not over the roof.
 		_draw_fox(HOUSE_POSITION + Vector2(0, 6))
 	else:
-		draw_string(font, HOUSE_POSITION + Vector2(-58, 78), "小屋建造中", HORIZONTAL_ALIGNMENT_LEFT, -1, 18, VISUAL_PALETTE["ink"])
-		draw_string(font, HOUSE_POSITION + Vector2(-54, 98), "交付 %d/3" % game_state.delivered_wood_count(), HORIZONTAL_ALIGNMENT_LEFT, -1, 16, VISUAL_PALETTE["ink"])
+		for index in range(3):
+			var wood_rect := Rect2(HOUSE_POSITION + Vector2(-32 + index * 24, 47), Vector2(20, 13))
+			draw_texture_rect(PLANK_ART, wood_rect, false, Color(1.0, 1.0, 1.0, 0.95 if index < game_state.delivered_wood_count() else 0.20))
+		if _house_delivery_available():
+			_draw_guide_icon(CRATE_ART, Rect2(HOUSE_POSITION + Vector2(28, 12), Vector2(26, 24)))
 
 	if game_state.is_q004_complete():
 		return
@@ -3410,13 +3445,9 @@ func _bridge_status_text() -> String:
 func _rabbit_feedback_text() -> String:
 	if not _should_show_rabbit_dialog():
 		return ""
-	if not game_state.is_complete():
+	if not game_state.is_complete() and game_state.board_count() == 0:
 		return "兔子：帮我修好小桥，好吗？"
-	if not game_state.seed_collected:
-		return "兔子：谢谢你！过桥找发光种子吧！"
-	if not game_state.seed_planted:
-		return "兔子：种子找到了！去花圃种下吧！"
-	return "兔子：你好！祝你今天玩得开心！"
+	return _guidance_details()["text"]
 
 
 func _draw_ellipse_custom(center: Vector2, radius: Vector2, color: Color) -> void:
@@ -3867,3 +3898,90 @@ func _hud_title_text() -> String:
 	if game_state.is_q012_complete():
 		return "奇趣小岛 · 主线完成"
 	return "奇趣小岛 · 自由探索"
+
+
+func _guidance_details() -> Dictionary:
+	var stage: String = IslandGuidance.stage(game_state, build_mode, q011_mode)
+	var choices := {
+		"q001_collect": ["兔子：找找草地上的木板吧。", PLANK_ART, BRIDGE_ART, _guide_first_position(BOARD_POSITIONS, game_state.collected)],
+		"q001_deliver": ["兔子：把木板放到桥面缺口吧。", PLANK_ART, BRIDGE_ART, BRIDGE_CENTER],
+		"q002_seed": ["兔子：谢谢你！过桥找发光种子吧！", SceneArt.SEED_POUCH, SceneArt.GARDEN_SOIL_BED, SEED_POSITION],
+		"q002_plant": ["兔子：种子找到了！去花圃种下吧！", SceneArt.SEED_POUCH, SceneArt.GARDEN_SOIL_BED, FLOWERBED_POSITION],
+		"q004_collect": ["兔子：找找木材箱，帮狐狸安家吧。", CRATE_ART, SceneArt.FOX_COTTAGE_CONSTRUCTION, _guide_first_position(WOOD_POSITIONS, game_state.wood_collected)],
+		"q004_deliver": ["兔子：把木材送到小屋吧。", CRATE_ART, SceneArt.FOX_COTTAGE_CONSTRUCTION, HOUSE_POSITION + Vector2(0, 40)],
+		"q003_pond": ["兔子：把石头摆到池塘边吧。", SceneArt.RIVER_STONE, SceneArt.NATURAL_POND, POND_RECT.get_center()],
+		"q005_water": ["兔子：给花圃浇浇水吧。", SceneArt.NATURAL_POND, SceneArt.GARDEN_SOIL_BED, Q005_WATERING_POINT_POSITION],
+		"q005_harvest": ["兔子：花开了，去采花吧。", SceneArt.GARDEN_SOIL_BED, TURTLE_ART, _guide_first_position(Q005_PLANT_POSITIONS, game_state.q005_plants_collected)],
+		"q005_deliver": ["兔子：把花束送给乌龟吧。", SceneArt.GARDEN_SOIL_BED, TURTLE_ART, Q005_TURTLE_POSITION],
+		"q006_decor": ["兔子：打开布置，装点花园吧。", SceneArt.TERRACOTTA_PLANTER, SceneArt.GARDEN_SOIL_BED, Q006_DECOR_PLOT_RECT.get_center()],
+		"q012_celebrate": ["兔子：来和大家一起庆祝吧！", FOX_ART, RABBIT_ART, Q012_RABBIT_POSITION],
+		"q007_shell": ["兔子：池塘边藏着一份小惊喜。", SceneArt.NATURAL_POND, TURTLE_ART, Q007_SHELL_POSITION],
+		"q009_collect": ["兔子：帮小鸟找齐筑巢材料吧。", BIRD_ART, SceneArt.BIRDHOUSE_CONSTRUCTION, _guide_first_position(Q009_MATERIAL_POSITIONS, game_state.q009_materials_collected)],
+		"q009_deliver": ["兔子：到鸟屋旁交材料吧。", SceneArt.BIRDHOUSE_CONSTRUCTION, SceneArt.BIRDHOUSE_COMPLETE, Q009_BIRDHOUSE_POSITION],
+		"q010_collect": ["兔子：还有三种种子等你发现。", SceneArt.SEED_POUCH, SceneArt.TERRACOTTA_PLANTER, _guide_first_position(Q010_SEED_POSITIONS, game_state.q010_seeds_collected)],
+		"q008_path": ["兔子：把石板连成一条小路吧。", SceneArt.RIVER_STONE, PLANK_ART, Q008_PATH_SLOT_RECTS[1].get_center()],
+		"q011_start": ["兔子：打开整理，收拾新地块吧。", CRATE_ART, SceneArt.GARDEN_SOIL_BED, Q011_AREA_RECT.get_center()],
+		"q011_tidy": ["兔子：把物品放进地块空位吧。", CRATE_ART, SceneArt.GARDEN_SOIL_BED, Q011_AREA_RECT.get_center()],
+		"free": ["兔子：你好！祝你今天玩得开心！", RABBIT_ART, FOX_ART, RABBIT_HOME_POSITION],
+	}
+	var entry: Array = choices[stage]
+	return {"stage": stage, "text": entry[0], "source": entry[1], "destination": entry[2], "target": entry[3]}
+
+
+func _guide_first_position(positions: Array, flags: Array) -> Vector2:
+	for index in range(positions.size()):
+		if not flags[index]:
+			return positions[index]
+	return positions[0]
+
+
+func _draw_guide_icon(texture: Texture2D, rect: Rect2) -> void:
+	var factor := minf(rect.size.x / texture.get_width(), rect.size.y / texture.get_height())
+	var icon_size := Vector2(texture.get_size()) * factor
+	draw_texture_rect(texture, Rect2(rect.get_center() - icon_size * 0.5, icon_size), false)
+
+
+func _house_delivery_available() -> bool:
+	return game_state.can_start_q004() and game_state.wood_count() > game_state.delivered_wood_count()
+
+
+func _planting_focus_target() -> float:
+	if not game_state.can_plant_seed():
+		return 0.0
+	var distance := player_position.distance_to(FLOWERBED_POSITION)
+	if distance > 120.0:
+		return 0.0
+	return 0.95 if distance <= FLOWERBED_INTERACTION_RADIUS else 0.45
+
+
+func _create_environment_focus() -> void:
+	garden_focus = GroundFocus.new()
+	house_focus = GroundFocus.new()
+	help_focus = GroundFocus.new()
+	for focus in [garden_focus, house_focus, help_focus]:
+		add_child(focus)
+
+
+func _update_environment_focus(delta: float) -> void:
+	if garden_focus == null:
+		return
+	garden_focus_level = move_toward(garden_focus_level, _planting_focus_target(), delta * 3.0)
+	var house_target := 0.0
+	if _house_delivery_available():
+		house_target = 0.95 if player_position.distance_to(HOUSE_POSITION) <= HOUSE_INTERACTION_RADIUS else 0.45
+	house_focus_level = move_toward(house_focus_level, house_target, delta * 3.0)
+	var breath := 0.92 + sin(animation_time * 1.7) * 0.08
+	var garden_rect := Rect2(FLOWERBED_POSITION - SceneArt.GARDEN_SOIL_SIZE * 0.5, SceneArt.GARDEN_SOIL_SIZE)
+	garden_focus.show_focus(SceneArt.GARDEN_SOIL_BED, _world_to_screen(garden_rect.position), garden_rect.size, _camera_zoom_scale(), garden_focus_level * breath)
+	var door_rect := Rect2(HOUSE_POSITION + Vector2(-45, 28), Vector2(90, 30))
+	house_focus.show_focus(SceneArt.GARDEN_SOIL_BED, _world_to_screen(door_rect.position), door_rect.size, _camera_zoom_scale(), house_focus_level * breath)
+	help_focus.visible = false
+	if rabbit_target_remaining > 0.0:
+		var guide := _guidance_details()
+		var target: Vector2 = guide["target"]
+		var mask: Texture2D = guide["source"]
+		var size := Vector2(72, 48)
+		if guide["stage"] in ["q002_plant", "q004_deliver"]:
+			mask = SceneArt.GARDEN_SOIL_BED
+			size = SceneArt.GARDEN_SOIL_SIZE if guide["stage"] == "q002_plant" else Vector2(90, 30)
+		help_focus.show_focus(mask, _world_to_screen(target - size * 0.5), size, _camera_zoom_scale(), minf(rabbit_target_remaining, 1.0) * breath * 0.8)

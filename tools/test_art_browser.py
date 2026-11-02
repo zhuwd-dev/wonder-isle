@@ -5,6 +5,7 @@ import functools
 import os
 import sys
 import threading
+import time
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from playwright.sync_api import sync_playwright
@@ -26,7 +27,10 @@ def main():
             if os.environ.get('CHROMIUM_PATH'):
                 options['executable_path'] = os.environ['CHROMIUM_PATH']
             browser = p.chromium.launch(**options)
-            context = browser.new_context(viewport={'width': 1280, 'height': 720}, has_touch=True)
+            context_options = {'viewport': {'width': 1280, 'height': 720}, 'has_touch': True}
+            if os.environ.get('ART_VIDEO_DIR'):
+                context_options['record_video_dir'] = os.environ['ART_VIDEO_DIR']
+            context = browser.new_context(**context_options)
             page = context.new_page()
             nav = Navigator(page, (build / 'index.html').read_text())
             errors = []
@@ -35,15 +39,32 @@ def main():
             expected = json.loads((build.parent.parent / 'assets/art/production-art.json').read_text())['mouse']['enabled']
             assert nav.position()['official_mouse_frames'] == expected, 'runtime art state differs from the enabled resource contract'
             page.mouse.click(800, 600)
+
+            def wait_animation(expected):
+                deadline = time.monotonic() + 5
+                while time.monotonic() < deadline:
+                    state = nav.position()
+                    if state['animation'] == expected:
+                        return state
+                    page.wait_for_timeout(30)
+                raise AssertionError(f'Animation {expected} did not follow real input: {nav.position()}')
+
             for key, facing in [('w', 'up'), ('s', 'down'), ('a', 'left'), ('d', 'right')]:
+                # Return by real input to open grass, rather than accumulating
+                # displacement toward a bank across all four probes.
+                nav.go(('y', 330), ('x', 450))
                 page.keyboard.down(key)
-                page.wait_for_timeout(350)
-                state = nav.position()
-                assert state['animation'] == 'walk_' + facing, state
-                page.screenshot(path=str(artifacts / ('art-controller-walk-' + facing + '.png')))
-                page.keyboard.up(key)
-                page.wait_for_timeout(250)
-                assert nav.position()['animation'] == 'idle_' + facing, nav.position()
+                try:
+                    wait_animation('walk_' + facing)
+                    # Leave a short visible movement segment in the recording.
+                    page.wait_for_timeout(250)
+                    assert nav.position()['animation'] == 'walk_' + facing, nav.position()
+                finally:
+                    page.keyboard.up(key)
+                wait_animation('idle_' + facing)
+                # Never hold movement during slow screenshots; the video is
+                # the evidence of movement, these stills show stopped facing.
+                page.screenshot(path=str(artifacts / ('art-controller-idle-' + facing + '.png')))
             if errors:
                 raise AssertionError(errors)
             print('PASS four-direction controller and safe fallback through real keyboard input', flush=True)
