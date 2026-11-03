@@ -235,6 +235,9 @@ func _run() -> void:
 	_expect(main._can_start_pond_stage(), "the pond stage must unlock after the fox house is complete")
 	_expect(main._task_stage_label() == "主线 4/7", "the completed fox house must advance to pond repair")
 	_expect(main._task_prompt_text() == "狐狸入住了！池塘石头已摆放 0/3。", "the pond step must show concrete placement progress")
+	_expect(main._task_action_hint_text().contains("水波亮起") and not main._task_action_hint_text().contains("轮廓"), "Q003 guidance must explain the free water drop instead of a fixed outline")
+	main.player_position = main.POND_RECT.get_center()
+	_expect(main._try_pond_interaction() and main.message.contains("水波亮起") and not main.message.contains("轮廓"), "the nearby pond hint must use the same free-drop instruction")
 
 	# Q003: mouse drag, invalid release, recovery, completion, and duplicate protection.
 	var stone_0: Vector2 = main.POND_STONE_POSITIONS[0]
@@ -249,6 +252,7 @@ func _run() -> void:
 
 	_mouse_button(stone_2, true)
 	_expect(main.dragging_pond_stone == 2, "any unplaced pond stone must enter mouse drag state")
+	_expect(main.message.contains("水波亮起") and not main.message.contains("轮廓"), "the drag hint must match the free-drop rule")
 	_mouse_motion(pond_drop_0)
 	_mouse_button(pond_drop_0, false)
 	_expect(main.game_state.pond_stones_placed == [false, false, true], "the last-numbered stone must place anywhere in the water first")

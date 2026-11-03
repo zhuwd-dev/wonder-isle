@@ -1502,7 +1502,7 @@ func _pointer_down(position: Vector2, screen_position := Vector2(-1.0, -1.0)) ->
 			if _pond_stone_rect(stone_id).grow(12).has_point(position):
 				dragging_pond_stone = stone_id
 				pond_drag_position = position
-				message = "把石头拖到池塘边对应的轮廓里。"
+				message = "把石头拖进池塘，水波亮起时松手。"
 				message_color = Color("fff7cf")
 				queue_redraw()
 				return
@@ -1751,7 +1751,7 @@ func _try_collect_nearby() -> void:
 		if not game_state.is_q004_complete():
 			message = "幼苗长出来了！下一步：帮狐狸收集木材、建好小屋。"
 		elif not game_state.is_pond_complete():
-			message = "狐狸已经入住了！下一步：把池塘边的石头放进轮廓。"
+			message = "狐狸已经入住了！下一步：把石头拖进池塘，水波亮起时松手。"
 		else:
 			message = "幼苗长出来了，继续探索右侧区域吧！"
 		message_color = Color("d9ffd0")
@@ -1856,7 +1856,7 @@ func _try_pond_interaction() -> bool:
 		message = "池塘水面荡开一圈涟漪，乌龟开心地探出头。"
 		message_color = Color("d9ffd0")
 	else:
-		message = "池塘还需要 %d 块石头。把石头拖到池边的轮廓里。" % (GameState.POND_STONE_TOTAL - game_state.pond_stones_placed.count(true))
+		message = "池塘还需要 %d 块石头；拖进水里，水波亮起时松手。" % (GameState.POND_STONE_TOTAL - game_state.pond_stones_placed.count(true))
 		message_color = Color("fff7cf")
 	return true
 
@@ -3857,7 +3857,7 @@ func _task_action_hint_text() -> String:
 			return "靠近木材，按 E 或点右下角按钮拾取。"
 		return "带着木材走到小屋旁，按 E 或点右下角按钮交付。"
 	if not game_state.is_pond_complete():
-		return "下一步：把池塘边剩余的石头拖进对应轮廓。"
+		return "下一步：把剩余的石头拖进池塘，水波亮起时松手。"
 	if not game_state.is_q005_complete():
 		if not game_state.q005_watered:
 			return "先到花圃旁的浇水点，按 E 或点右下角“浇水”。"

@@ -141,11 +141,11 @@ func _run() -> void:
 	_expect(not main.game_state.pond_stones_placed[0], "石头无效释放不能改变放置状态")
 	main._pointer_down(main.POND_STONE_POSITIONS[0])
 	main._pointer_up(pond_slot_0)
-	_expect(main.game_state.pond_stones_placed[0], "第 1 块石头应能放入对应轮廓")
+	_expect(main.game_state.pond_stones_placed[0], "第 1 块石头松手后应能放入池塘")
 	var pond_slot_1: Vector2 = main.POND_SLOTS[1].position + main.POND_SLOTS[1].size / 2.0
 	main._pointer_down(main.POND_STONE_POSITIONS[1])
 	main._pointer_up(pond_slot_1)
-	_expect(main.game_state.pond_stones_placed[1], "第 2 块石头应能独立放入对应轮廓")
+	_expect(main.game_state.pond_stones_placed[1], "第 2 块石头松手后应能放入池塘")
 	var touch_stone_down := InputEventScreenTouch.new()
 	touch_stone_down.position = main.POND_STONE_POSITIONS[2]
 	touch_stone_down.pressed = true
