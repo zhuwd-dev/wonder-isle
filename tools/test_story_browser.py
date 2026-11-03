@@ -198,7 +198,7 @@ def main():
                 nav.go(('x', x), ('y', 480))
                 interact()
                 verify(lambda s, i=index: s['q005_plants_collected'][i], f"Q005 collect flower {index + 1}/3")
-            nav.go(('x', 1140), ('y', 310))
+            nav.pursue_turtle()
             interact()
             verify(lambda s: s['q005_completed'], "Q005 deliver bouquet")
             page.screenshot(path=str(artifacts / "web-story-q005-complete.png"))

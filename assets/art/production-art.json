@@ -96,7 +96,7 @@
   },
   "items": {
     "plant_seedling": {
-      "enabled": false,
+      "enabled": true,
       "path": "assets/art/plants/seedling.png",
       "canvas": [
         128,

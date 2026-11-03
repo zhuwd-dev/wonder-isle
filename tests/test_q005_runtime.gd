@@ -30,6 +30,18 @@ func _run() -> void:
 	_complete_q003_runtime()
 	_expect(main.game_state.can_start_q005(), "Q003 completion must unlock Q005 at runtime")
 	_expect(main.game_state.is_q004_complete(), "the main story must finish the fox house before the pond garden")
+	main.player_position = Vector2(200, 200)
+	main.turtle_position = main.Q005_TURTLE_POSITION
+	main.turtle_patrol_index = 0
+	main.turtle_pause_remaining = 0.0
+	main._tick_turtle_patrol(0.2)
+	main._tick_turtle_patrol(0.5)
+	var turtle_moved_position: Vector2 = main.turtle_position
+	_expect(turtle_moved_position != main.Q005_TURTLE_POSITION, "the turtle must slowly crawl along its patrol path")
+	main.player_position = turtle_moved_position + Vector2(70, 0)
+	main._tick_turtle_patrol(0.3)
+	_expect(main.turtle_position == turtle_moved_position, "the turtle must pause beside the player for interaction")
+	_expect(main._is_walkable(main.turtle_position), "the turtle must not become a hard movement blocker")
 	_expect(main._task_prompt_text() == "乌龟花园：先浇水，再采收 3 朵花（0/3）。", "Q005 unlock prompt must show the order and current progress")
 
 	for plant_id in range(3):
@@ -79,7 +91,7 @@ func _run() -> void:
 	_expect(main.game_state.is_q005_complete(), "watering, harvesting and delivering must complete Q005")
 	_expect(main.task_transition_remaining > 0.0, "bouquet delivery must trigger a short task transition")
 	_expect(main._task_prompt_text() == "下一步：布置花园装饰（0/3）。", "Q005 completion must clearly lead to the optional garden task")
-	_expect(main._task_action_hint_text().contains("把剩余 3 件装饰拖到右侧自由摆放区"), "Q005 completion must explain the next action")
+	_expect(main._task_action_hint_text().contains("小屋、花圃或小路旁的空地"), "Q005 completion must explain where decoration can be used")
 	_expect(main._hud_title_text() == "奇趣小岛 · 花园装饰任务", "Q005 completion must update the HUD title")
 	_expect(main.build_button.visible, "the optional garden build button must unlock after the main story")
 	_expect(main.build_button.text == "开始布置", "the current next action must be named directly on the build button")

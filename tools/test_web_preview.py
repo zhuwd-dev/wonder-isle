@@ -553,7 +553,11 @@ def main() -> int:
                             raise AssertionError("A full harvest must still wait for the turtle delivery interaction")
                         page.screenshot(path=str(turtle_bouquet_screenshot_path), full_page=True)
 
-                        navigator.go(("x", 1130), ("y", 320))
+                        # The turtle walks a patrol while flowers are collected.
+                        # Chase its current position with ordinary WASD input;
+                        # a stale fixed coordinate can leave the player outside
+                        # the interaction radius even after completing the loop.
+                        navigator.pursue_turtle()
                         page.screenshot(path=str(artifact_dir / "web-q005-at-turtle.png"), full_page=True)
                         page.mouse.click(1_214, 662)
                         page.wait_for_timeout(180)

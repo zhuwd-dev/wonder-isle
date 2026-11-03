@@ -344,9 +344,9 @@ def main() -> int:
                 snap("web-q011-after-refresh.png")
 
                 # Re-enter decoration mode after the story and move a placed
-                # garden item to an arbitrary open coordinate inside the plot.
-                # This guards against the old fixed-slot-only behavior in the
-                # real browser input path, not just the runtime unit tests.
+                # garden item to an arbitrary open coordinate on both islands.
+                # This guards against the old right-island-only area and
+                # fixed-slot behavior in the real browser input path.
                 page.mouse.click(950, 50)
                 page.wait_for_timeout(500)
                 snap("web-q006-free-placement-before.png")
@@ -366,6 +366,23 @@ def main() -> int:
                 if moved_decor.get("q006_decor_positions", [None])[0] != [1030, 210]:
                     raise AssertionError("The browser did not persist the free decoration coordinate")
                 snap("web-q006-free-placement-after.png")
+
+                page.mouse.move(1030, 210)
+                page.mouse.down()
+                page.wait_for_timeout(100)
+                page.mouse.move(410, 472, steps=14)
+                page.wait_for_timeout(350)
+                snap("web-q006-cottage-fence-preview.png")
+                page.mouse.up()
+                page.wait_for_timeout(700)
+                cottage_decor = verify(
+                    lambda save: isinstance(save.get("q006_decor_positions"), list)
+                    and save["q006_decor_positions"][0] == [410, 472],
+                    "Q006 move the fence beside the cottage on the other island",
+                )
+                if cottage_decor.get("q006_decor_positions", [None])[0] != [410, 472]:
+                    raise AssertionError("The browser did not accept a safe cottage-side decoration position")
+                snap("web-q006-cottage-fence.png")
                 if errors:
                     raise AssertionError(f"Browser errors or failed requests: {errors}")
                 print(json.dumps({"result": "passed", "checks": checks, "browser_errors": errors}, ensure_ascii=False, indent=2))

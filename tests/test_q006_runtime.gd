@@ -44,14 +44,21 @@ func _run() -> void:
 	_expect(main._should_show_q006_slots(), "the free garden plot must be visible in build mode")
 	_expect(main._task_prompt_text() == "任务：布置花园装饰。已完成 0/3。", "Q006 build prompt must be visible")
 	_expect(main._task_stage_label() == "主线 6/7", "the garden decoration task must be identified as the sixth main-story step")
-	_expect(main._task_action_hint_text().contains("右侧草地任意空地摆放"), "the decoration instruction must explicitly allow free placement across the grass")
+	_expect(main._task_action_hint_text().contains("两座岛的空草地都能摆"), "the decoration instruction must allow free placement on either island")
+	for decor_id in range(3):
+		var scenic_spot: Vector2 = main.Q006_DECOR_SUGGESTIONS[decor_id][0]
+		_expect(main._q006_decor_drop_is_valid(decor_id, scenic_spot), "each decoration should have a clear suggested spot suited to its garden role")
+	_expect(main._q006_decor_drop_is_valid(0, Vector2(410, 472)), "the fence must be placeable beside the cottage")
+	_expect(main._q006_decor_drop_is_valid(2, Vector2(668, 396)), "the lantern must be placeable beside the footpath")
+	_expect(not main._q006_decor_drop_is_valid(0, main.HOUSE_POSITION), "a decoration must not cover the cottage")
+	_expect(not main._q006_decor_drop_is_valid(0, main.POND_RECT.get_center()), "a decoration must not be placed in the pond")
 
-	var decor_positions := [Vector2(950, 230), Vector2(1040, 174), Vector2(1110, 215)]
+	var decor_positions := [Vector2(1030, 210), Vector2(1088, 174), Vector2(1110, 225)]
 	var first_inventory := _center(main._q006_decor_inventory_rect(0))
 	_mouse_button(first_inventory, true)
 	_expect(main.dragging_q006_decor == 0, "Q006 inventory input must start decoration dragging")
-	_mouse_motion(Vector2(600, 400))
-	_mouse_button(Vector2(600, 400), false)
+	_mouse_motion(Vector2(800, 400))
+	_mouse_button(Vector2(800, 400), false)
 	_expect(not main.game_state.q006_decor_placed[0], "an invalid decoration release must not place it")
 	_expect(main.game_state.q006_decor_inventory[0], "an invalid decoration release must preserve inventory")
 
@@ -67,7 +74,7 @@ func _run() -> void:
 	_expect(main._q006_decor_slot_at(decor_positions[0]) == 0, "the green placement preview must follow the pointer rather than fixed slots")
 	_mouse_button(decor_positions[0], false)
 	_expect(main.game_state.q006_decor_placed[0] and main.game_state.q006_decor_positions[0] == decor_positions[0], "the fence must be stored at the selected coordinate")
-	_expect(_read_save().get("q006_decor_positions")[0] == [950.0, 230.0], "valid free placement must save the exact coordinate immediately")
+	_expect(_read_save().get("q006_decor_positions")[0] == [1030.0, 210.0], "valid free placement must save the exact coordinate immediately")
 
 	for decor_id in [1, 2]:
 		_mouse_button(_center(main._q006_decor_inventory_rect(decor_id)), true)

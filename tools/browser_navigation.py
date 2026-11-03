@@ -90,3 +90,32 @@ class Navigator:
         finally:
             self.page.keyboard.up(key)
         raise AssertionError(f"Interaction {expected_action} did not become ready: {self.position()}")
+
+    def pursue_turtle(self, expected_action="送花", timeout=25):
+        """Chase the live turtle using WASD until its nearby action is ready."""
+        deadline = time.monotonic() + timeout
+        keys_down = set()
+        try:
+            while time.monotonic() < deadline:
+                state = self.position()
+                if state["action"] == expected_action and state["ready"]:
+                    return state
+                if "turtle_x" not in state or "turtle_y" not in state:
+                    raise AssertionError(f"Turtle telemetry is missing: {state}")
+                dx = state["turtle_x"] - state["x"]
+                dy = state["turtle_y"] - state["y"]
+                desired = set()
+                if abs(dx) > 4:
+                    desired.add("d" if dx > 0 else "a")
+                if abs(dy) > 4:
+                    desired.add("s" if dy > 0 else "w")
+                for key in keys_down - desired:
+                    self.page.keyboard.up(key)
+                for key in desired - keys_down:
+                    self.page.keyboard.down(key)
+                keys_down = desired
+                self.page.wait_for_timeout(70)
+            raise AssertionError(f"Could not approach turtle for {expected_action}: {self.position()}")
+        finally:
+            for key in keys_down:
+                self.page.keyboard.up(key)

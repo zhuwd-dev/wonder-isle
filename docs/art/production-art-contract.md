@@ -1,6 +1,6 @@
 # 正式角色、植物和道具接入规范
 
-本轮提供工程能力，不提供新角色帧或植物、道具美术。`assets/art/production-art.json` 为正式清单，缺件默认 `enabled: false`。关闭或缺失时使用现有稳定表现；不要将缺件的启用状态提交。
+当前资源已接入一张幼苗 PNG 与一把浇水壶 PNG；这不代表四方向角色动画或植物完整成长组已完成。`assets/art/production-art.json` 为可选资源清单，未制作的状态默认 `enabled: false`。缺件继续使用现有稳定表现；不要把缺件启用。
 
 ## 主角
 
@@ -28,6 +28,7 @@
 
 - Q002 已种植：`plants/seedling.png`。未种植不显示植株。
 - Q005 未浇水：seedling；浇水后的原有短暂生长过渡：growing；浇水后未采摘：flowering；已采摘：harvested，仍保留活植株。
+- 当前幼苗 PNG 使用 128×128 画布、(64,116) 根部锚点、0.40 倍缩放；浇水壶为 `assets/art/props/watering-can.png`，由场景资源注册表加载。growing / flowering / harvested 尚无正式 PNG，继续走现有状态表现。
 - Q010 外观奖励：`flowering-unlocked.png`、`harvested-unlocked.png`。不增加成长玩法或存档字段。奖励素材缺失时沿用原外观绘制。
 - 生长只改变显示尺寸，根部锚点固定。最终需人工检查叶片、根土接缝和光照。
 
