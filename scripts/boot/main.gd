@@ -1163,10 +1163,19 @@ func _update_interact_button() -> void:
 	elif game_state.can_start_q004():
 		var near_house := player_position.distance_to(HOUSE_POSITION) <= HOUSE_INTERACTION_RADIUS
 		var near_wood_id := _nearest_uncollected_wood()
-		if near_house:
-			action_label = "交木材" if game_state.wood_count() > game_state.delivered_wood_count() else "互动"
+		var has_wood_to_deliver: bool = game_state.wood_count() > game_state.delivered_wood_count()
+		if near_house and has_wood_to_deliver:
+			action_label = "交木材"
 			action_ready = true
 			action_tooltip = "把收集的木材交给狐狸，或查看建屋要求"
+		elif near_wood_id >= 0 and game_state.wood_count() < GameState.Q004_WOOD_TOTAL:
+			action_label = "收木材"
+			action_ready = true
+			action_tooltip = "靠近木材并收集"
+		elif near_house:
+			action_label = "互动"
+			action_ready = true
+			action_tooltip = "木材还不够；先收集三份，再回到小屋交付"
 		else:
 			action_label = "收木材" if game_state.wood_count() < GameState.Q004_WOOD_TOTAL else "交木材"
 			action_ready = near_wood_id >= 0
@@ -1923,7 +1932,8 @@ func _try_turtle_interaction() -> bool:
 
 
 func _try_q004_interaction() -> void:
-	if player_position.distance_to(HOUSE_POSITION) <= HOUSE_INTERACTION_RADIUS:
+	var near_house := player_position.distance_to(HOUSE_POSITION) <= HOUSE_INTERACTION_RADIUS
+	if near_house and game_state.wood_count() > game_state.delivered_wood_count():
 		if game_state.deliver_next_wood():
 			_start_collect_sparkles(HOUSE_POSITION + Vector2(0, 38), Color("fff1a8"))
 			_save_game()
@@ -1935,12 +1945,6 @@ func _try_q004_interaction() -> void:
 				message = "木材交付成功！还需要 %d 份。" % (GameState.Q004_WOOD_TOTAL - game_state.delivered_wood_count())
 				message_color = Color("d9ffd0")
 			return
-		if game_state.wood_count() < GameState.Q004_WOOD_TOTAL:
-			message = "木材还不够，请先收集 %d 份。" % (GameState.Q004_WOOD_TOTAL - game_state.wood_count())
-		else:
-			message = "木材已经集齐，继续按互动键交付。"
-		message_color = Color("fff1a8")
-		return
 
 	var nearest_id := -1
 	var nearest_distance := COLLECTION_RADIUS
@@ -1956,6 +1960,12 @@ func _try_q004_interaction() -> void:
 		_save_game()
 		message = "木材收集成功：%d/%d。" % [game_state.wood_count(), GameState.Q004_WOOD_TOTAL]
 		message_color = Color("d9ffd0")
+	elif near_house and game_state.wood_count() < GameState.Q004_WOOD_TOTAL:
+		message = "木材还不够，请先收集 %d 份。" % (GameState.Q004_WOOD_TOTAL - game_state.wood_count())
+		message_color = Color("fff1a8")
+	elif near_house:
+		message = "木材已经集齐，继续按互动键交付。"
+		message_color = Color("fff1a8")
 	elif game_state.wood_count() < GameState.Q004_WOOD_TOTAL:
 		message = "请在岛上找到木材，再按互动键收集。"
 		message_color = Color("fff1a8")

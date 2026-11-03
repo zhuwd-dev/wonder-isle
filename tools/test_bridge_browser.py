@@ -61,7 +61,10 @@ def main():
                 nav.axis('x', 680)
                 # Different heights exercise both sides of both entrance seams.
                 for crossing in range(20):
-                    lane = (320, 339, 360, 380, 390)[crossing % 5]
+                    # Exercise several walkable deck heights; stay inside the
+                    # deck's centre lane so key-up frame quantization cannot
+                    # push the player outside the bridge before crossing.
+                    lane = (340, 345, 360, 375, 380)[crossing % 5]
                     nav.axis('y', lane, tolerance=8)
                     if crossing < 5 and lane >= 380:
                         page.screenshot(path=str(artifacts / f'bridge-lower-left-{lane}.png'))
@@ -69,10 +72,16 @@ def main():
                         nav.axis('x', 820)
                         page.wait_for_timeout(400)
                         page.screenshot(path=str(artifacts / 'bridge-middle-keyboard.png'))
-                    nav.axis('x', 930, tolerance=7)
+                    # The pond occupies the immediate east side of the upper
+                    # bridge approach. Reach the open bank, walk around its
+                    # south tip, then verify the player can reach the bank.
+                    nav.axis('x', 930)
+                    nav.axis('y', 390, tolerance=8)
+                    nav.axis('x', 960)
                     right = nav.position()
-                    assert right['x'] >= 923 and right['bridge'], f'left to right failed: {right}'
+                    assert right['x'] >= 923 and right['bridge'] and right['right_clear'], f'left to right failed: {right}'
                     page.screenshot(path=str(artifacts / f'bridge-right-{crossing % 5}.png')) if crossing < 5 else None
+                    nav.axis('x', 930)
                     nav.axis('y', lane, tolerance=8)
                     if crossing < 5 and lane >= 380:
                         page.screenshot(path=str(artifacts / f'bridge-lower-right-{lane}.png'))
@@ -82,9 +91,9 @@ def main():
                     # safely back on the west bank. Keep the normal-input
                     # crossing assertion and use the navigator's standard
                     # 12-unit waypoint tolerance.
-                    nav.axis('x', 680, tolerance=12)
+                    nav.axis('x', 660)
                     left = nav.position()
-                    assert left['x'] <= 692 and left['bridge'], f'right to left failed: {left}'
+                    assert left['x'] <= 690 and left['bridge'] and left['left_clear'], f'right to left failed: {left}'
                     print(f'PASS round trip {crossing + 1} lane {lane}: left={left}', flush=True)
                 nav.axis('y', 390, tolerance=8)
                 page.mouse.move(96, 622); page.mouse.down(); page.mouse.move(150, 622, steps=5)
@@ -110,7 +119,10 @@ def main():
                 diagonal = nav.position()
                 assert diagonal['x'] > lower['x'] and diagonal['y'] >= 300, f'diagonal input failed: {diagonal}'
                 print('PASS bridge railings and diagonal input', upper, lower, diagonal, flush=True)
-                nav.axis('y', 339, tolerance=8); nav.axis('x', 930, tolerance=7)
+                nav.axis('y', 339, tolerance=8)
+                nav.axis('x', 930)
+                nav.axis('y', 390, tolerance=8)
+                nav.axis('x', 960)
                 print('PASS bridge traversal after save reload', nav.position(), flush=True)
                 if errors:
                     raise AssertionError(f'browser errors: {errors}')

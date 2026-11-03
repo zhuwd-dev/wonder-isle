@@ -52,10 +52,27 @@ class Navigator:
             previous = current
             last_progress = time.monotonic()
             try:
-                # Near a waypoint, sample after a short input pulse instead of
-                # reversing a long hold based on delayed browser telemetry.
+                # Near a waypoint, keep the key down until a fresh physics
+                # telemetry sample confirms movement. A fixed short pulse can
+                # land entirely between frames on a slower CI browser, making
+                # a real input look like a collision.
                 if abs(distance) <= 35:
-                    self.page.wait_for_timeout(35)
+                    pulse_started = time.monotonic()
+                    previous_pulse_position = current
+                    previous_state_received_at = self.state_received_at
+                    while time.monotonic() < deadline:
+                        self.page.wait_for_timeout(10)
+                        state = self.position()
+                        current = state[axis]
+                        if abs(target - current) <= tolerance:
+                            return
+                        if self.state_received_at > previous_state_received_at:
+                            previous_state_received_at = self.state_received_at
+                            if abs(current - previous_pulse_position) >= 1.0:
+                                break
+                            previous_pulse_position = current
+                        if time.monotonic() - pulse_started >= 0.5:
+                            break
                     continue
                 while time.monotonic() < deadline:
                     self.page.wait_for_timeout(25)
