@@ -2578,7 +2578,7 @@ func _draw_floating_petals() -> void:
 func _draw_world(font: Font) -> void:
 	_draw_environment_glimmers()
 	_draw_river()
-	_draw_bridge(font)
+	_draw_bridge()
 	_draw_rabbit_area(font)
 	_draw_region_area(font)
 	_draw_seed_area(font)
@@ -2591,15 +2591,15 @@ func _draw_world(font: Font) -> void:
 	_draw_q005_area(font)
 	_draw_q006_area(font)
 	if celebration_remaining <= 0.0:
-		_draw_q008_area(font)
-		_draw_q007_area(font)
+		_draw_q008_area()
+		_draw_q007_area()
 	if not player_drawn and _player_is_behind_birdhouse():
 		_draw_player()
 		player_drawn = true
 	if celebration_remaining <= 0.0:
-		_draw_q009_area(font)
-		_draw_q010_area(font)
-		_draw_q011_area(font)
+		_draw_q009_area()
+		_draw_q010_area()
+		_draw_q011_area()
 	_draw_boards(font)
 	if not player_drawn:
 		_draw_player()
@@ -2800,13 +2800,15 @@ func _main_story_progress() -> int:
 	return 7 if game_state.is_q012_complete() else 6
 
 
-func _draw_bridge(font: Font) -> void:
+func _draw_bridge() -> void:
 	var bridge_texture: Texture2D = BRIDGE_ART if game_state.bridge_repaired else SceneArt.DAMAGED_WOODLAND_BRIDGE
 	draw_set_transform(_world_to_screen(BRIDGE_CENTER), BRIDGE_ROTATION, Vector2.ONE * _camera_zoom_scale())
 	draw_texture_rect(bridge_texture, Rect2(-BRIDGE_DRAW_SIZE * 0.5, BRIDGE_DRAW_SIZE), false)
 	_restore_world_draw_transform()
 
 	if not game_state.bridge_repaired:
+		if game_state.board_count() > game_state.placed_count() and player_position.distance_to(BRIDGE_CENTER) <= 190.0:
+			_draw_world_target_glimmer(BRIDGE_CENTER + Vector2(0, -58), 0.72, Color("ffe7a1"))
 		for slot_id in range(BRIDGE_SLOTS.size()):
 			var slot: Rect2 = BRIDGE_SLOTS[slot_id]
 			if slot_id < game_state.placed_count():
@@ -2816,12 +2818,9 @@ func _draw_bridge(font: Font) -> void:
 			if target_id >= 0:
 				_draw_ellipse_custom(Vector2(831, 366), Vector2(50, 14), Color(1.0, 0.83, 0.44, 0.18))
 				_draw_ellipse_custom(Vector2(831, 366), Vector2(35, 8), Color(1.0, 0.94, 0.70, 0.14))
-			var drag_hint := "松开木板，修好小桥" if target_id >= 0 else "拖到桥面缺口，再松手"
-			var hint_rect := Rect2(BRIDGE_CENTER + Vector2(-112, -102), Vector2(224, 30))
-			_draw_panel(hint_rect, Color("fff8e8", 0.96), Color("a9c885"), 14)
-			draw_string(font, hint_rect.position + Vector2(10, 20), drag_hint, HORIZONTAL_ALIGNMENT_CENTER, hint_rect.size.x - 20, 14, VISUAL_PALETTE["ink"])
-		if game_state.board_count() > 0 and player_position.distance_to(BRIDGE_CENTER) <= 150.0:
-			_draw_bridge_status(font, "修桥 %d/3" % game_state.placed_count())
+		# During a drag, the bridge deck itself provides the target feedback.
+		# The repaired sections remain visible as real planks, so a text label is
+		# not needed to explain progress.
 	elif bridge_repair_remaining > 0.0:
 		var repair_progress := 1.0 - bridge_repair_remaining / BRIDGE_REPAIR_DURATION
 		var shimmer_x := lerpf(770.0, 870.0, repair_progress)
@@ -2834,12 +2833,6 @@ func _draw_bridge_repair_plank(position: Vector2) -> void:
 	draw_set_transform(_world_to_screen(position), BRIDGE_ROTATION, Vector2.ONE * _camera_zoom_scale())
 	draw_texture_rect(SceneArt.BRIDGE_REPAIR_PLANK, Rect2(-SceneArt.BRIDGE_REPAIR_PLANK_SIZE * 0.5, SceneArt.BRIDGE_REPAIR_PLANK_SIZE), false)
 	_restore_world_draw_transform()
-
-
-func _draw_bridge_status(font: Font, label: String) -> void:
-	var rect := Rect2(BRIDGE_CENTER + Vector2(-58, -83), Vector2(116, 24))
-	_draw_soft_panel(rect, Color("fff7e5", 0.94), Color("d8bd83"), 12, 0.08)
-	draw_string(font, rect.position + Vector2(6, 17), label, HORIZONTAL_ALIGNMENT_CENTER, rect.size.x - 12, 13, Color("536c4c"))
 
 
 func _draw_rabbit_area(font: Font) -> void:
@@ -2865,15 +2858,21 @@ func _draw_rabbit_area(font: Font) -> void:
 		draw_line(dialog_rect.position + Vector2(156, 62), dialog_rect.position + Vector2(184, 62), Color("b79550"), 2.0, true)
 		draw_line(dialog_rect.position + Vector2(178, 56), dialog_rect.position + Vector2(184, 62), Color("b79550"), 2.0, true)
 		draw_line(dialog_rect.position + Vector2(178, 68), dialog_rect.position + Vector2(184, 62), Color("b79550"), 2.0, true)
-		# The bubble remains open until the child closes it or taps the rabbit.
+		# The bubble remains open until the child closes it from the lower-right action.
 		draw_line(dialog_rect.position + Vector2(338, 14), dialog_rect.position + Vector2(348, 24), Color("947647"), 2.0, true)
 		draw_line(dialog_rect.position + Vector2(348, 14), dialog_rect.position + Vector2(338, 24), Color("947647"), 2.0, true)
 	if game_state.can_start_q012():
 		var pulse := 0.5 + sin(animation_time * 3.0) * 0.5
 		draw_arc(Q012_RABBIT_POSITION, 75.0 + pulse * 5.0, 0.0, TAU, 48, Color(1.0, 0.88, 0.48, 0.58), 4.0)
-		var finale_tag := Rect2(Q012_RABBIT_POSITION + Vector2(-82, -107), Vector2(164, 30))
-		_draw_panel(finale_tag, Color("fff5d9"), Color("d5a45f"), 12)
-		draw_string(font, finale_tag.position + Vector2(10, 20), "主线最后一步 · 庆祝", HORIZONTAL_ALIGNMENT_CENTER, finale_tag.size.x - 20, 14, VISUAL_PALETTE["ink"])
+		var star_center := Q012_RABBIT_POSITION + Vector2(0, -76)
+		var star_size := 7.0 + pulse * 1.5
+		var star_points := PackedVector2Array()
+		for point_id in range(10):
+			var angle := -PI * 0.5 + TAU * float(point_id) / 10.0
+			var radius := star_size if point_id % 2 == 0 else star_size * 0.46
+			star_points.append(star_center + Vector2(cos(angle), sin(angle)) * radius)
+		draw_colored_polygon(star_points, Color("ffe7a1", 0.90))
+		draw_circle(star_center, 2.0, Color("fff9dc"))
 	_draw_rabbit(_rabbit_position())
 	if not _should_show_rabbit_dialog() and (player_position.distance_to(_rabbit_position()) <= COLLECTION_RADIUS or rabbit_intro_remaining > 0.0):
 		var bubble := _rabbit_position() + Vector2(34, -56)
@@ -2881,9 +2880,7 @@ func _draw_rabbit_area(font: Font) -> void:
 		for dot in [-5.0, 0.0, 5.0]:
 			draw_circle(bubble + Vector2(dot, 0), 1.2, Color("876f50"))
 	if game_state.can_start_q012():
-		draw_circle(Q012_RABBIT_POSITION + Vector2(0, -67), 13.0, Color("e8bd62"))
-		draw_string(font, Q012_RABBIT_POSITION + Vector2(-5, -61), "!", HORIZONTAL_ALIGNMENT_LEFT, -1, 19, Color("fff7dc"))
-		draw_string(font, Q012_RABBIT_POSITION + Vector2(18, -63), "庆祝", HORIZONTAL_ALIGNMENT_LEFT, -1, 15, Color("526b43"))
+		_draw_flower_symbol(Q012_RABBIT_POSITION + Vector2(0, -65), Color("e77a84"))
 
 
 func _should_show_rabbit_dialog() -> bool:
@@ -2945,8 +2942,8 @@ func _draw_seed_area(font: Font) -> void:
 	if not game_state.seed_collected:
 		_draw_ellipse_custom(SEED_POSITION + Vector2(0, 14), Vector2(20, 5), Color(0.19, 0.13, 0.10, 0.18))
 		SceneArt.draw_grounded(self, SceneArt.SEED_POUCH, SEED_POSITION + Vector2(0, 15), Vector2(46, 30))
-		if player_position.distance_to(SEED_POSITION) <= COLLECTION_RADIUS:
-			draw_circle(SEED_POSITION + Vector2(-22, -15), 2.0, Color(1.0, 0.94, 0.68, 0.72))
+		if IslandGuidance.stage(game_state, build_mode, q011_mode) == "q002_seed" or player_position.distance_to(SEED_POSITION) <= COLLECTION_RADIUS:
+			_draw_world_target_glimmer(SEED_POSITION + Vector2(0, -18), 0.88, Color("ffe7a1"))
 
 
 func _can_show_planting_hint() -> bool:
@@ -2978,6 +2975,8 @@ func _draw_pond_area(font: Font) -> void:
 	for stone_id in range(GameState.POND_STONE_TOTAL):
 		if not game_state.pond_stones_placed[stone_id]:
 			_draw_pond_stone_at(POND_STONE_POSITIONS[stone_id], Color("8d9a9c"), false)
+			if IslandGuidance.stage(game_state, build_mode, q011_mode) == "q003_pond" and stone_id == _guide_first_index(game_state.pond_stones_placed):
+				_draw_world_target_glimmer(POND_STONE_POSITIONS[stone_id] + Vector2(0, -17), 0.74, Color("d8fbf5"))
 	if dragging_pond_stone >= 0:
 		if _pond_drag_target_at(pond_drag_position) >= 0:
 			var pulse := 0.5 + sin(animation_time * 5.0) * 0.5
@@ -3002,8 +3001,10 @@ func _draw_q004_area(font: Font) -> void:
 		if game_state.wood_collected[wood_id]:
 			continue
 		_draw_wood_at(WOOD_POSITIONS[wood_id])
-		if player_position.distance_to(WOOD_POSITIONS[wood_id]) <= COLLECTION_RADIUS:
-			draw_circle(WOOD_POSITIONS[wood_id] + Vector2(-24, -23), 2.0, Color(1.0, 0.93, 0.65, 0.72))
+		if IslandGuidance.stage(game_state, build_mode, q011_mode) == "q004_collect" and wood_id == _guide_first_index(game_state.wood_collected):
+			_draw_world_target_glimmer(WOOD_POSITIONS[wood_id] + Vector2(0, -30), 0.72, Color("ffe7a1"))
+		elif player_position.distance_to(WOOD_POSITIONS[wood_id]) <= COLLECTION_RADIUS:
+			_draw_world_target_glimmer(WOOD_POSITIONS[wood_id] + Vector2(0, -30), 0.54, Color("fff0c2"))
 
 
 func _draw_fox_cottage() -> void:
@@ -3032,12 +3033,16 @@ func _draw_q005_area(font: Font) -> void:
 		var harvested: bool = game_state.q005_plants_collected[plant_id]
 		_draw_ellipse_custom(Q005_PLANT_POSITIONS[plant_id] + Vector2(0, 14), Vector2(21, 6), Color(0.20, 0.39, 0.19, 0.18))
 		_draw_q005_plant_at(plant_position, harvested, game_state.is_q010_complete(), not game_state.q005_watered and not harvested, plant_scale)
+		if game_state.q005_watered and not harvested and IslandGuidance.stage(game_state, build_mode, q011_mode) == "q005_harvest" and plant_id == _guide_first_index(game_state.q005_plants_collected):
+			_draw_world_target_glimmer(plant_position + Vector2(0, -20), 0.82, Color("fff0ba"))
 
 	if not game_state.is_q005_complete():
 		var watering_anchor := Q005_WATERING_POINT_POSITION + Vector2(-4, 8)
 		var watering_progress := 1.0 - watering_animation_remaining / Q005_WATERING_ANIMATION_DURATION
 		var watering_tilt := sin(clampf(watering_progress, 0.0, 1.0) * PI) * 0.48 if watering_animation_remaining > 0.0 else 0.0
 		_draw_watering_can(watering_anchor, watering_tilt)
+		if not game_state.q005_watered and IslandGuidance.stage(game_state, build_mode, q011_mode) == "q005_water":
+			_draw_world_target_glimmer(watering_anchor + Vector2(0, -29), 0.96, Color("bdebef"))
 		if player_position.distance_to(Q005_WATERING_POINT_POSITION) <= Q005_WATERING_RADIUS and not game_state.q005_watered:
 			var pulse := 0.5 + sin(animation_time * 3.6) * 0.5
 			draw_arc(Q005_GARDEN_RECT.position + Vector2(9, 39), 19.0 + pulse * 3.0, -1.05, 1.05, 28, Color(0.90, 0.98, 0.72, 0.60), 2.0)
@@ -3115,7 +3120,7 @@ func _should_show_q006_slots() -> bool:
 	return build_mode and _can_use_q006_build_mode()
 
 
-func _draw_q008_area(font: Font) -> void:
+func _draw_q008_area() -> void:
 	if not _can_use_q008_side_task():
 		return
 
@@ -3134,19 +3139,11 @@ func _draw_q008_area(font: Font) -> void:
 			var is_hovered := _q008_path_slot_is_hovered(slot_id)
 			var slot_fill: Color = VISUAL_PALETTE["target_valid_fill"] if is_drop_target else VISUAL_PALETTE["target_idle_fill"]
 			var slot_border: Color = VISUAL_PALETTE["target_valid"] if is_drop_target else VISUAL_PALETTE["target_idle"]
-			draw_rect(slot, slot_fill, true)
 			if is_hovered:
-				draw_rect(slot.grow(8), Color(0.20, 0.90, 0.40, 0.36), true)
-				draw_rect(slot.grow(8), Color("16883f"), false, 5.0)
-				draw_rect(slot, Color(0.58, 1.0, 0.56, 0.48), true)
-			draw_rect(slot, slot_border, false, 4.0 if is_drop_target else 3.0)
-			draw_string(font, slot.position + Vector2(9, 18), "空槽", HORIZONTAL_ALIGNMENT_LEFT, -1, 12, VISUAL_PALETTE["ink"])
-
-	if path_complete:
-		draw_string(font, Vector2(566, 342), "小路已连起来", HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Color("fff1a8"))
-	if dragging_q008_path >= 0:
-		var drag_hint := "空槽可以松开" if _q008_path_slot_at(q008_path_drag_position) >= 0 else "把石板移到小路空槽再松开"
-		draw_string(font, Vector2(520, 420), drag_hint, HORIZONTAL_ALIGNMENT_LEFT, -1, 16, VISUAL_PALETTE["ink"])
+				_draw_ellipse_custom(slot.get_center() + Vector2(0, 3), slot.size * Vector2(0.54, 0.22), Color(slot_fill, 0.88))
+				_draw_ellipse_custom(slot.get_center(), slot.size * Vector2(0.47, 0.16), Color(slot_border, 0.46))
+			elif is_drop_target:
+				draw_arc(slot.get_center(), 22.0, 0.0, TAU, 28, Color(slot_border, 0.70), 2.0)
 
 
 func _q008_prompt_text() -> String:
@@ -3155,42 +3152,38 @@ func _q008_prompt_text() -> String:
 	return "小路任务：已铺设 %d/3 块路面石板。" % game_state.q008_path_placed_count()
 
 
-func _draw_q007_area(font: Font) -> void:
+func _draw_q007_area() -> void:
 	if not _can_use_q007_side_task():
 		return
 	if game_state.q007_shell_collected:
 		if game_state.q007_reward_unlocked:
 			_draw_q007_shell_at(Q007_REWARD_POSITION, true)
-			draw_string(font, Q007_REWARD_POSITION + Vector2(-48, 42), "珍珠贝壳摆件", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, VISUAL_PALETTE["ink"])
 		return
 	_draw_q007_shell_at(Q007_SHELL_POSITION, false)
-	draw_string(font, Q007_SHELL_POSITION + Vector2(-28, 38), "隐藏贝壳", HORIZONTAL_ALIGNMENT_LEFT, -1, 15, VISUAL_PALETTE["ink"])
+	if IslandGuidance.stage(game_state, build_mode, q011_mode) == "q007_shell" or player_position.distance_to(Q007_SHELL_POSITION) <= 150.0:
+		_draw_world_target_glimmer(Q007_SHELL_POSITION + Vector2(0, -18), 0.92, Color("ffe7a1"))
 
 
-func _draw_q009_area(font: Font) -> void:
+func _draw_q009_area() -> void:
 	if not _should_show_q009_task_card():
 		return
-	var complete: bool = game_state.is_q009_complete()
-	var panel_color: Color = Color(0.91, 0.93, 0.86, 0.82) if complete else Color(0.82, 0.96, 0.80, 0.86)
-	var panel_border: Color = Color("a9bda3") if complete else VISUAL_PALETTE["island_highlight"]
-	_draw_panel(Rect2(74, 222, 300, 76), panel_color, panel_border, 16)
-	draw_string(font, Vector2(94, 251), _q009_prompt_text(), HORIZONTAL_ALIGNMENT_LEFT, -1, 17, VISUAL_PALETTE["ink"])
-	draw_string(font, Vector2(94, 278), _q009_action_hint_text(), HORIZONTAL_ALIGNMENT_LEFT, 260, 14, VISUAL_PALETTE["ink"])
 	if not game_state.is_q009_complete():
 		for material_id in range(GameState.Q009_MATERIAL_TOTAL):
 			if game_state.q009_materials_collected[material_id]:
 				continue
 			var material_position: Vector2 = Q009_MATERIAL_POSITIONS[material_id]
 			_draw_q009_material_at(material_position, material_id)
-			draw_string(font, material_position + Vector2(-24, 34), Q009_MATERIAL_LABELS[material_id], HORIZONTAL_ALIGNMENT_LEFT, -1, 15, VISUAL_PALETTE["ink"])
+			if IslandGuidance.stage(game_state, build_mode, q011_mode) == "q009_collect" and material_id == _guide_first_index(game_state.q009_materials_collected):
+				_draw_world_target_glimmer(material_position + Vector2(0, -20), 1.07, Color("fff0ba"))
 		if game_state.q009_material_count() == GameState.Q009_MATERIAL_TOTAL:
 			_draw_q009_birdhouse_frame(Q009_BIRDHOUSE_POSITION, game_state.q009_material_delivery_count())
-			draw_string(font, Q009_BIRDHOUSE_POSITION + Vector2(-46, 68), "鸟屋施工 %d/3" % game_state.q009_material_delivery_count(), HORIZONTAL_ALIGNMENT_LEFT, -1, 15, VISUAL_PALETTE["ink"])
+			if game_state.q009_material_delivery_count() < GameState.Q009_MATERIAL_TOTAL:
+				_draw_world_target_glimmer(Q009_BIRDHOUSE_POSITION + Vector2(0, -26), 0.78, Color("ffe2a0"))
 	else:
 		_draw_q009_birdhouse(Q009_BIRDHOUSE_POSITION)
 		_draw_q009_bird(Q009_BIRD_POSITION)
-		draw_string(font, Q009_BIRDHOUSE_POSITION + Vector2(-26, 62), "鸟屋", HORIZONTAL_ALIGNMENT_LEFT, -1, 16, VISUAL_PALETTE["ink"])
-		draw_string(font, Q009_BIRD_POSITION + Vector2(-44, -30), "小鸟：欢迎！", HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Color("fff1a8"))
+		if player_position.distance_to(Q009_BIRD_POSITION) <= COLLECTION_RADIUS:
+			_draw_speech_dots(Q009_BIRD_POSITION + Vector2(26, -48))
 
 
 func _q009_prompt_text() -> String:
@@ -3218,15 +3211,9 @@ func _draw_q009_birdhouse_frame(position: Vector2, delivered_count: int) -> void
 		draw_circle(ground_anchor + Vector2(-12 + material_id * 12, 5), 2.7, dot_color)
 
 
-func _draw_q010_area(font: Font) -> void:
+func _draw_q010_area() -> void:
 	if not _should_show_q010_task_card():
 		return
-	var complete: bool = game_state.is_q010_complete()
-	var panel_color: Color = Color(0.91, 0.93, 0.86, 0.82) if complete else Color(0.82, 0.96, 0.80, 0.86)
-	var panel_border: Color = Color("a9bda3") if complete else VISUAL_PALETTE["island_highlight"]
-	_draw_panel(Rect2(74, 312, 300, 76), panel_color, panel_border, 16)
-	draw_string(font, Vector2(92, 342), _q010_prompt_text(), HORIZONTAL_ALIGNMENT_LEFT, 270, 17, VISUAL_PALETTE["ink"])
-	draw_string(font, Vector2(92, 371), _q010_action_hint_text(), HORIZONTAL_ALIGNMENT_LEFT, 270, 14, VISUAL_PALETTE["ink"])
 	if game_state.is_q010_complete():
 		return
 	for seed_id in range(GameState.Q010_SEED_TOTAL):
@@ -3234,10 +3221,11 @@ func _draw_q010_area(font: Font) -> void:
 			continue
 		var seed_position: Vector2 = Q010_SEED_POSITIONS[seed_id]
 		_draw_q010_seed_at(seed_position, seed_id)
-		draw_string(font, seed_position + Vector2(-34, 32), Q010_SEED_LABELS[seed_id], HORIZONTAL_ALIGNMENT_LEFT, -1, 15, VISUAL_PALETTE["ink"])
+		if IslandGuidance.stage(game_state, build_mode, q011_mode) == "q010_collect":
+			_draw_world_target_glimmer(seed_position + Vector2(0, -17), 0.72 + float(seed_id) * 0.08, [Color("ffb5b6"), Color("bce7f6"), Color("ffe8a4")][seed_id])
 
 
-func _draw_q011_area(font: Font) -> void:
+func _draw_q011_area() -> void:
 	if not _should_show_q011_area_contents():
 		return
 	var complete: bool = game_state.is_q011_complete()
@@ -3252,11 +3240,9 @@ func _draw_q011_area(font: Font) -> void:
 			draw_circle(flower_position, 4.0, Color("e96b70"))
 			draw_circle(flower_position + Vector2(-4, -2), 3.0, Color("fff1a8"))
 			draw_circle(flower_position + Vector2(4, -2), 3.0, Color("fff1a8"))
-		draw_string(font, Vector2(222, 567), "额外地块 · 已整理", HORIZONTAL_ALIGNMENT_LEFT, -1, 15, Color("214232"))
 	else:
 		draw_line(Vector2(201, 569), Vector2(206, 562), Color("668949"), 3.0)
 		draw_line(Vector2(378, 569), Vector2(383, 562), Color("668949"), 3.0)
-		draw_string(font, Vector2(216, 567), "整理物品 · %d/3" % game_state.q011_placed_count(), HORIZONTAL_ALIGNMENT_LEFT, -1, 15, Color("3e392b"))
 	for slot_id in range(GameState.Q011_ITEM_TOTAL):
 		var slot: Rect2 = Q011_SLOT_RECTS[slot_id]
 		var item_id: int = game_state.q011_slot_occupants[slot_id]
@@ -3268,14 +3254,11 @@ func _draw_q011_area(font: Font) -> void:
 			draw_rect(slot, Color("896c47"), false, 2.0)
 		if item_id >= 0:
 			_draw_q011_item_at(slot.position + slot.size / 2.0, item_id, false)
-		elif not (dragging_q011_item >= 0 and _q011_slot_at(q011_drag_position) == slot_id):
-			draw_string(font, slot.position + Vector2(17, 17), "空", HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color("51442f"))
+		elif dragging_q011_item < 0:
+			_draw_ellipse_custom(slot.get_center() + Vector2(0, 6), Vector2(20, 4), Color("fff4d4", 0.40))
 		if dragging_q011_item >= 0 and _q011_slot_at(q011_drag_position) == slot_id:
 			draw_rect(slot.grow(5), VISUAL_PALETTE["target_valid_fill"], true)
 			draw_rect(slot.grow(5), VISUAL_PALETTE["target_valid"], false, 3.0)
-	if dragging_q011_item >= 0:
-		var hint := "空槽可以松开" if _q011_slot_at(q011_drag_position) >= 0 else "把物品移到空槽再松开"
-		draw_string(font, Vector2(202, 638), hint, HORIZONTAL_ALIGNMENT_LEFT, -1, 14, VISUAL_PALETTE["ink"])
 
 
 func _draw_q011_item_at(position: Vector2, item_id: int, lifted: bool) -> void:
@@ -3410,6 +3393,31 @@ func _draw_q007_shell_at(position: Vector2, reward: bool) -> void:
 		draw_circle(position + Vector2(-2, -5), 3.0, Color("ffffff"))
 
 
+func _draw_world_target_glimmer(position: Vector2, phase_offset: float, tint: Color) -> void:
+	var phase := animation_time * 2.4 + phase_offset
+	var pulse := 0.68 + (sin(phase) + 1.0) * 0.16
+	var color := tint
+	color.a *= 0.82 + pulse * 0.18
+	var drift := Vector2(sin(phase * 0.63) * 2.5, cos(phase * 0.74) * 2.5)
+	var center := position + drift
+	var halo_radius := 10.0 + pulse * 2.0
+	draw_circle(center, halo_radius, Color(tint, 0.11))
+	draw_arc(center, halo_radius, 0.0, TAU, 32, Color(tint, 0.44 * pulse), 1.6, true)
+	draw_circle(center, 2.0 + pulse, color)
+	var ray_length := 8.0 + pulse * 2.0
+	draw_line(center + Vector2(0, -ray_length), center + Vector2(0, ray_length), color, 2.0, true)
+	draw_line(center + Vector2(-ray_length, 0), center + Vector2(ray_length, 0), color, 2.0, true)
+	draw_circle(center + Vector2(12, -7), 2.2, Color(tint, pulse * 0.78))
+	draw_circle(center + Vector2(-12, 6), 1.7, Color(tint, pulse * 0.62))
+
+
+func _draw_speech_dots(position: Vector2) -> void:
+	var pulse := 0.92 + sin(animation_time * 2.4) * 0.08
+	_draw_ellipse_custom(position, Vector2(14, 9) * pulse, Color("fff7df", 0.90))
+	for dot in [-5.0, 0.0, 5.0]:
+		draw_circle(position + Vector2(dot, 0), 1.25, Color("876f50", 0.82))
+
+
 func _draw_q008_path_paver_at(position: Vector2, material_id: int, lifted: bool) -> void:
 	if SceneArt.draw_optional(self, "path_stone", position + Vector2(0, 3 if lifted else 11)):
 		return
@@ -3474,11 +3482,9 @@ func _draw_boards(font: Font) -> void:
 	for board_id in range(GameState.BOARD_TOTAL):
 		if not game_state.collected[board_id]:
 			_draw_board_at(BOARD_POSITIONS[board_id], VISUAL_PALETTE["board"], false)
-			if player_position.distance_to(BOARD_POSITIONS[board_id]) <= COLLECTION_RADIUS:
-				var sparkle_phase := animation_time * 3.2 + float(board_id) * 1.7
-				var sparkle_color := Color(1.0, 0.94, 0.64, 0.45 + sin(sparkle_phase) * 0.22)
-				draw_circle(BOARD_POSITIONS[board_id] + Vector2(-25, -22 + sin(sparkle_phase) * 2.0), 2.2, sparkle_color)
-				draw_circle(BOARD_POSITIONS[board_id] + Vector2(26, -16 + cos(sparkle_phase) * 2.0), 1.7, sparkle_color)
+			var is_current_target := IslandGuidance.stage(game_state, build_mode, q011_mode) == "q001_collect" and board_id == _guide_first_index(game_state.collected)
+			if is_current_target or player_position.distance_to(BOARD_POSITIONS[board_id]) <= COLLECTION_RADIUS:
+				_draw_world_target_glimmer(BOARD_POSITIONS[board_id] + Vector2(0, -27), 0.66 + float(board_id) * 0.09, Color("ffe7a1"))
 
 
 func _draw_player() -> void:
@@ -3597,7 +3603,8 @@ func _draw_pond_stone_at(position: Vector2, color: Color, lifted: bool) -> void:
 func _draw_task_card(font: Font) -> void:
 	var card_rect := Rect2(18, 14, 360, 68)
 	_draw_soft_panel(card_rect, Color("fff9ed", 0.95), Color("d5bd83", 0.94), 19, 0.12)
-	_draw_board_at(Vector2(52, 48), Color.WHITE, false)
+	var guidance := _guidance_details()
+	_draw_guide_icon(guidance["source"], Rect2(25, 27, 54, 40))
 	var title := "修好小桥" if not game_state.is_complete() else _hud_title_text().replace("奇趣小岛 · ", "")
 	draw_string(font, Vector2(86, 43), title, HORIZONTAL_ALIGNMENT_LEFT, 188, 20, VISUAL_PALETTE["ink"])
 	draw_string(font, Vector2(86, 65), _task_card_progress_text(), HORIZONTAL_ALIGNMENT_LEFT, 238, 14, Color("566d58"))
@@ -3639,8 +3646,7 @@ func _draw_hud(font: Font) -> void:
 	elif _can_use_q008_side_task() and not game_state.is_q008_complete():
 		_draw_q008_inventory(font)
 	else:
-		draw_string(font, Vector2(910, 600), "木板", HORIZONTAL_ALIGNMENT_LEFT, 80, 15, Color("425d48"))
-		var board_count_label := "%d/3" % game_state.board_count()
+		var board_count_label := "%d/3" % maxi(0, game_state.board_count() - game_state.placed_count())
 		draw_string(font, Vector2(1080, 600), board_count_label, HORIZONTAL_ALIGNMENT_RIGHT, 52, 13, Color("8a714c"))
 		for board_id in range(GameState.BOARD_TOTAL):
 			var rect := _inventory_rect(board_id)
@@ -3653,7 +3659,7 @@ func _draw_hud(font: Font) -> void:
 
 
 func _draw_q004_inventory(font: Font) -> void:
-	draw_string(font, Vector2(928, 602), "木材  %d/3" % game_state.wood_count(), HORIZONTAL_ALIGNMENT_LEFT, 230, 16, Color("425d48"))
+	draw_string(font, Vector2(1100, 602), "%d/3" % maxi(0, game_state.wood_count() - game_state.delivered_wood_count()), HORIZONTAL_ALIGNMENT_RIGHT, 52, 16, Color("425d48"))
 	for wood_id in range(GameState.Q004_WOOD_TOTAL):
 		var rect := _inventory_rect(wood_id)
 		if game_state.wood_collected[wood_id] and not game_state.wood_delivered[wood_id]:
@@ -3665,7 +3671,7 @@ func _draw_q004_inventory(font: Font) -> void:
 
 
 func _draw_q008_inventory(font: Font) -> void:
-	draw_string(font, Vector2(928, 602), "石板（拖到左侧小路）", HORIZONTAL_ALIGNMENT_LEFT, 230, 16, Color("425d48"))
+	draw_string(font, Vector2(1100, 602), "%d/3" % game_state.q008_path_placed_count(), HORIZONTAL_ALIGNMENT_RIGHT, 52, 16, Color("425d48"))
 	for material_id in range(GameState.Q008_PATH_SLOT_TOTAL):
 		var rect := _q008_path_material_rect(material_id)
 		if game_state.q008_path_material_is_available(material_id) and dragging_q008_path != material_id:
@@ -3677,8 +3683,7 @@ func _draw_q008_inventory(font: Font) -> void:
 
 
 func _draw_q011_inventory(font: Font) -> void:
-	var title := "整理托盘（拖到左侧任意空位）"
-	draw_string(font, Vector2(928, 602), title, HORIZONTAL_ALIGNMENT_LEFT, 230, 16, Color("425d48"))
+	draw_string(font, Vector2(1100, 602), "%d/3" % game_state.q011_placed_count(), HORIZONTAL_ALIGNMENT_RIGHT, 52, 16, Color("425d48"))
 	for item_id in range(GameState.Q011_ITEM_TOTAL):
 		var rect := _q011_item_inventory_rect(item_id)
 		if game_state.q011_item_is_available(item_id) and dragging_q011_item != item_id:
@@ -3690,7 +3695,7 @@ func _draw_q011_inventory(font: Font) -> void:
 
 
 func _draw_q006_inventory(font: Font) -> void:
-	draw_string(font, Vector2(928, 602), "装饰（拖到岛上空地）", HORIZONTAL_ALIGNMENT_LEFT, 230, 16, Color("425d48"))
+	draw_string(font, Vector2(1100, 602), "%d/3" % game_state.q006_placed_count(), HORIZONTAL_ALIGNMENT_RIGHT, 52, 16, Color("425d48"))
 	for decor_id in range(GameState.Q006_DECOR_TOTAL):
 		var rect := _q006_decor_inventory_rect(decor_id)
 		if game_state.q006_decor_is_available(decor_id) and dragging_q006_decor != decor_id:
@@ -3699,10 +3704,6 @@ func _draw_q006_inventory(font: Font) -> void:
 			_draw_slot_card(rect)
 		if not game_state.q006_decor_is_available(decor_id):
 			_draw_check_badge(rect.get_center())
-	if game_state.q006_windmill_unlocked:
-		draw_string(font, Vector2(914, 678), "小风车已解锁（保留在库存）", HORIZONTAL_ALIGNMENT_LEFT, 230, 14, Color("9b7542"))
-	else:
-		draw_string(font, Vector2(914, 678), "放满三件装饰后解锁小风车", HORIZONTAL_ALIGNMENT_LEFT, 230, 14, Color("788970"))
 
 
 func _draw_slot_card(rect: Rect2) -> void:
@@ -3733,9 +3734,13 @@ func _draw_touch_hint(font: Font) -> void:
 	var joystick_center := _virtual_joystick_center()
 	var hint_rect := Rect2(170, hint_y, 640, 42)
 	_draw_soft_panel(hint_rect, Color("fff8e8", 0.96), Color("bfca99"), 15, 0.11)
-	draw_circle(Vector2(192, hint_y + 21), 9.0, Color("e8cc88"))
-	draw_circle(Vector2(192, hint_y + 21), 4.0, Color("fff4d3"))
-	draw_string(font, Vector2(210, hint_y + 27.0), _compact_action_hint_text(), HORIZONTAL_ALIGNMENT_LEFT, 580, 14, Color("334c3d"))
+	var guidance := _guidance_details()
+	_draw_guide_icon(guidance["source"], Rect2(180, hint_y + 6, 30, 30))
+	draw_line(Vector2(212, hint_y + 21), Vector2(224, hint_y + 21), Color("b79655"), 1.8, true)
+	draw_line(Vector2(221, hint_y + 17), Vector2(225, hint_y + 21), Color("b79655"), 1.8, true)
+	draw_line(Vector2(221, hint_y + 25), Vector2(225, hint_y + 21), Color("b79655"), 1.8, true)
+	_draw_guide_icon(guidance["destination"], Rect2(228, hint_y + 6, 30, 30))
+	draw_string(font, Vector2(266, hint_y + 27.0), _compact_action_hint_text(), HORIZONTAL_ALIGNMENT_LEFT, 535, 14, Color("334c3d"))
 	var move_hint := Rect2(24, joystick_center.y - 82.0, 142, 26)
 	_draw_panel(move_hint, Color("fff8e8", 0.92), Color("c4c998"), 12)
 	draw_string(font, move_hint.position + Vector2(9, 18), "拖动圆盘移动", HORIZONTAL_ALIGNMENT_LEFT, 126, 13, Color("4e6953"))
@@ -4053,6 +4058,13 @@ func _guide_first_position(positions: Array, flags: Array) -> Vector2:
 	return positions[0]
 
 
+func _guide_first_index(flags: Array) -> int:
+	for index in range(flags.size()):
+		if not flags[index]:
+			return index
+	return 0
+
+
 func _draw_guide_icon(texture: Texture2D, rect: Rect2) -> void:
 	var factor := minf(rect.size.x / texture.get_width(), rect.size.y / texture.get_height())
 	var icon_size := Vector2(texture.get_size()) * factor
@@ -4064,12 +4076,19 @@ func _house_delivery_available() -> bool:
 
 
 func _planting_focus_target() -> float:
-	if not game_state.can_plant_seed():
-		return 0.0
-	var distance := player_position.distance_to(FLOWERBED_POSITION)
-	if distance > 120.0:
-		return 0.0
-	return 0.95 if distance <= FLOWERBED_INTERACTION_RADIUS else 0.45
+	if game_state.can_plant_seed():
+		var distance := player_position.distance_to(FLOWERBED_POSITION)
+		if distance > 120.0:
+			return 0.0
+		return 0.95 if distance <= FLOWERBED_INTERACTION_RADIUS else 0.45
+	if game_state.is_q004_complete() and game_state.is_pond_complete() and not game_state.is_q005_complete():
+		var garden_distance := player_position.distance_to(Q005_GARDEN_RECT.get_center())
+		if garden_distance > 210.0:
+			return 0.12 if not game_state.q005_watered else 0.0
+		if garden_distance <= Q005_WATERING_RADIUS:
+			return 0.92 if not game_state.q005_watered else 0.58
+		return 0.34
+	return 0.0
 
 
 func _create_environment_focus() -> void:
@@ -4090,6 +4109,8 @@ func _update_environment_focus(delta: float) -> void:
 	house_focus_level = move_toward(house_focus_level, house_target, delta * 3.0)
 	var breath := 0.92 + sin(animation_time * 1.7) * 0.08
 	var garden_rect := Rect2(FLOWERBED_POSITION - SceneArt.GARDEN_SOIL_SIZE * 0.5, SceneArt.GARDEN_SOIL_SIZE)
+	if game_state.is_q004_complete() and game_state.is_pond_complete() and not game_state.is_q005_complete():
+		garden_rect = Q005_GARDEN_RECT
 	garden_focus.show_focus(SceneArt.GARDEN_SOIL_BED, _world_to_screen(garden_rect.position), garden_rect.size, _camera_zoom_scale(), garden_focus_level * breath)
 	var door_rect := Rect2(HOUSE_POSITION + Vector2(-45, 28), Vector2(90, 30))
 	house_focus.show_focus(SceneArt.GARDEN_SOIL_BED, _world_to_screen(door_rect.position), door_rect.size, _camera_zoom_scale(), house_focus_level * breath)
