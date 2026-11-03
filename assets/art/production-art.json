@@ -110,7 +110,7 @@
       "state_mapping": "Q002 / Q005 before watering"
     },
     "plant_growing": {
-      "enabled": false,
+      "enabled": true,
       "path": "assets/art/plants/growing.png",
       "canvas": [
         128,
@@ -124,7 +124,7 @@
       "state_mapping": "Q005 watering transition"
     },
     "plant_flowering": {
-      "enabled": false,
+      "enabled": true,
       "path": "assets/art/plants/flowering.png",
       "canvas": [
         128,
@@ -138,7 +138,7 @@
       "state_mapping": "Q005 watered, not harvested"
     },
     "plant_harvested": {
-      "enabled": false,
+      "enabled": true,
       "path": "assets/art/plants/harvested.png",
       "canvas": [
         128,
@@ -320,7 +320,7 @@
       "state_mapping": "Q011 item 2"
     },
     "plant_flowering_unlocked": {
-      "enabled": false,
+      "enabled": true,
       "path": "assets/art/plants/flowering-unlocked.png",
       "canvas": [
         128,
@@ -334,7 +334,7 @@
       "state_mapping": "Q010 appearance reward / Q005 flowering"
     },
     "plant_harvested_unlocked": {
-      "enabled": false,
+      "enabled": true,
       "path": "assets/art/plants/harvested-unlocked.png",
       "canvas": [
         128,

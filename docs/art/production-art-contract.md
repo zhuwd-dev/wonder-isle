@@ -1,6 +1,6 @@
 # 正式角色、植物和道具接入规范
 
-当前资源已接入一张幼苗 PNG 与一把浇水壶 PNG；这不代表四方向角色动画或植物完整成长组已完成。`assets/art/production-art.json` 为可选资源清单，未制作的状态默认 `enabled: false`。缺件继续使用现有稳定表现；不要把缺件启用。
+当前资源包括幼苗、浇水壶，以及 growing / flowering / harvested / flowering-unlocked / harvested-unlocked 五张植物状态 PNG。`assets/art/production-art.json` 为资源清单。主角仅有四张已验收的 Idle，尚缺合格 Walk，故 `mouse.enabled` 仍为 false；不能将站立素材当作行走动画。
 
 ## 主角
 
@@ -20,7 +20,7 @@
 | 镜像 | 默认不镜像。左右各交付 6+1 帧，保留不对称挎包；正背面禁止用侧面镜像替代 |
 | 导入 | Godot Texture2D，lossless，关闭 repeat，CanvasItem 使用线性过滤；透明边缘无杂色，不预先叠加阴影 |
 
-角色须保留当前老鼠的耳朵、脸型、服装、围巾、挎包及身体比例。动画控制器使用 `SpriteFrames`，空资源只有八个动画名称，没有占位图片。绘制锚点、稳定阴影和碰撞独立；缺正式素材时不再旋转整张立绘模拟步行。
+角色须保留当前老鼠的耳朵、脸型、服装、围巾、挎包及身体比例。四张 Idle 已按合同入库，但未启用：只有 28 帧全部合格才可生成并启用 SpriteFrames。本轮 Walk 候选因重心转换不连续、部分帧比例变化而淘汰，候选没有入库。绘制锚点、稳定阴影和碰撞独立；缺正式素材时保留静态降级。
 
 ## 植物
 
@@ -28,8 +28,9 @@
 
 - Q002 已种植：`plants/seedling.png`。未种植不显示植株。
 - Q005 未浇水：seedling；浇水后的原有短暂生长过渡：growing；浇水后未采摘：flowering；已采摘：harvested，仍保留活植株。
-- 当前幼苗 PNG 使用 128×128 画布、(64,116) 根部锚点、0.40 倍缩放；浇水壶为 `assets/art/props/watering-can.png`，由场景资源注册表加载。growing / flowering / harvested 尚无正式 PNG，继续走现有状态表现。
-- Q010 外观奖励：`flowering-unlocked.png`、`harvested-unlocked.png`。不增加成长玩法或存档字段。奖励素材缺失时沿用原外观绘制。
+- 幼苗及五种成长/奖励状态均使用 128×128 画布、(64,116) 根部锚点、0.40 倍缩放；浇水壶为 `assets/art/props/watering-can.png`，由场景资源注册表加载。原有幼苗和水壶没有重制。
+- 生长期为闭合花苞，开花期为奶白桃色花，采摘后保留叶片、剪口及侧芽。五张新图统一缩放与根部基准，避免各状态独立缩放造成根部跳动。
+- Q010 外观奖励：`flowering-unlocked.png`、`harvested-unlocked.png` 已接入，使用粉、蓝、金三色花与采摘后的三色花苞。不增加成长玩法或存档字段。
 - 生长只改变显示尺寸，根部锚点固定。最终需人工检查叶片、根土接缝和光照。
 
 ## Q007～Q011 道具

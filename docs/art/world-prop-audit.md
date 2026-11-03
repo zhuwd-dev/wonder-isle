@@ -8,11 +8,11 @@
 | Q001 桥梁 | `assets/art/environment/bridge/woodland-footbridge-{damaged,complete}.png` | PASS：损坏、修理和完工素材；保留真实碰撞。 |
 | Q002 种子 | `assets/art/props/seed-pouch.png` | FIX：带阴影的种子袋，靠近才出现小亮点，去除名称。 |
 | Q002 花圃 | `assets/art/environment/farmland/garden-soil-bed.png` | FIX：携带种子且靠近时柔光；任务结束不显示旧提示。 |
-| Q002 幼苗 | `_draw_seed_area` 程序线条和圆形 | ASSET_REQUIRED：需要无裸露根系、与土壤融合的高质量植物素材。 |
+| Q002 幼苗 | `assets/art/plants/seedling.png` | 已接入：沿用现有幼苗贴图和根部锚点。 |
 | Q003 石头 | `assets/art/props/river-stone.png` | FIX：移除世界名称；拖拽轮廓及池塘标签仍需统一。 |
 | Q004 木材 | `assets/art/props/island-wood-crate.png` | FIX：移除常驻名称，靠近显示细小亮点；材料栏仍需材质和尺寸重设计。 |
 | Q004 小屋 | `assets/art/environment/buildings/fox-cottage-{construction,complete}.png` | PASS：图片和地面锚点；施工进度文字仍需进一步优化。 |
-| Q005 植株和浇水点 | `_draw_q005_plant_at` 等程序绘制 | ASSET_REQUIRED：缺成长、开花及收获后的统一贴图；状态提示保留以确保可理解。 |
+| Q005 植株和浇水点 | `assets/art/plants/{seedling,growing,flowering,harvested,flowering-unlocked,harvested-unlocked}.png`，`assets/art/props/watering-can.png` | 六种植物状态及原有水壶均已接入；成长/采摘/奖励沿用原任务映射。 |
 | Q006 栅栏、花盆、路灯 | `assets/art/decorations/` 下三个 PNG | PASS：各有素材和锚点；自由摆放遵循原碰撞。 |
 | Q007 贝壳 | `_draw_q007_shell_at` 程序绘制 | ASSET_REQUIRED：缺真实接地贝壳及奖励素材。 |
 | Q008 石板 | `assets/art/props/weathered-planks.png` 复用 | ASSET_REQUIRED：缺具有石材质感的道路素材。 |

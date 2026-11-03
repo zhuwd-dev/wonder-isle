@@ -195,9 +195,13 @@ def main():
             interact()
             verify(lambda s: s['q005_watered'], "Q005 water garden")
             for index, x in enumerate((1028, 1080, 1132)):
-                nav.go(('x', x), ('y', 480))
+                # Use the open southern approach, then the real action-ready
+                # feedback rather than a waypoint beside the eastern rocks.
+                nav.go(('y', 520), ('x', x))
+                nav.move_until_ready('w', '采花')
                 interact()
                 verify(lambda s, i=index: s['q005_plants_collected'][i], f"Q005 collect flower {index + 1}/3")
+            nav.go(('x', 1090), ('y', 420))
             nav.pursue_turtle()
             interact()
             verify(lambda s: s['q005_completed'], "Q005 deliver bouquet")

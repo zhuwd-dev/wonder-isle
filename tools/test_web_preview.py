@@ -495,7 +495,11 @@ def main() -> int:
                             attempts = 1 if harvest_step == 1 else 5
                             harvested_save = {}
                             for _attempt in range(attempts):
-                                navigator.go(("x", (1028, 1080, 1132)[remaining_id]), ("y", 480))
+                                # Approach from the open south side. An exact
+                                # y=480 waypoint can brush the eastern rocks
+                                # after input-release drift on slower frames.
+                                navigator.go(("y", 520), ("x", (1028, 1080, 1132)[remaining_id]))
+                                navigator.move_until_ready("w", "采花")
                                 page.mouse.click(1_214, 662)
                                 page.wait_for_timeout(500)
                                 for _ in range(24 if harvest_step == 1 else 6):
@@ -557,6 +561,9 @@ def main() -> int:
                         # Chase its current position with ordinary WASD input;
                         # a stale fixed coordinate can leave the player outside
                         # the interaction radius even after completing the loop.
+                        # Leave the eastern rock from its open western side
+                        # before chasing the patrolling NPC.
+                        navigator.go(("x", 1090), ("y", 420))
                         navigator.pursue_turtle()
                         page.screenshot(path=str(artifact_dir / "web-q005-at-turtle.png"), full_page=True)
                         page.mouse.click(1_214, 662)
