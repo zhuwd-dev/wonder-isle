@@ -41,6 +41,7 @@ var area_unlocked := false
 var seed_collected := false
 var seed_planted := false
 var pond_stones_placed: Array[bool] = [false, false, false]
+var pond_stone_install_order: Array[int] = [-1, -1, -1]
 var pond_opened := false
 var wood_collected: Array[bool] = [false, false, false]
 var wood_delivered: Array[bool] = [false, false, false]
@@ -80,6 +81,7 @@ func reset() -> void:
 	seed_collected = false
 	seed_planted = false
 	pond_stones_placed = [false, false, false]
+	pond_stone_install_order = [-1, -1, -1]
 	pond_opened = false
 	wood_collected = [false, false, false]
 	wood_delivered = [false, false, false]
@@ -193,7 +195,11 @@ func can_place_pond_stone(stone_id: int) -> bool:
 func place_pond_stone(stone_id: int) -> bool:
 	if not can_place_pond_stone(stone_id):
 		return false
+	var install_slot := pond_stone_install_order.find(-1)
+	if install_slot < 0:
+		return false
 	pond_stones_placed[stone_id] = true
+	pond_stone_install_order[install_slot] = stone_id
 	if _all_pond_stones_placed():
 		pond_opened = true
 	return true
@@ -674,6 +680,7 @@ func to_save_data() -> Dictionary:
 		"seed_collected": seed_collected,
 		"seed_planted": seed_planted,
 		"pond_stones_placed": pond_stones_placed.duplicate(),
+		"pond_stone_install_order": pond_stone_install_order.duplicate(),
 		"pond_opened": pond_opened,
 		"wood_collected": wood_collected.duplicate(),
 		"wood_delivered": wood_delivered.duplicate(),
@@ -773,6 +780,7 @@ func load_save_data(data: Dictionary) -> bool:
 		return false
 
 	var validated_pond_stones: Array[bool] = [false, false, false]
+	var validated_pond_stone_install_order: Array[int] = [-1, -1, -1]
 	var validated_pond_opened := false
 	if is_pond_schema or is_q004_schema or is_q005_schema or is_q006_schema or is_q007_schema or is_q008_schema or is_q009_schema or is_q010_schema or is_q011_schema or is_q012_schema or is_q013_schema:
 		var pond_stones_data = data.get("pond_stones_placed")
@@ -782,6 +790,33 @@ func load_save_data(data: Dictionary) -> bool:
 			if typeof(pond_stones_data[i]) != TYPE_BOOL:
 				return false
 			validated_pond_stones[i] = pond_stones_data[i]
+		if data.has("pond_stone_install_order"):
+			var pond_order_data = data["pond_stone_install_order"]
+			if not pond_order_data is Array or pond_order_data.size() != POND_STONE_TOTAL:
+				return false
+			var seen_pond_stones: Array[int] = []
+			for slot_id in range(POND_STONE_TOTAL):
+				var stored_id = pond_order_data[slot_id]
+				if (typeof(stored_id) != TYPE_INT and typeof(stored_id) != TYPE_FLOAT) or not is_equal_approx(float(stored_id), round(float(stored_id))):
+					return false
+				var stone_id := int(stored_id)
+				if stone_id < -1 or stone_id >= POND_STONE_TOTAL:
+					return false
+				if stone_id >= 0:
+					if not validated_pond_stones[stone_id] or seen_pond_stones.has(stone_id):
+						return false
+					seen_pond_stones.append(stone_id)
+				validated_pond_stone_install_order[slot_id] = stone_id
+			if seen_pond_stones.size() != _count_true(validated_pond_stones):
+				return false
+		else:
+			# Older saves only stored which stones had been placed. Rebuild a
+			# stable natural layout without changing their task progress.
+			var next_slot := 0
+			for stone_id in range(POND_STONE_TOTAL):
+				if validated_pond_stones[stone_id]:
+					validated_pond_stone_install_order[next_slot] = stone_id
+					next_slot += 1
 		if typeof(data.get("pond_opened")) != TYPE_BOOL:
 			return false
 		validated_pond_opened = data["pond_opened"]
@@ -1109,6 +1144,7 @@ func load_save_data(data: Dictionary) -> bool:
 	seed_collected = validated_seed_collected
 	seed_planted = validated_seed_planted
 	pond_stones_placed = validated_pond_stones
+	pond_stone_install_order = validated_pond_stone_install_order
 	pond_opened = validated_pond_opened
 	wood_collected = validated_wood_collected
 	wood_delivered = validated_wood_delivered

@@ -45,10 +45,18 @@ const FLOWERBED_POSITION := Vector2(1080, 480)
 const FLOWERBED_INTERACTION_RADIUS := 76.0
 const POND_RECT := Rect2(936, 270, 190, 130)
 const POND_STONE_POSITIONS := [Vector2(945, 470), Vector2(1170, 340), Vector2(1170, 520)]
+const POND_INSTALL_POSITIONS := [Vector2(1000, 335), Vector2(1044, 351), Vector2(1081, 331)]
+# Legacy test/inspection rectangles identify the three final artwork positions.
+# They are never drawn and are not used as the drag acceptance test.
 const POND_SLOTS := [
-	Rect2(970, 325, 40, 30),
-	Rect2(1020, 338, 40, 30),
-	Rect2(1062, 325, 40, 30),
+	Rect2(984, 321, 32, 28),
+	Rect2(1028, 337, 32, 28),
+	Rect2(1065, 317, 32, 28),
+]
+const POND_PLACEMENT_POLYGON := [
+	Vector2(971, 327), Vector2(987, 316), Vector2(1012, 311), Vector2(1040, 313),
+	Vector2(1068, 317), Vector2(1092, 328), Vector2(1097, 343), Vector2(1087, 357),
+	Vector2(1062, 365), Vector2(1036, 367), Vector2(1009, 363), Vector2(985, 353), Vector2(973, 342),
 ]
 const Q005_WATERING_POINT_POSITION := Vector2(976, 520)
 # Give the small garden actions a forgiving touch target at browser/mobile scale.
@@ -189,6 +197,7 @@ var task_transition_remaining := 0.0
 var task_transition_position := Vector2.ZERO
 var task_transition_text := ""
 var pond_ripple_remaining := 0.0
+var pond_ripple_position := Vector2(1030, 340)
 var touch_direction := Vector2.ZERO
 var virtual_joystick_active := false
 var virtual_joystick_mouse_active := false
@@ -1589,7 +1598,9 @@ func _pointer_up(position: Vector2, _screen_position := Vector2(-1.0, -1.0)) -> 
 		dragging_pond_stone = -1
 		pond_drag_position = Vector2.ZERO
 		if target_slot >= 0 and game_state.place_pond_stone(stone_id):
-			_start_collect_sparkles(POND_SLOTS[target_slot].get_center(), Color("a9e7f0"))
+			pond_ripple_position = position
+			pond_ripple_remaining = 1.0
+			_start_collect_sparkles(position, Color("a9e7f0"))
 			message = "池边石头放好 %d/3！" % game_state.pond_stones_placed.count(true)
 			message_color = Color("d9ffd0")
 			_save_game()
@@ -1840,6 +1851,7 @@ func _try_pond_interaction() -> bool:
 	if not _can_show_pond_area() or player_position.distance_to(POND_RECT.get_center()) > POND_INTERACTION_RADIUS:
 		return false
 	if game_state.is_pond_complete():
+		pond_ripple_position = POND_RECT.get_center()
 		pond_ripple_remaining = 1.0
 		message = "池塘水面荡开一圈涟漪，乌龟开心地探出头。"
 		message_color = Color("d9ffd0")
@@ -2118,9 +2130,23 @@ func _pond_stone_rect(stone_id: int) -> Rect2:
 func _pond_drag_target_at(position: Vector2) -> int:
 	if dragging_pond_stone < 0 or not game_state.can_place_pond_stone(dragging_pond_stone):
 		return -1
-	if dragging_pond_stone >= POND_SLOTS.size():
+	if not _pond_position_is_valid(position):
 		return -1
-	return dragging_pond_stone if POND_SLOTS[dragging_pond_stone].grow(18).has_point(position) else -1
+	return game_state.pond_stone_install_order.find(-1)
+
+
+func _pond_position_is_valid(position: Vector2) -> bool:
+	var water_polygon := PackedVector2Array(POND_PLACEMENT_POLYGON)
+	if Geometry2D.is_point_in_polygon(position, water_polygon):
+		return true
+	# A small forgiving edge around the natural water shape avoids requiring a
+	# pixel-perfect drop while still rejecting the shore and surrounding island.
+	for point_id in range(water_polygon.size()):
+		var start: Vector2 = water_polygon[point_id]
+		var finish: Vector2 = water_polygon[(point_id + 1) % water_polygon.size()]
+		if position.distance_to(Geometry2D.get_closest_point_to_segment(position, start, finish)) <= 12.0:
+			return true
+	return false
 
 
 func _q005_plant_inventory_rect(plant_id: int) -> Rect2:
@@ -2431,7 +2457,7 @@ func _draw_feedback_effects() -> void:
 		for ring_id in range(3):
 			var ring_progress := clampf(progress + float(ring_id) * 0.12, 0.0, 1.0)
 			var ring_color := Color(0.89, 0.99, 0.95, ripple_alpha * 0.52)
-			draw_arc(POND_RECT.get_center(), 14.0 + ring_progress * 70.0, 0.0, TAU, 42, ring_color, 2.0)
+			draw_arc(pond_ripple_position, 8.0 + ring_progress * 32.0, 0.0, TAU, 42, ring_color, 1.8)
 
 
 func _draw_interact_button_glow() -> void:
@@ -2870,6 +2896,11 @@ func _draw_pond_area(font: Font) -> void:
 	if not _can_show_pond_area():
 		return
 	SceneArt.draw_centered(self, SceneArt.NATURAL_POND, POND_RECT.get_center(), SceneArt.POND_SIZE)
+	if dragging_pond_stone >= 0:
+		var placement_glow := PackedVector2Array(POND_PLACEMENT_POLYGON)
+		placement_glow.append(placement_glow[0])
+		draw_colored_polygon(PackedVector2Array(POND_PLACEMENT_POLYGON), Color(0.70, 0.96, 0.93, 0.085))
+		draw_polyline(placement_glow, Color(0.71, 0.96, 0.92, 0.44), 1.5, true)
 	for line_id in range(2):
 		var y: float = POND_RECT.get_center().y + (float(line_id) - 0.5) * 48.0
 		var wave_phase := animation_time * 0.9 + float(line_id) * 1.2
@@ -2879,29 +2910,18 @@ func _draw_pond_area(font: Font) -> void:
 			Vector2(POND_RECT.end.x - 48, y + sin(wave_phase + 2.2) * 1.2),
 		])
 		draw_polyline(wave, Color("e2fff5", 0.30), 1.4, true)
-	draw_string(font, POND_RECT.position + Vector2(54, -12), "池塘", HORIZONTAL_ALIGNMENT_LEFT, -1, 22, VISUAL_PALETTE["ink"])
-	if game_state.is_pond_complete():
-		draw_string(font, POND_RECT.position + Vector2(34, 118), "池塘已开放", HORIZONTAL_ALIGNMENT_LEFT, -1, 18, Color("fff1a8"))
-		if player_position.distance_to(POND_RECT.get_center()) <= POND_INTERACTION_RADIUS:
-			draw_string(font, POND_RECT.position + Vector2(28, 144), "点互动看水纹", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color("f4fff0"))
-		return
-
 	for slot_id in range(GameState.POND_STONE_TOTAL):
-		var slot: Rect2 = POND_SLOTS[slot_id]
-		var slot_color: Color = VISUAL_PALETTE["target_valid"] if game_state.pond_stones_placed[slot_id] else VISUAL_PALETTE["target_idle"]
-		var slot_fill: Color = VISUAL_PALETTE["target_valid_fill"] if game_state.pond_stones_placed[slot_id] else VISUAL_PALETTE["target_idle_fill"]
-		draw_rect(slot, slot_fill, true)
-		draw_rect(slot, slot_color, false, 3.0)
-		if game_state.pond_stones_placed[slot_id]:
-			_draw_pond_stone_at(slot.position + slot.size / 2.0, Color("8d9a9c"), false)
-		else:
-			draw_string(font, slot.position + Vector2(12, 22), "轮廓", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, VISUAL_PALETTE["ink"])
+		var stone_id: int = game_state.pond_stone_install_order[slot_id]
+		if stone_id >= 0:
+			_draw_pond_stone_at(POND_INSTALL_POSITIONS[slot_id], Color("8d9a9c"), false)
 	for stone_id in range(GameState.POND_STONE_TOTAL):
 		if not game_state.pond_stones_placed[stone_id]:
 			_draw_pond_stone_at(POND_STONE_POSITIONS[stone_id], Color("8d9a9c"), false)
 	if dragging_pond_stone >= 0:
-		var drag_hint := "绿色轮廓可以松开" if _pond_drag_target_at(pond_drag_position) >= 0 else "把石头移到对应轮廓再松开"
-		draw_string(font, Vector2(936, 535), drag_hint, HORIZONTAL_ALIGNMENT_LEFT, -1, 16, VISUAL_PALETTE["ink"])
+		if _pond_drag_target_at(pond_drag_position) >= 0:
+			var pulse := 0.5 + sin(animation_time * 5.0) * 0.5
+			draw_circle(pond_drag_position, 13.0 + pulse * 4.0, Color(0.70, 0.96, 0.93, 0.17))
+			draw_arc(pond_drag_position, 16.0 + pulse * 4.0, 0.0, TAU, 28, Color(0.87, 1.0, 0.96, 0.82), 2.2)
 func _draw_q004_area(font: Font) -> void:
 	if not game_state.seed_planted:
 		return

@@ -161,9 +161,35 @@ def main():
                 page.wait_for_timeout(400)
                 page.screenshot(path=str(artifacts / f'experience-house-delivery-{index + 1}.png'))
             assert not nav.position()['house_delivery'] and nav.position()['house_focus'] < 0.02, nav.position()
-            for index, (source, target) in enumerate((((945, 470), (990, 340)), ((1170, 340), (1040, 353)), ((1170, 520), (1082, 340)))):
-                drag(source, target)
-                verify(lambda s, i=index: s['pond_stones_placed'][i], f"Q003 pond stone {index + 1}/3")
+            pond_progress = lambda: sum(bool(placed) for placed in saved()["pond_stones_placed"])
+            page.screenshot(path=str(artifacts / "web-q003-pond-0-of-3.png"))
+            # A release on the shore is rejected without consuming the stone.
+            page.mouse.move(945, 470)
+            page.mouse.down()
+            page.mouse.move(900, 450, steps=12)
+            page.mouse.up()
+            page.wait_for_timeout(250)
+            if pond_progress() != 0:
+                raise AssertionError("Q003 must reject a stone released outside the water")
+            page.screenshot(path=str(artifacts / "web-q003-invalid-release.png"))
+
+            # Use a non-slot order and land on different points inside the
+            # water. The release coordinate is intentionally independent of
+            # the stone ID and the final scenic installation position.
+            pond_drags = (
+                (2, (1170, 520), (1027, 332)),
+                (0, (945, 470), (1072, 348)),
+                (1, (1170, 340), (970, 333)),
+            )
+            for progress, (stone_id, source, target) in enumerate(pond_drags, start=1):
+                page.mouse.move(*source)
+                page.mouse.down()
+                page.mouse.move(*target, steps=12)
+                if progress == 1:
+                    page.screenshot(path=str(artifacts / "web-q003-drop-preview.png"))
+                page.mouse.up()
+                verify(lambda s, i=stone_id: s["pond_stones_placed"][i], f"Q003 arbitrary stone {progress}/3")
+                page.screenshot(path=str(artifacts / f"web-q003-pond-{progress}-of-3.png"))
             nav.go(('y', 339), ('x', 960), ('y', 500), ('x', 975))
             page.screenshot(path=str(artifacts / "web-story-watering-point.png"))
             interact()
