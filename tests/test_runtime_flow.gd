@@ -326,7 +326,11 @@ func _run() -> void:
 	# Q006 → Q012: continue the same fresh runtime through the ending.
 	main._toggle_build_mode()
 	_expect(main.build_mode, "the final main-story task must enter decoration mode")
-	var decor_positions := [Vector2(1030, 210), Vector2(1088, 174), Vector2(1110, 225)]
+	var decor_positions := [
+		main.Q006_DECOR_SUGGESTIONS[0][0],
+		main.Q006_DECOR_SUGGESTIONS[1][0],
+		main.Q006_DECOR_SUGGESTIONS[2][0],
+	]
 	_mouse_button(_center(main._q006_decor_inventory_rect(0)), true)
 	_mouse_motion(main.Q005_PLANT_POSITIONS[0])
 	_expect(not main._q006_decor_drop_is_valid(0, main.Q005_PLANT_POSITIONS[0]), "free placement must still prevent stacking decor on a planted flower")

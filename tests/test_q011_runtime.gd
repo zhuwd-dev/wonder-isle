@@ -118,12 +118,11 @@ func _run() -> void:
 	_expect(main.build_mode, "Q006 build mode must still open after Q011 unlock")
 	_expect(not main.q011_button.visible, "the Q011 control must not overlap Q006 build controls")
 	_expect(main._task_prompt_text() == "花园装饰已完成，可拖动已摆放的装饰调整位置。", "Q011 must not replace the active build-mode prompt")
-	_expect(main._task_action_hint_text() == "两座岛的安全草地都可调整；栅栏围住小屋或花圃，花盆点缀入口和花圃，路灯照亮石板小路。", "Q011 must not replace the active build-mode instructions")
+	_expect(main._task_action_hint_text() == "两座岛的安全草地都可自由装饰；点一下已摆放的物品收回，拖动可调整位置。", "Q011 must not replace the active free-decoration instructions")
 	var q006_position: Vector2 = main._q006_decor_rect(0).get_center()
-	main._toggle_remove_mode()
 	_mouse_button(q006_position, true)
+	_mouse_button(q006_position, false)
 	_expect(main.game_state.q006_decor_inventory[0], "completed Q006 decorations must remain editable")
-	main._toggle_remove_mode()
 	_mouse_button(main._q006_decor_inventory_rect(0).get_center(), true)
 	_expect(main.dragging_q006_decor == 0, "Q006 decoration dragging must remain available in its own mode")
 	var free_position := Vector2(1030, 210)
@@ -159,7 +158,7 @@ func _run() -> void:
 	_expect(main.build_mode, "the optional build button must still allow garden adjustments after completion")
 	_expect(main._task_stage_label() == "建造", "optional garden editing must be distinct from unfinished tasks")
 	_expect(main._task_prompt_text() == "花园装饰已完成，可拖动已摆放的装饰调整位置。", "the build mode must explain how to adjust completed decorations")
-	_expect(main._task_action_hint_text() == "两座岛的安全草地都可调整；栅栏围住小屋或花圃，花盆点缀入口和花圃，路灯照亮石板小路。", "the build mode must explain free movement and removal")
+	_expect(main._task_action_hint_text() == "两座岛的安全草地都可自由装饰；点一下已摆放的物品收回，拖动可调整位置。", "the build mode must explain free movement and direct collection")
 
 	main.queue_free()
 	await process_frame

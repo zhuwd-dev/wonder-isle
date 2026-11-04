@@ -32,15 +32,12 @@ func _run() -> void:
 	_expect(main.game_state.is_q004_complete(), "the main story must finish the fox house before the pond garden")
 	main.player_position = Vector2(200, 200)
 	main.turtle_position = main.Q005_TURTLE_POSITION
-	main.turtle_patrol_index = 0
-	main.turtle_pause_remaining = 0.0
-	main._tick_turtle_patrol(0.2)
-	main._tick_turtle_patrol(0.5)
-	var turtle_moved_position: Vector2 = main.turtle_position
-	_expect(turtle_moved_position != main.Q005_TURTLE_POSITION, "the turtle must slowly crawl along its patrol path")
-	main.player_position = turtle_moved_position + Vector2(70, 0)
-	main._tick_turtle_patrol(0.3)
-	_expect(main.turtle_position == turtle_moved_position, "the turtle must pause beside the player for interaction")
+	main._keep_turtle_at_habitat()
+	var turtle_habitat_position: Vector2 = main.turtle_position
+	_expect(turtle_habitat_position == main.Q005_TURTLE_POSITION, "the turtle with a single standing pose must stay at the pond until crawl frames are available")
+	main.player_position = turtle_habitat_position + Vector2(70, 0)
+	main._keep_turtle_at_habitat()
+	_expect(main.turtle_position == turtle_habitat_position, "the turtle must stay reachable beside the pond for interaction")
 	_expect(main._is_walkable(main.turtle_position), "the turtle must not become a hard movement blocker")
 	_expect(main._task_prompt_text() == "乌龟花园：先浇水，再采收 3 朵花（0/3）。", "Q005 unlock prompt must show the order and current progress")
 

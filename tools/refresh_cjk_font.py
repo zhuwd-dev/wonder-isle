@@ -19,7 +19,7 @@ UPSTREAM_URL = (
     "main/Sans/OTF/SimplifiedChinese/NotoSansCJKsc-Regular.otf"
 )
 UPSTREAM_SHA256 = "2c76254f6fc379fddfce0a7e84fb5385bb135d3e399294f6eeb6680d0365b74b"
-TEXT_SUFFIXES = {".gd", ".tscn", ".tres", ".cfg", ".godot"}
+TEXT_SUFFIXES = {".gd", ".tscn", ".tres", ".cfg", ".godot", ".json", ".csv"}
 
 
 def source_codepoints() -> set[int]:
@@ -49,6 +49,11 @@ def main() -> None:
         requested = source_codepoints()
         font_subsetter.populate(unicodes=requested)
         font_subsetter.subset(font)
+        covered = set().union(*(set(table.cmap) for table in font["cmap"].tables))
+        missing = sorted(codepoint for codepoint in requested if codepoint >= 0x20 and codepoint not in covered)
+        if missing:
+            rendered = " ".join(f"U+{codepoint:04X}" for codepoint in missing)
+            raise SystemExit(f"Subset font is missing requested codepoints: {rendered}")
         font.save(FONT_PATH)
         print(f"Wrote {FONT_PATH.relative_to(ROOT)} ({FONT_PATH.stat().st_size} bytes)")
 

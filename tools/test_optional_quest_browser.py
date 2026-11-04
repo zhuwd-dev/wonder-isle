@@ -383,6 +383,31 @@ def main() -> int:
                 if cottage_decor.get("q006_decor_positions", [None])[0] != [410, 472]:
                     raise AssertionError("The browser did not accept a safe cottage-side decoration position")
                 snap("web-q006-cottage-fence.png")
+
+                # A tap on a placed piece returns it directly to the compact
+                # decoration tray; no separate removal mode is involved.
+                page.mouse.click(410, 472)
+                recovered = verify(
+                    lambda save: save.get("q006_decor_placed", [None])[0] is False
+                    and save.get("q006_decor_inventory", [None])[0] is True,
+                    "Q006 tap placed fence to recover it to inventory",
+                )
+                snap("web-q006-direct-collect.png")
+                page.mouse.move(951, 634)
+                page.mouse.down()
+                page.wait_for_timeout(100)
+                page.mouse.move(430, 600, steps=12)
+                page.wait_for_timeout(300)
+                snap("web-q006-replacement-preview.png")
+                page.mouse.up()
+                replacement = verify(
+                    lambda save: isinstance(save.get("q006_decor_positions"), list)
+                    and save["q006_decor_positions"][0] == [430, 600],
+                    "Q006 place recovered fence from tray at another free grass location",
+                )
+                if replacement.get("q006_decor_positions", [None])[0] != [430, 600]:
+                    raise AssertionError("The recovered fence could not be placed again")
+                snap("web-q006-replaced-fence.png")
                 if errors:
                     raise AssertionError(f"Browser errors or failed requests: {errors}")
                 print(json.dumps({"result": "passed", "checks": checks, "browser_errors": errors}, ensure_ascii=False, indent=2))

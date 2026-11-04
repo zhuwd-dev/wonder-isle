@@ -64,6 +64,17 @@ def main() -> int:
         print(f"Godot Web export is missing files: {', '.join(missing_exports)}", file=sys.stderr)
         return 1
 
+    pck_file = build_dir / "index.pck"
+    maximum_pck_size = 64 * 1024 * 1024
+    if pck_file.stat().st_size > maximum_pck_size:
+        print(
+            f"Godot Web resource pack is {pck_file.stat().st_size} bytes; "
+            f"the 64 MiB safety limit was exceeded. Check export exclusions "
+            "for tests, screenshots, recordings, and unused source assets.",
+            file=sys.stderr,
+        )
+        return 1
+
     # A query string on index.html does not change the URLs Godot uses for its
     # JavaScript, WASM, and PCK. Give those payloads content-addressed names so
     # an older cached game can never survive a Pages update.

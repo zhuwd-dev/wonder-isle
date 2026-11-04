@@ -17,7 +17,8 @@ class QuietHandler(SimpleHTTPRequestHandler):
 
 def main():
     build = Path(sys.argv[1]).resolve()
-    artifacts = Path(os.environ.get('WEB_TEST_ARTIFACTS', build.parent.parent / 'tests/artifacts'))
+    project_root = Path(__file__).resolve().parent.parent
+    artifacts = Path(os.environ.get('WEB_TEST_ARTIFACTS', project_root / 'tests/artifacts'))
     artifacts.mkdir(parents=True, exist_ok=True)
     server = ThreadingHTTPServer(('127.0.0.1', 0), functools.partial(QuietHandler, directory=str(build)))
     threading.Thread(target=server.serve_forever, daemon=True).start()
@@ -36,7 +37,7 @@ def main():
             errors = []
             page.on('pageerror', lambda error: errors.append(str(error)))
             page.goto(f'http://127.0.0.1:{server.server_port}/index.html?test_telemetry=1', wait_until='load')
-            expected = json.loads((build.parent.parent / 'assets/art/production-art.json').read_text())['mouse']['enabled']
+            expected = json.loads((project_root / 'assets/art/production-art.json').read_text())['mouse']['enabled']
             assert nav.position()['official_mouse_frames'] == expected, 'runtime art state differs from the enabled resource contract'
             page.mouse.click(800, 600)
 

@@ -72,12 +72,6 @@ const Q005_PLANT_SLOTS := [
 const Q005_GARDEN_RECT := Rect2(1000, 438, 160, 84)
 const Q005_TURTLE_POSITION := Vector2(1160, 280)
 const Q005_TURTLE_INTERACTION_RADIUS := 72.0
-const TURTLE_PATROL_SPEED := 18.0
-const TURTLE_PAUSE_DISTANCE := 98.0
-const TURTLE_PATROL_POINTS := [
-	Vector2(1160, 280), Vector2(1183, 324), Vector2(1186, 390), Vector2(1174, 430),
-	Vector2(1160, 390), Vector2(1160, 280),
-]
 const WOOD_POSITIONS := [Vector2(160, 330), Vector2(360, 400), Vector2(620, 540)]
 const HOUSE_POSITION := Vector2(520, 500)
 const HOUSE_INTERACTION_RADIUS := 88.0
@@ -99,19 +93,18 @@ const Q006_DECOR_RIGHT_ISLAND_POLYGON := [
 	Vector2(1080, 590), Vector2(1012, 582), Vector2(964, 558), Vector2(936, 539),
 	Vector2(921, 508), Vector2(918, 288),
 ]
-const Q006_DECOR_CLEARANCE := 46.0
 const Q006_DECOR_SUGGESTIONS := [
 	[Vector2(410, 472), Vector2(410, 526), Vector2(980, 422), Vector2(1185, 422)], # Fence: cottage or garden edge.
 	[Vector2(980, 500), Vector2(650, 420), Vector2(1185, 480), Vector2(640, 548)], # Planter: by cottage or flowerbed.
-	[Vector2(668, 396), Vector2(645, 584), Vector2(970, 540), Vector2(980, 420)], # Lantern: path or pond approach.
+	[Vector2(642, 430), Vector2(645, 584), Vector2(970, 540), Vector2(980, 420)], # Lantern: path or pond approach.
 ]
 const Q006_DECOR_SLOTS := [
 	Rect2(940, 547, 76, 24),
 	Rect2(1034, 547, 76, 24),
 	Rect2(1128, 547, 76, 24),
 ]
-const Q006_DECOR_INVENTORY_ORIGIN := Vector2(904, 606)
-const Q006_DECOR_INVENTORY_STEP := 80.0
+const Q006_DECOR_INVENTORY_ORIGIN := Vector2(922, 614)
+const Q006_DECOR_INVENTORY_STEP := 64.0
 const Q007_SHELL_POSITION := Vector2(930, 430)
 const Q007_REWARD_POSITION := Vector2(930, 430)
 const Q008_PATH_MATERIAL_POSITIONS := [Vector2(938, 661), Vector2(1018, 661), Vector2(1098, 661)]
@@ -205,8 +198,6 @@ var animation_time := 0.0
 var player_walk_phase := 0.0
 var player_is_moving := false
 var turtle_position := Q005_TURTLE_POSITION
-var turtle_patrol_index := 0
-var turtle_pause_remaining := 0.0
 var test_telemetry_enabled := false
 var test_telemetry_elapsed := 0.0
 var build_revision := "local"
@@ -236,6 +227,8 @@ var q005_plant_drag_position := Vector2.ZERO
 var dragging_q006_decor := -1
 var q006_decor_drag_from_slot := -1
 var q006_decor_drag_position := Vector2.ZERO
+var q006_decor_drag_start_position := Vector2.ZERO
+var q006_decor_drag_moved := false
 var dragging_q008_path := -1
 var q008_path_drag_position := Vector2.ZERO
 var dragging_q011_item := -1
@@ -243,7 +236,6 @@ var q011_drag_start_position := Vector2.ZERO
 var q011_drag_position := Vector2.ZERO
 var build_mode := false
 var q011_mode := false
-var remove_decor_mode := false
 var message_remaining_seconds := 0.0
 var message: String = "兔子需要帮助：收集 3 块木板，修好小桥。":
 	set(value):
@@ -275,7 +267,6 @@ var interaction_button_label := ""
 var interaction_button_ready := false
 var interaction_button_tooltip := ""
 var build_button: Button
-var remove_decor_button: Button
 var q011_button: Button
 var panel_style_cache: Dictionary = {}
 var soft_panel_style_cache: Dictionary = {}
@@ -359,7 +350,7 @@ func _physics_process(delta: float) -> void:
 			player_walk_phase = fposmod(player_walk_phase + delta * TAU * 3.2, TAU)
 			_keep_player_in_view(delta)
 	player_animation.update(player_position - position_before_move, delta)
-	_tick_turtle_patrol(delta)
+	_keep_turtle_at_habitat()
 	_update_environment_focus(delta)
 	_update_interact_button()
 	_update_interact_button_animation()
@@ -371,22 +362,14 @@ func _physics_process(delta: float) -> void:
 	queue_redraw()
 
 
-func _tick_turtle_patrol(delta: float) -> void:
+func _keep_turtle_at_habitat() -> void:
 	if game_state == null or not game_state.is_pond_complete():
 		turtle_position = Q005_TURTLE_POSITION
-		turtle_patrol_index = 0
-		turtle_pause_remaining = 0.0
 		return
-	if player_position.distance_to(turtle_position) <= TURTLE_PAUSE_DISTANCE:
-		turtle_pause_remaining = 0.8
-	else:
-		turtle_pause_remaining = maxf(0.0, turtle_pause_remaining - delta)
-	if turtle_pause_remaining > 0.0:
-		return
-	var target: Vector2 = TURTLE_PATROL_POINTS[turtle_patrol_index]
-	turtle_position = turtle_position.move_toward(target, TURTLE_PATROL_SPEED * delta)
-	if turtle_position.distance_to(target) <= 1.5:
-		turtle_patrol_index = (turtle_patrol_index + 1) % TURTLE_PATROL_POINTS.size()
+	# turtle.png is a single standing pose, not a crawl cycle. Keep the NPC
+	# beside its pond until approved movement frames are available; do not make
+	# a planted pose slide around the island.
+	turtle_position = Q005_TURTLE_POSITION
 
 
 func _start_collect_sparkles(position: Vector2, color := Color("fff1a8")) -> void:
@@ -475,6 +458,7 @@ func _input(event: InputEvent) -> void:
 			queue_redraw()
 		elif dragging_q006_decor >= 0:
 			q006_decor_drag_position = _screen_to_world(event.position)
+			q006_decor_drag_moved = q006_decor_drag_moved or q006_decor_drag_position.distance_to(q006_decor_drag_start_position) >= 8.0
 			queue_redraw()
 		elif dragging_q008_path >= 0:
 			q008_path_drag_position = _screen_to_world(event.position)
@@ -549,6 +533,7 @@ func _input(event: InputEvent) -> void:
 			queue_redraw()
 		elif dragging_q006_decor >= 0:
 			q006_decor_drag_position = _screen_to_world(event.position)
+			q006_decor_drag_moved = q006_decor_drag_moved or q006_decor_drag_position.distance_to(q006_decor_drag_start_position) >= 8.0
 			queue_redraw()
 		elif dragging_q008_path >= 0:
 			q008_path_drag_position = _screen_to_world(event.position)
@@ -738,7 +723,7 @@ func _is_virtual_joystick_hit(position: Vector2) -> bool:
 
 
 func _is_button_control_position(position: Vector2) -> bool:
-	for control in [menu_button, task_card_button, build_button, remove_decor_button, q011_button, interact_button, zoom_out_button, zoom_in_button, zoom_reset_button]:
+	for control in [menu_button, task_card_button, build_button, q011_button, interact_button, zoom_out_button, zoom_in_button, zoom_reset_button]:
 		if control != null and control.visible and control.get_global_rect().has_point(position):
 			return true
 	return false
@@ -992,19 +977,6 @@ func _create_controls() -> void:
 	build_button.pressed.connect(_toggle_build_mode)
 	add_child(build_button)
 
-	remove_decor_button = Button.new()
-	remove_decor_button.name = "RemoveDecorButton"
-	remove_decor_button.text = "移除装饰"
-	remove_decor_button.position = Vector2(860, 88)
-	remove_decor_button.size = Vector2(180, 48)
-	remove_decor_button.add_theme_font_size_override("font_size", 18)
-	remove_decor_button.add_theme_color_override("font_color", Color("253b32"))
-	remove_decor_button.tooltip_text = "先点击此按钮，再点击已放置的装饰"
-	remove_decor_button.pressed.connect(_toggle_remove_mode)
-	remove_decor_button.visible = false
-	add_child(remove_decor_button)
-	_apply_button_style(remove_decor_button, false)
-
 	q011_button = Button.new()
 	q011_button.name = "Q011Button"
 	q011_button.text = "整理"
@@ -1047,7 +1019,6 @@ func _layout_controls() -> void:
 	zoom_in_button.position = Vector2(layout_width - 578.0, 30.0)
 	zoom_reset_button.position = Vector2(layout_width - 524.0, 30.0)
 	build_button.position = Vector2(layout_width - 420.0, 24.0)
-	remove_decor_button.position = Vector2(layout_width - 420.0, 88.0)
 	q011_button.position = Vector2(layout_width - 420.0, 88.0)
 	interact_button.position = Vector2(layout_width - INTERACT_BUTTON_SIZE.x - 8.0, maxf(8.0, visible_size.y - INTERACT_BUTTON_SIZE.y - 12.0))
 	interact_button.pivot_offset = INTERACT_BUTTON_SIZE * 0.5
@@ -1330,7 +1301,6 @@ func _toggle_build_mode() -> void:
 	dragging_q011_item = -1
 	q011_drag_start_position = Vector2.ZERO
 	q011_drag_position = Vector2.ZERO
-	remove_decor_mode = false
 	dragging_q006_decor = -1
 	q006_decor_drag_from_slot = -1
 	q006_decor_drag_position = Vector2.ZERO
@@ -1354,7 +1324,6 @@ func _toggle_q011_mode() -> void:
 		return
 	q011_mode = not q011_mode
 	build_mode = false
-	remove_decor_mode = false
 	dragging_q006_decor = -1
 	q006_decor_drag_from_slot = -1
 	q006_decor_drag_position = Vector2.ZERO
@@ -1373,16 +1342,6 @@ func _toggle_q011_mode() -> void:
 	queue_redraw()
 
 
-func _toggle_remove_mode() -> void:
-	if not build_mode:
-		return
-	remove_decor_mode = not remove_decor_mode
-	remove_decor_button.text = "取消移除" if remove_decor_mode else "移除装饰"
-	message = "请点击已放置的装饰将它移除。" if remove_decor_mode else "已取消移除模式。"
-	message_color = Color("fff7cf")
-	queue_redraw()
-
-
 func _refresh_build_controls() -> void:
 	if build_button == null:
 		return
@@ -1391,8 +1350,6 @@ func _refresh_build_controls() -> void:
 	var next_step: bool = available and not game_state.is_q006_complete() and not build_mode
 	build_button.text = "开始布置" if next_step else ("退出建造" if build_mode else "建造")
 	_apply_build_button_style(next_step)
-	remove_decor_button.visible = available and build_mode
-	remove_decor_button.text = "取消移除" if remove_decor_mode else "移除装饰"
 	q011_button.visible = _can_use_q011_mode() and not build_mode
 	var q011_next_step := q011_button.visible and not q011_mode
 	q011_button.text = "退出整理" if q011_mode else "开始整理"
@@ -1509,27 +1466,15 @@ func _pointer_down(position: Vector2, screen_position := Vector2(-1.0, -1.0)) ->
 		queue_redraw()
 		return
 	if build_mode and _can_use_q006_build_mode():
-		if remove_decor_mode:
-			for placed_decor_id in range(GameState.Q006_DECOR_TOTAL):
-				var placed_slot: int = game_state.q006_slot_for_decoration(placed_decor_id)
-				if placed_slot >= 0 and _q006_decor_rect(placed_decor_id).grow(12).has_point(position):
-					if game_state.remove_q006_decoration(placed_decor_id, placed_slot):
-						_save_game()
-						message = "装饰已收回托盘，可以换个位置摆放。"
-						message_color = Color("d9ffd0")
-						queue_redraw()
-					return
-			message = "请点击已放置的装饰。"
-			message_color = Color("ffe1b8")
-			queue_redraw()
-			return
 		for placed_decor_id in range(GameState.Q006_DECOR_TOTAL):
 			var placed_slot: int = game_state.q006_slot_for_decoration(placed_decor_id)
 			if placed_slot >= 0 and _q006_decor_rect(placed_decor_id).grow(12).has_point(position):
 				dragging_q006_decor = placed_decor_id
 				q006_decor_drag_from_slot = placed_slot
 				q006_decor_drag_position = position
-				message = "拖动装饰到岛上空地，绿色光圈亮起时松开。"
+				q006_decor_drag_start_position = position
+				q006_decor_drag_moved = false
+				message = "点一下收回装饰，拖动可以换个位置。"
 				message_color = Color("fff7cf")
 				queue_redraw()
 				return
@@ -1538,7 +1483,9 @@ func _pointer_down(position: Vector2, screen_position := Vector2(-1.0, -1.0)) ->
 				dragging_q006_decor = decor_id
 				q006_decor_drag_from_slot = -1
 				q006_decor_drag_position = position
-				message = "把装饰拖到岛上空地，绿色光圈亮起时松开。"
+				q006_decor_drag_start_position = position
+				q006_decor_drag_moved = false
+				message = "把装饰拖到岛上空地，暖金光圈亮起时松开。"
 				message_color = Color("fff7cf")
 				queue_redraw()
 				return
@@ -1617,26 +1564,34 @@ func _pointer_up(position: Vector2, _screen_position := Vector2(-1.0, -1.0)) -> 
 		var from_slot := q006_decor_drag_from_slot
 		var q006_was_complete: bool = game_state.is_q006_complete()
 		var drop_valid := _q006_decor_drop_is_valid(decor_id, position)
+		var was_click := from_slot >= 0 and not q006_decor_drag_moved
 		dragging_q006_decor = -1
 		q006_decor_drag_from_slot = -1
 		q006_decor_drag_position = Vector2.ZERO
+		q006_decor_drag_start_position = Vector2.ZERO
+		q006_decor_drag_moved = false
 		var placed_successfully := false
-		if drop_valid and from_slot >= 0:
+		if was_click:
+			placed_successfully = game_state.remove_q006_decoration(decor_id, from_slot)
+			if placed_successfully:
+				message = "装饰已收回托盘，拖到喜欢的位置再摆下。"
+				message_color = Color("d9ffd0")
+				_save_game()
+		elif drop_valid and from_slot >= 0:
 			placed_successfully = game_state.move_q006_decoration_to(decor_id, from_slot, position)
 		elif drop_valid:
 			placed_successfully = game_state.place_q006_decoration_at(decor_id, position)
-		if placed_successfully:
+		if placed_successfully and not was_click:
 			_start_task_transition(position, "装饰摆好了")
 			message = "摆放成功！两座岛的空草地都可以调整装饰。"
 			message_color = Color("d9ffd0")
 			_save_game()
 			if not q006_was_complete and game_state.is_q006_complete():
 				build_mode = false
-				remove_decor_mode = false
 				_start_task_transition(position, "花园布置完成")
 				message = "花园装饰完成！回到兔子身边参加小岛庆祝。"
 				message_color = Color("fff1a8")
-		else:
+		elif not placed_successfully:
 			message = "这个位置不合适，装饰没有丢失。"
 			message_color = Color("ffe1b8")
 		_refresh_build_controls()
@@ -2234,7 +2189,7 @@ func _q005_plant_slot_is_hovered(slot_id: int) -> bool:
 
 
 func _q006_decor_inventory_rect(decor_id: int) -> Rect2:
-	return Rect2(Q006_DECOR_INVENTORY_ORIGIN + Vector2(Q006_DECOR_INVENTORY_STEP * decor_id, 0), Vector2(76, 42))
+	return Rect2(Q006_DECOR_INVENTORY_ORIGIN + Vector2(Q006_DECOR_INVENTORY_STEP * decor_id, 0), Vector2(58, 40))
 
 
 func _q006_decor_slot_rect(slot_id: int) -> Rect2:
@@ -2254,11 +2209,19 @@ func _q006_decor_drop_is_valid(decor_id: int, position: Vector2) -> bool:
 	var on_right_grass := Q006_DECOR_RIGHT_BOUNDS.grow(-14.0).has_point(position) and Geometry2D.is_point_in_polygon(position, PackedVector2Array(Q006_DECOR_RIGHT_ISLAND_POLYGON))
 	if not on_left_grass and not on_right_grass:
 		return false
-	if POND_RECT.grow(12.0).has_point(position) or Q005_GARDEN_RECT.grow(12.0).has_point(position):
+	# Keep the bridge approaches, task path, pond, garden, house entrances and
+	# NPC interaction space open while allowing the rest of both grassy islands.
+	if POND_RECT.grow(18.0).has_point(position) or Q005_GARDEN_RECT.grow(18.0).has_point(position):
 		return false
 	if HOUSE_RECT.grow(24.0).has_point(position) or position.distance_to(RABBIT_HOME_POSITION) < 38.0:
 		return false
-	if position.distance_to(turtle_position) < 42.0:
+	if Rect2(510, 344, 210, 62).has_point(position):
+		return false
+	if position.distance_to(Vector2(710, 392)) < 64.0 or position.distance_to(Vector2(922, 392)) < 64.0:
+		return false
+	if position.distance_to(Vector2(620, 478)) < 48.0 or position.distance_to(Vector2(638, 510)) < 38.0:
+		return false
+	if position.distance_to(turtle_position) < 88.0 or position.distance_to(Q012_RABBIT_POSITION) < 72.0:
 		return false
 	if position.distance_to(Q007_REWARD_POSITION) < 40.0:
 		return false
@@ -2274,7 +2237,8 @@ func _q006_decor_drop_is_valid(decor_id: int, position: Vector2) -> bool:
 	for other_id in range(GameState.Q006_DECOR_TOTAL):
 		if other_id == decor_id or not game_state.q006_decor_placed[other_id]:
 			continue
-		if position.distance_to(game_state.q006_decor_positions[other_id]) < Q006_DECOR_CLEARANCE:
+		var item_clearance := 30.0 if decor_id == 1 or other_id == 1 else 38.0
+		if position.distance_to(game_state.q006_decor_positions[other_id]) < item_clearance:
 			return false
 	return true
 
@@ -2361,8 +2325,6 @@ func _restart_game() -> void:
 		task_card_button.size = Vector2(360, 68)
 	player_position = Vector2(250, 500)
 	turtle_position = Q005_TURTLE_POSITION
-	turtle_patrol_index = 0
-	turtle_pause_remaining = 0.0
 	player_facing = Vector2.RIGHT
 	player_walk_phase = 0.0
 	player_is_moving = false
@@ -2379,7 +2341,6 @@ func _restart_game() -> void:
 	dragging_q005_plant = -1
 	q005_plant_drag_position = Vector2.ZERO
 	build_mode = false
-	remove_decor_mode = false
 	dragging_q006_decor = -1
 	q006_decor_drag_from_slot = -1
 	q006_decor_drag_position = Vector2.ZERO
@@ -3101,8 +3062,14 @@ func _draw_q006_area(font: Font) -> void:
 	if not build_mode and placed_count == 0:
 		return
 	if build_mode:
-		# The land itself remains visible. Soft ground glows mark several
-		# attractive examples without turning the garden into fixed slots.
+		# Keep the map painterly while hinting that placement is free across
+		# both islands, rather than limited to the nearby sample glows.
+		for world_x in range(120, 1180, 92):
+			for world_y in range(190, 590, 86):
+				var hint_position := Vector2(float(world_x), float(world_y))
+				if _q006_decor_drop_is_valid(1, hint_position):
+					var twinkle := 0.5 + sin(animation_time * 1.6 + float(world_x + world_y) * 0.018) * 0.5
+					_draw_ellipse_custom(hint_position, Vector2(15, 5), Color(0.97, 0.84, 0.52, 0.045 + twinkle * 0.04))
 		for decor_id in range(GameState.Q006_DECOR_TOTAL):
 			var selected := dragging_q006_decor < 0 or dragging_q006_decor == decor_id
 			var suggestion_color: Color = [Color("8cad65"), Color("d69a67"), Color("e4bf6e")][decor_id]
@@ -3121,9 +3088,9 @@ func _draw_q006_area(font: Font) -> void:
 		_draw_q006_decor_at(game_state.q006_decor_positions[decor_id], decor_id, false)
 	if dragging_q006_decor >= 0:
 		var valid_drop := _q006_decor_drop_is_valid(dragging_q006_decor, q006_decor_drag_position)
-		var target_color := Color("64d887") if valid_drop else Color("e8a65e")
-		_draw_ellipse_custom(q006_decor_drag_position + Vector2(0, 12), Vector2(31, 10), Color(target_color.r, target_color.g, target_color.b, 0.24))
-		draw_arc(q006_decor_drag_position + Vector2(0, 2), 24.0, 0.0, TAU, 32, target_color, 2.4)
+		var target_color := Color("e8c36b") if valid_drop else Color("d99a7d")
+		_draw_ellipse_custom(q006_decor_drag_position + Vector2(0, 12), Vector2(34, 12), Color(target_color.r, target_color.g, target_color.b, 0.34 if valid_drop else 0.20))
+		draw_arc(q006_decor_drag_position + Vector2(0, 2), 24.0, 0.0, TAU, 32, Color(target_color, 0.88 if valid_drop else 0.56), 2.2)
 
 
 func _should_show_q006_slots() -> bool:
@@ -3646,6 +3613,8 @@ func _draw_hud(font: Font) -> void:
 	if not show_inventory:
 		return
 	var tray_rect := Rect2(INVENTORY_PANEL_RECT.position + Vector2(0, 10), INVENTORY_PANEL_RECT.size - Vector2(0, 14))
+	if build_mode:
+		tray_rect = Rect2(906, 580, 222, 86)
 	_draw_soft_panel(tray_rect, Color("f7edd8", 0.94), Color("ad8a5f"), 18, 0.12)
 	if q011_mode:
 		_draw_q011_inventory(font)
@@ -3705,7 +3674,8 @@ func _draw_q011_inventory(font: Font) -> void:
 
 
 func _draw_q006_inventory(font: Font) -> void:
-	draw_string(font, Vector2(1100, 602), "%d/3" % game_state.q006_placed_count(), HORIZONTAL_ALIGNMENT_RIGHT, 52, 16, Color("425d48"))
+	draw_string(font, Vector2(930, 602), "花园装饰", HORIZONTAL_ALIGNMENT_LEFT, 110, 14, Color("6b805d"))
+	draw_string(font, Vector2(1112, 602), "%d/3" % game_state.q006_placed_count(), HORIZONTAL_ALIGNMENT_RIGHT, 40, 13, Color("7d765f"))
 	for decor_id in range(GameState.Q006_DECOR_TOTAL):
 		var rect := _q006_decor_inventory_rect(decor_id)
 		if game_state.q006_decor_is_available(decor_id) and dragging_q006_decor != decor_id:
@@ -3945,16 +3915,14 @@ func _task_action_hint_text() -> String:
 	if game_state.is_q012_complete() and celebration_remaining > 0.0:
 		return "小岛庆典开始了！稍后可以选择池塘边的可选任务。"
 	if build_mode and _can_use_q006_build_mode():
-		if remove_decor_mode:
-			return "点击已放置的装饰移除；再次点击移除按钮可取消。"
 		if game_state.is_q006_complete():
-			return "两座岛的安全草地都可调整；栅栏围住小屋或花圃，花盆点缀入口和花圃，路灯照亮石板小路。"
+			return "两座岛的安全草地都可自由装饰；点一下已摆放的物品收回，拖动可调整位置。"
 		if dragging_q006_decor >= 0:
 			match dragging_q006_decor:
 				0: return "栅栏可以围住小屋或花圃；两座岛的空草地都能摆。"
 				1: return "花盆适合放在小屋入口或花圃旁；两座岛的空草地都能摆。"
 				2: return "路灯放在石板路边或池塘入口更合适；两座岛的空草地都能摆。"
-		return "栅栏围小屋或花圃，花盆点缀入口，路灯照亮小路；两座岛的空草地都能摆。"
+		return "把装饰拖到两座岛的空草地；点一下已摆放的物品即可收回。"
 	if game_state.is_q011_complete():
 		return "没有必做任务：自由探索，或点右上角“建造”调整花园。"
 	if not game_state.is_complete():
