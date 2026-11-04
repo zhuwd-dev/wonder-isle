@@ -50,6 +50,11 @@ func _run() -> void:
 	main._try_collect_nearby()
 	_expect(main.game_state.is_q004_complete(), "third house interaction must complete Q004")
 	_expect(main.game_state.fox_moved_in, "Q004 completion must show the fox moved in")
+	main.fox_welcome_remaining = 0.0
+	main.player_position = Vector2(300, 300)
+	_expect(not main._fox_should_greet_player(), "the fox should be inside after its move-in greeting when the player leaves")
+	main.player_position = main.HOUSE_POSITION
+	_expect(main._fox_should_greet_player(), "the fox should greet the player when they return to the cottage")
 	_expect(not main.game_state.is_pond_complete(), "Q003 must remain incomplete after Q004")
 	_expect(main._task_prompt_text() == "狐狸入住了！池塘石头已摆放 0/3。", "Q004 completion must clearly direct the player to the unfinished pond task")
 	_expect(main._can_start_pond_stage(), "Q004 completion must unlock the pond stage")

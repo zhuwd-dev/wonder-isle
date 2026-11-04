@@ -105,6 +105,7 @@ const Q006_DECOR_SLOTS := [
 ]
 const Q006_DECOR_INVENTORY_ORIGIN := Vector2(922, 614)
 const Q006_DECOR_INVENTORY_STEP := 64.0
+const Q006_DRAG_THRESHOLD_SCREEN := 12.0
 const Q007_SHELL_POSITION := Vector2(930, 430)
 const Q007_REWARD_POSITION := Vector2(930, 430)
 const Q008_PATH_MATERIAL_POSITIONS := [Vector2(938, 661), Vector2(1018, 661), Vector2(1098, 661)]
@@ -208,6 +209,7 @@ var q005_growth_remaining := 0.0
 var watering_animation_remaining := 0.0
 var bridge_repair_remaining := 0.0
 var celebration_remaining := 0.0
+var fox_welcome_remaining := 0.0
 var task_transition_remaining := 0.0
 var task_transition_position := Vector2.ZERO
 var task_transition_text := ""
@@ -227,7 +229,7 @@ var q005_plant_drag_position := Vector2.ZERO
 var dragging_q006_decor := -1
 var q006_decor_drag_from_slot := -1
 var q006_decor_drag_position := Vector2.ZERO
-var q006_decor_drag_start_position := Vector2.ZERO
+var q006_decor_drag_start_screen_position := Vector2.ZERO
 var q006_decor_drag_moved := false
 var dragging_q008_path := -1
 var q008_path_drag_position := Vector2.ZERO
@@ -330,6 +332,7 @@ func _physics_process(delta: float) -> void:
 	watering_animation_remaining = maxf(0.0, watering_animation_remaining - delta)
 	bridge_repair_remaining = maxf(bridge_repair_remaining - delta, 0.0)
 	celebration_remaining = maxf(celebration_remaining - delta, 0.0)
+	fox_welcome_remaining = maxf(fox_welcome_remaining - delta, 0.0)
 	task_transition_remaining = maxf(task_transition_remaining - delta, 0.0)
 	pond_ripple_remaining = maxf(pond_ripple_remaining - delta, 0.0)
 	player_is_moving = false
@@ -358,7 +361,7 @@ func _physics_process(delta: float) -> void:
 		test_telemetry_elapsed += delta
 		if test_telemetry_elapsed >= 0.033:
 			test_telemetry_elapsed = 0.0
-			print("TEST_POSITION ", JSON.stringify({"x": player_position.x, "y": player_position.y, "turtle_x": turtle_position.x, "turtle_y": turtle_position.y, "action": interaction_button_label, "ready": interaction_button_ready, "bridge": game_state.bridge_repaired, "planting_hint": _can_show_planting_hint(), "garden_focus": garden_focus_level, "house_delivery": _house_delivery_available(), "house_focus": house_focus_level, "guide_stage": IslandGuidance.stage(game_state, build_mode, q011_mode), "camera_zoom": camera_zoom, "animation": player_animation.animation, "official_mouse_frames": SceneArt.mouse_enabled() and player_animation.has_complete_set(), "move_input": [direction.x, direction.y], "right_clear": _is_walkable(player_position + Vector2(4, 0)), "left_clear": _is_walkable(player_position + Vector2(-4, 0)), "q005_completed": game_state.is_q005_complete(), "q010_completed": game_state.is_q010_complete(), "q011_completed": game_state.is_q011_complete(), "build_revision": build_revision}))
+			print("TEST_POSITION ", JSON.stringify({"x": player_position.x, "y": player_position.y, "turtle_x": turtle_position.x, "turtle_y": turtle_position.y, "action": interaction_button_label, "ready": interaction_button_ready, "bridge": game_state.bridge_repaired, "planting_hint": _can_show_planting_hint(), "garden_focus": garden_focus_level, "house_delivery": _house_delivery_available(), "house_focus": house_focus_level, "fox_greeting": _fox_should_greet_player(), "build_mode": build_mode, "guide_stage": IslandGuidance.stage(game_state, build_mode, q011_mode), "camera_zoom": camera_zoom, "animation": player_animation.animation, "official_mouse_frames": SceneArt.mouse_enabled() and player_animation.has_complete_set(), "move_input": [direction.x, direction.y], "right_clear": _is_walkable(player_position + Vector2(4, 0)), "left_clear": _is_walkable(player_position + Vector2(-4, 0)), "q005_completed": game_state.is_q005_complete(), "q010_completed": game_state.is_q010_complete(), "q011_completed": game_state.is_q011_complete(), "build_revision": build_revision}))
 	queue_redraw()
 
 
@@ -457,9 +460,7 @@ func _input(event: InputEvent) -> void:
 			q005_plant_drag_position = _screen_to_world(event.position)
 			queue_redraw()
 		elif dragging_q006_decor >= 0:
-			q006_decor_drag_position = _screen_to_world(event.position)
-			q006_decor_drag_moved = q006_decor_drag_moved or q006_decor_drag_position.distance_to(q006_decor_drag_start_position) >= 8.0
-			queue_redraw()
+			_update_q006_decor_drag(event.position)
 		elif dragging_q008_path >= 0:
 			q008_path_drag_position = _screen_to_world(event.position)
 			queue_redraw()
@@ -532,9 +533,7 @@ func _input(event: InputEvent) -> void:
 			q005_plant_drag_position = _screen_to_world(event.position)
 			queue_redraw()
 		elif dragging_q006_decor >= 0:
-			q006_decor_drag_position = _screen_to_world(event.position)
-			q006_decor_drag_moved = q006_decor_drag_moved or q006_decor_drag_position.distance_to(q006_decor_drag_start_position) >= 8.0
-			queue_redraw()
+			_update_q006_decor_drag(event.position)
 		elif dragging_q008_path >= 0:
 			q008_path_drag_position = _screen_to_world(event.position)
 			queue_redraw()
@@ -555,6 +554,14 @@ func _begin_world_pointer(screen_position: Vector2, touch_index: int) -> void:
 		get_viewport().set_input_as_handled()
 		return
 	_pointer_down(world_position, screen_position)
+
+
+func _update_q006_decor_drag(screen_position: Vector2) -> void:
+	q006_decor_drag_position = _screen_to_world(screen_position)
+	# Compare in screen pixels so tap-vs-drag feels the same at every zoom level.
+	# This also absorbs normal finger jitter without trapping deliberate drags.
+	q006_decor_drag_moved = q006_decor_drag_moved or screen_position.distance_to(q006_decor_drag_start_screen_position) >= Q006_DRAG_THRESHOLD_SCREEN
+	queue_redraw()
 
 
 func _handle_rabbit_dialog_pointer(world_position: Vector2) -> bool:
@@ -1294,8 +1301,6 @@ func _toggle_build_mode() -> void:
 		message = "完成狐狸小屋、池塘和花园任务后，就可以布置花园装饰。"
 		message_color = Color("ffe1b8")
 		return
-	if game_state.is_q006_complete() and not game_state.is_q012_complete():
-		return
 	build_mode = not build_mode
 	q011_mode = false
 	dragging_q011_item = -1
@@ -1346,9 +1351,16 @@ func _refresh_build_controls() -> void:
 	if build_button == null:
 		return
 	var available := _can_use_q006_build_mode()
-	build_button.visible = available and (not game_state.is_q006_complete() or game_state.is_q012_complete())
+	# Decoration is a reusable sandbox after the Q006 goal is reached. Keep it
+	# available during the short Q012 ending step as well; it never resets progress.
+	build_button.visible = available
 	var next_step: bool = available and not game_state.is_q006_complete() and not build_mode
-	build_button.text = "开始布置" if next_step else ("退出建造" if build_mode else "建造")
+	if next_step:
+		build_button.text = "开始布置"
+	elif build_mode:
+		build_button.text = "退出建造"
+	else:
+		build_button.text = "调整装饰" if game_state.is_q006_complete() else "建造"
 	_apply_build_button_style(next_step)
 	q011_button.visible = _can_use_q011_mode() and not build_mode
 	var q011_next_step := q011_button.visible and not q011_mode
@@ -1472,7 +1484,7 @@ func _pointer_down(position: Vector2, screen_position := Vector2(-1.0, -1.0)) ->
 				dragging_q006_decor = placed_decor_id
 				q006_decor_drag_from_slot = placed_slot
 				q006_decor_drag_position = position
-				q006_decor_drag_start_position = position
+				q006_decor_drag_start_screen_position = screen_position
 				q006_decor_drag_moved = false
 				message = "点一下收回装饰，拖动可以换个位置。"
 				message_color = Color("fff7cf")
@@ -1483,7 +1495,7 @@ func _pointer_down(position: Vector2, screen_position := Vector2(-1.0, -1.0)) ->
 				dragging_q006_decor = decor_id
 				q006_decor_drag_from_slot = -1
 				q006_decor_drag_position = position
-				q006_decor_drag_start_position = position
+				q006_decor_drag_start_screen_position = screen_position
 				q006_decor_drag_moved = false
 				message = "把装饰拖到岛上空地，暖金光圈亮起时松开。"
 				message_color = Color("fff7cf")
@@ -1568,7 +1580,7 @@ func _pointer_up(position: Vector2, _screen_position := Vector2(-1.0, -1.0)) -> 
 		dragging_q006_decor = -1
 		q006_decor_drag_from_slot = -1
 		q006_decor_drag_position = Vector2.ZERO
-		q006_decor_drag_start_position = Vector2.ZERO
+		q006_decor_drag_start_screen_position = Vector2.ZERO
 		q006_decor_drag_moved = false
 		var placed_successfully := false
 		if was_click:
@@ -1893,6 +1905,7 @@ func _try_q004_interaction() -> void:
 			_start_collect_sparkles(HOUSE_POSITION + Vector2(0, 38), Color("fff1a8"))
 			_save_game()
 			if game_state.is_q004_complete():
+				fox_welcome_remaining = 5.0
 				_start_task_transition(HOUSE_POSITION, "狐狸搬进新家")
 				message = "小屋建好了！狐狸入住了！下一步：整理池塘边的石头。"
 				message_color = Color("fff1a8")
@@ -2335,6 +2348,7 @@ func _restart_game() -> void:
 	pond_ripple_remaining = 0.0
 	bridge_repair_remaining = 0.0
 	celebration_remaining = 0.0
+	fox_welcome_remaining = 0.0
 	dragging_board = -1
 	dragging_pond_stone = -1
 	pond_drag_position = Vector2.ZERO
@@ -2344,6 +2358,8 @@ func _restart_game() -> void:
 	dragging_q006_decor = -1
 	q006_decor_drag_from_slot = -1
 	q006_decor_drag_position = Vector2.ZERO
+	q006_decor_drag_start_screen_position = Vector2.ZERO
+	q006_decor_drag_moved = false
 	dragging_q008_path = -1
 	q008_path_drag_position = Vector2.ZERO
 	q011_mode = false
@@ -2832,26 +2848,12 @@ func _draw_rabbit_area(font: Font) -> void:
 		# The bubble remains open until the child closes it from the lower-right action.
 		draw_line(dialog_rect.position + Vector2(338, 14), dialog_rect.position + Vector2(348, 24), Color("947647"), 2.0, true)
 		draw_line(dialog_rect.position + Vector2(348, 14), dialog_rect.position + Vector2(338, 24), Color("947647"), 2.0, true)
-	if game_state.can_start_q012():
-		var pulse := 0.5 + sin(animation_time * 3.0) * 0.5
-		draw_arc(Q012_RABBIT_POSITION, 75.0 + pulse * 5.0, 0.0, TAU, 48, Color(1.0, 0.88, 0.48, 0.58), 4.0)
-		var star_center := Q012_RABBIT_POSITION + Vector2(0, -76)
-		var star_size := 7.0 + pulse * 1.5
-		var star_points := PackedVector2Array()
-		for point_id in range(10):
-			var angle := -PI * 0.5 + TAU * float(point_id) / 10.0
-			var radius := star_size if point_id % 2 == 0 else star_size * 0.46
-			star_points.append(star_center + Vector2(cos(angle), sin(angle)) * radius)
-		draw_colored_polygon(star_points, Color("ffe7a1", 0.90))
-		draw_circle(star_center, 2.0, Color("fff9dc"))
 	_draw_rabbit(_rabbit_position())
 	if not _should_show_rabbit_dialog() and (player_position.distance_to(_rabbit_position()) <= COLLECTION_RADIUS or rabbit_intro_remaining > 0.0):
 		var bubble := _rabbit_position() + Vector2(34, -56)
 		_draw_ellipse_custom(bubble, Vector2(13, 9), Color("fff7df", 0.92))
 		for dot in [-5.0, 0.0, 5.0]:
 			draw_circle(bubble + Vector2(dot, 0), 1.2, Color("876f50"))
-	if game_state.can_start_q012():
-		_draw_flower_symbol(Q012_RABBIT_POSITION + Vector2(0, -65), Color("e77a84"))
 
 
 func _should_show_rabbit_dialog() -> bool:
@@ -2958,7 +2960,10 @@ func _draw_q004_area(font: Font) -> void:
 		return
 	_draw_fox_cottage()
 	if game_state.is_q004_complete():
-		_draw_fox(HOUSE_POSITION + Vector2(0, 6))
+		if _fox_should_greet_player():
+			_draw_fox(HOUSE_POSITION + Vector2(0, 6))
+		else:
+			_draw_fox_home_lights()
 	else:
 		for index in range(3):
 			var wood_rect := Rect2(HOUSE_POSITION + Vector2(-32 + index * 24, 47), Vector2(20, 13))
@@ -2985,6 +2990,22 @@ func _draw_fox_cottage() -> void:
 	_draw_ellipse_custom(ground_anchor + Vector2(2, 5), Vector2(66, 10), Color(0.16, 0.20, 0.12, shadow_alpha))
 	var cottage_texture: Texture2D = SceneArt.FOX_COTTAGE_COMPLETE if complete else SceneArt.FOX_COTTAGE_CONSTRUCTION
 	SceneArt.draw_grounded(self, cottage_texture, ground_anchor, SceneArt.FOX_COTTAGE_SIZE)
+
+
+func _fox_should_greet_player() -> bool:
+	# The fox greets the player when moving in, when they visit the cottage, and
+	# during the ending. Otherwise the warm windows show that the fox is home.
+	return game_state.is_q004_complete() and (
+		fox_welcome_remaining > 0.0
+		or player_position.distance_to(HOUSE_POSITION) <= 142.0
+		or (game_state.is_q012_complete() and celebration_remaining > 0.0)
+	)
+
+
+func _draw_fox_home_lights() -> void:
+	var glow := 0.055 + (0.5 + sin(animation_time * 0.55) * 0.5) * 0.045
+	for window_center in [Vector2(529, 486), Vector2(590, 477)]:
+		_draw_ellipse_custom(window_center, Vector2(8.0, 11.0), Color(1.0, 0.75, 0.36, glow))
 
 
 func _draw_q005_area(font: Font) -> void:

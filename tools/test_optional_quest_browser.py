@@ -44,13 +44,21 @@ def main() -> int:
 
     with tempfile.TemporaryDirectory(prefix="wonder-isle-post-story-") as temp_dir:
         fixture_path = Path(temp_dir) / "post-story-save.json"
+        pending_fixture_path = Path(temp_dir) / "q012-pending-save.json"
         subprocess.run(
             [godot_bin, "--headless", "--path", str(project_root), "--script", "tests/create_post_story_web_save.gd", "--", str(fixture_path)],
             check=True,
             capture_output=True,
             text=True,
         )
+        subprocess.run(
+            [godot_bin, "--headless", "--path", str(project_root), "--script", "tests/create_q012_pending_web_save.gd", "--", str(pending_fixture_path)],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
         fixture_payload = base64.b64encode(fixture_path.read_bytes()).decode("ascii")
+        pending_fixture_payload = base64.b64encode(pending_fixture_path.read_bytes()).decode("ascii")
 
         server = ThreadingHTTPServer(
             ("127.0.0.1", 0), functools.partial(QuietHandler, directory=str(build_dir))
@@ -410,6 +418,152 @@ def main() -> int:
                 snap("web-q006-replaced-fence.png")
                 if errors:
                     raise AssertionError(f"Browser errors or failed requests: {errors}")
+
+                # Regression for the actual player report: Q006 is complete,
+                # but the Q012 celebration interaction has not happened yet.
+                # Editing must still be available, and remain available after reload.
+                recording_dir = artifact_dir / "q006-pending-ending-video"
+                recording_dir.mkdir(parents=True, exist_ok=True)
+                page.evaluate(
+                    """async ({key, payload}) => new Promise((resolve, reject) => {
+                        const binary = atob(payload);
+                        const contents = new Int8Array(binary.length);
+                        for (let index = 0; index < binary.length; index++) contents[index] = binary.charCodeAt(index);
+                        const opening = indexedDB.open('/userfs');
+                        opening.onerror = () => reject(opening.error);
+                        opening.onsuccess = () => {
+                            const transaction = opening.result.transaction('FILE_DATA', 'readwrite');
+                            const store = transaction.objectStore('FILE_DATA');
+                            const existing = store.get(key);
+                            existing.onsuccess = () => {
+                                if (!existing.result) return reject(new Error('Expected initialized WebFS save record'));
+                                const record = existing.result;
+                                record.timestamp = new Date();
+                                record.contents = contents;
+                                store.put(record, key);
+                            };
+                            existing.onerror = () => reject(existing.error);
+                            transaction.oncomplete = resolve;
+                            transaction.onerror = () => reject(transaction.error);
+                        };
+                    })""",
+                    {"key": SAVE_KEY, "payload": pending_fixture_payload},
+                )
+                page.reload(wait_until="load", timeout=60_000)
+                navigator.state = None
+                page.wait_for_selector("canvas", timeout=60_000)
+                page.wait_for_timeout(2_500)
+                pending_state = navigator.position()
+                if pending_state.get("guide_stage") != "q012_celebrate":
+                    raise AssertionError(f"Browser did not load the Q012-pending fixture: {pending_state}")
+                if pending_state.get("fox_greeting") is not False:
+                    raise AssertionError(f"The fox should be inside while the player is away: {pending_state}")
+                page.screenshot(path=str(artifact_dir / "web-fox-at-home-away-from-player.png"))
+                navigator.go(("x", 400), ("y", 500))
+                fox_near_state = navigator.position()
+                if fox_near_state.get("fox_greeting") is not True:
+                    raise AssertionError(f"The fox should greet the player near the completed cottage: {fox_near_state}")
+                page.screenshot(path=str(artifact_dir / "web-fox-greets-at-cottage.png"))
+                checks.append("Fox returns home while away and greets the player near the cottage")
+                pending_before = page.evaluate(
+                    """async key => new Promise((resolve, reject) => {
+                        const opening = indexedDB.open('/userfs');
+                        opening.onerror = () => reject(opening.error);
+                        opening.onsuccess = () => {
+                            const request = opening.result.transaction('FILE_DATA', 'readonly').objectStore('FILE_DATA').get(key);
+                            request.onsuccess = () => resolve(JSON.parse(new TextDecoder().decode(new Uint8Array(request.result.contents))));
+                            request.onerror = () => reject(request.error);
+                        };
+                    })""",
+                    SAVE_KEY,
+                )
+                if pending_before.get("q006_completed") is not True or pending_before.get("q012_completed") is not False:
+                    raise AssertionError("Browser fixture must restore Q006 complete with Q012 pending")
+                def start_canvas_recording() -> None:
+                    page.evaluate(
+                        """() => {
+                            const canvas = document.querySelector('canvas');
+                            const stream = canvas.captureStream(24);
+                            const recorder = new MediaRecorder(stream, {mimeType: 'video/webm;codecs=vp8'});
+                            const chunks = [];
+                            recorder.ondataavailable = event => { if (event.data.size) chunks.push(event.data); };
+                            window.__q006Recorder = {recorder, stream, chunks};
+                            recorder.start();
+                        }"""
+                    )
+
+                def stop_canvas_recording(target_path: Path) -> None:
+                    encoded = page.evaluate(
+                        """() => new Promise(resolve => {
+                            const state = window.__q006Recorder;
+                            state.recorder.onstop = async () => {
+                                const blob = new Blob(state.chunks, {type: 'video/webm'});
+                                const reader = new FileReader();
+                                reader.onload = () => resolve(reader.result.split(',')[1]);
+                                reader.readAsDataURL(blob);
+                                state.stream.getTracks().forEach(track => track.stop());
+                            };
+                            state.recorder.stop();
+                        })"""
+                    )
+                    target_path.write_bytes(base64.b64decode(encoded))
+
+                page.mouse.click(950, 52)
+                page.wait_for_timeout(250)
+                page.screenshot(path=str(artifact_dir / "web-q006-adjust-before-celebration.png"))
+                start_canvas_recording()
+                page.mouse.move(978, 559)
+                page.mouse.down()
+                page.wait_for_timeout(100)
+                page.mouse.move(430, 600, steps=12)
+                page.wait_for_timeout(250)
+                page.screenshot(path=str(artifact_dir / "web-q006-pending-ending-drag.png"))
+                page.mouse.up()
+                page.wait_for_timeout(700)
+
+                for _ in range(10):
+                    pending_after = read_save()
+                    if pending_after.get("q006_decor_positions", [None])[0] == [430, 600]:
+                        break
+                    page.wait_for_timeout(400)
+                else:
+                    raise AssertionError(f"Q006 movement before Q012 was not saved: {pending_after}")
+                if pending_after.get("q012_completed") is not False:
+                    raise AssertionError("Decoration editing must not force the Q012 celebration")
+                checks.append("Q006 can be adjusted while Q012 is still pending")
+                stop_canvas_recording(recording_dir / "q006-pending-ending.webm")
+                page.reload(wait_until="load", timeout=60_000)
+                navigator.state = None
+                page.wait_for_selector("canvas", timeout=60_000)
+                page.wait_for_timeout(2_500)
+                restored_state = navigator.position()
+                if restored_state.get("guide_stage") != "q012_celebrate":
+                    raise AssertionError(f"Q012 pending state did not survive browser reload: {restored_state}")
+                page.mouse.click(950, 52)
+                page.wait_for_timeout(250)
+                page.screenshot(path=str(artifact_dir / "web-q006-after-refresh-build-mode.png"))
+                start_canvas_recording()
+                page.mouse.move(430, 600)
+                page.mouse.down()
+                page.wait_for_timeout(100)
+                page.mouse.move(410, 472, steps=12)
+                page.wait_for_timeout(250)
+                page.screenshot(path=str(artifact_dir / "web-q006-after-refresh-drag.png"))
+                page.mouse.up()
+                page.wait_for_timeout(700)
+                pending_restored = {}
+                for _ in range(10):
+                    pending_restored = read_save()
+                    if pending_restored.get("q006_decor_positions", [None])[0] == [410, 472]:
+                        break
+                    page.wait_for_timeout(400)
+                if pending_restored.get("q006_decor_positions", [None])[0] != [410, 472]:
+                    raise AssertionError(f"Q006 adjustment did not remain movable after reload: {pending_restored}")
+                if pending_restored.get("q012_completed") is not False:
+                    raise AssertionError("Reloaded adjustment must preserve Q012 pending state")
+                checks.append("Q006 movement works again after reload before Q012")
+                stop_canvas_recording(recording_dir / "q006-after-refresh.webm")
+                print(f"Q006 browser recordings: {recording_dir}", flush=True)
                 print(json.dumps({"result": "passed", "checks": checks, "browser_errors": errors}, ensure_ascii=False, indent=2))
                 browser.close()
         finally:
