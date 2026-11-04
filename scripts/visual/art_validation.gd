@@ -39,7 +39,8 @@ static func inspect(spec: Dictionary, strict := false) -> Dictionary:
 				var path: String = animation["frames"][index]
 				if path != "assets/art/characters/mouse/%s/%02d.png" % [name, index]:
 					errors.append("animation filename mismatch: " + path)
-				_check_file(path, mouse, strict or mouse["enabled"], errors, missing)
+				var required_now: bool = strict or mouse["enabled"] or (state == "idle" and mouse.get("idle_enabled", false))
+				_check_file(path, mouse, required_now, errors, missing)
 	if mouse["animations"].size() != required.size():
 		errors.append("unexpected animation names")
 	for key in spec["items"]:

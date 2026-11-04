@@ -1,0 +1,41 @@
+[gd_resource type="SpriteFrames" format=3]
+
+[ext_resource type="Texture2D" path="res://assets/art/characters/mouse/idle_down/00.png" id="1_6dj42"]
+[ext_resource type="Texture2D" path="res://assets/art/characters/mouse/idle_left/00.png" id="2_fds5u"]
+[ext_resource type="Texture2D" path="res://assets/art/characters/mouse/idle_right/00.png" id="3_jvb43"]
+[ext_resource type="Texture2D" path="res://assets/art/characters/mouse/idle_up/00.png" id="4_pu6aq"]
+
+[resource]
+animations = [{
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("1_6dj42")
+}],
+"loop": 1,
+"name": &"idle_down",
+"speed": 1.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("2_fds5u")
+}],
+"loop": 1,
+"name": &"idle_left",
+"speed": 1.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("3_jvb43")
+}],
+"loop": 1,
+"name": &"idle_right",
+"speed": 1.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("4_pu6aq")
+}],
+"loop": 1,
+"name": &"idle_up",
+"speed": 1.0
+}]

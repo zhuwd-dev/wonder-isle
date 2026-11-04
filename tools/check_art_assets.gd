@@ -11,6 +11,26 @@ func _init() -> void:
 	if not report["errors"].is_empty():
 		quit(1)
 		return
+	if "--build-idle" in args:
+		if not spec["mouse"].get("idle_enabled", false):
+			printerr("Enable the approved idle set before building it")
+			quit(1)
+			return
+		var idle_frames := SpriteFrames.new()
+		idle_frames.remove_animation("default")
+		for facing in ["down", "up", "left", "right"]:
+			var name: String = "idle_" + facing
+			var animation: Dictionary = spec["mouse"]["animations"][name]
+			idle_frames.add_animation(name)
+			idle_frames.set_animation_speed(name, animation["fps"])
+			idle_frames.set_animation_loop(name, animation["loop"])
+			for path in animation["frames"]:
+				idle_frames.add_frame(name, load("res://" + path))
+		var idle_error := ResourceSaver.save(idle_frames, "res://assets/art/animation/mouse-idle-frames.tres")
+		if idle_error != OK:
+			printerr("Could not save the approved idle frame resource: ", idle_error)
+			quit(1)
+			return
 	if "--build-mouse" in args:
 		if not spec["mouse"]["enabled"]:
 			printerr("Enable the complete mouse set only after all frames pass validation")

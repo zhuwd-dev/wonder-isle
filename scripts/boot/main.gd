@@ -7,6 +7,7 @@ const SceneArt = preload("res://scripts/visual/scene_art_registry.gd")
 const UI_FONT = preload("res://assets/fonts/NotoSansCJKsc-GameSubset.otf")
 const PlayerAnimation = preload("res://scripts/visual/player_animation.gd")
 const MOUSE_FRAMES: SpriteFrames = preload("res://assets/art/animation/mouse-frames.tres")
+const MOUSE_IDLE_FRAMES: SpriteFrames = preload("res://assets/art/animation/mouse-idle-frames.tres")
 const MOUSE_ART: Texture2D = preload("res://assets/art/characters/mouse.png")
 const RABBIT_ART: Texture2D = preload("res://assets/art/characters/rabbit.png")
 const FOX_ART: Texture2D = preload("res://assets/art/characters/fox.png")
@@ -186,7 +187,7 @@ var game_state
 var save_path := SAVE_PATH
 var player_position := Vector2(250, 500)
 var player_facing := Vector2.RIGHT
-var player_animation := PlayerAnimation.new(MOUSE_FRAMES)
+var player_animation := PlayerAnimation.new(MOUSE_FRAMES if SceneArt.mouse_enabled() else MOUSE_IDLE_FRAMES)
 var camera_center := WORLD_SIZE * 0.5
 var camera_zoom := 1.0
 var camera_pan_active := false
@@ -3488,12 +3489,13 @@ func _draw_boards(font: Font) -> void:
 func _draw_player() -> void:
 	var foot_anchor := player_position + PLAYER_FOOT_OFFSET
 	_draw_ellipse_custom(foot_anchor + Vector2(2, 3), Vector2(21, 5.8), Color(0.19, 0.15, 0.11, 0.28))
-	var texture: Texture2D = player_animation.current_texture() if SceneArt.mouse_enabled() else null
+	var texture: Texture2D = player_animation.current_texture()
 	if texture != null:
-		# All production frames share one canvas and foot anchor.
+		# Approved idle views can establish facing while moving; absent walk cycles
+		# fall back to the matching view without inventing step motion.
 		draw_texture_rect(texture, Rect2(foot_anchor - Vector2(128, 232) * 0.30, Vector2(256, 256) * 0.30), false)
 	else:
-		# Static safe fallback: no invented front/back pose or simulated steps.
+		# Safe legacy fallback if even the approved idle set is unavailable.
 		var height := 68.0
 		SceneArt.draw_grounded(self, MOUSE_ART, foot_anchor, Vector2(height * MOUSE_ART.get_width() / MOUSE_ART.get_height(), height))
 

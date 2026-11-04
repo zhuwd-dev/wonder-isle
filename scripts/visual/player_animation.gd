@@ -42,8 +42,24 @@ func has_complete_set() -> bool:
 					return false
 	return true
 
+func has_idle_set() -> bool:
+	if frames == null:
+		return false
+	for facing in DIRECTIONS:
+		var name: String = "idle_" + facing
+		if not frames.has_animation(name) or frames.get_frame_count(name) != 1:
+			return false
+		if frames.get_frame_texture(name, 0) == null:
+			return false
+	return true
+
 func current_texture() -> Texture2D:
-	if not has_complete_set():
+	if not has_idle_set():
 		return null
-	var count := frames.get_frame_count(animation)
-	return frames.get_frame_texture(animation, int(elapsed * frames.get_animation_speed(animation)) % count)
+	var selected_animation := animation
+	if not frames.has_animation(selected_animation) or frames.get_frame_count(selected_animation) == 0:
+		selected_animation = "idle_" + direction
+	var count := frames.get_frame_count(selected_animation)
+	if count <= 0:
+		return null
+	return frames.get_frame_texture(selected_animation, int(elapsed * frames.get_animation_speed(selected_animation)) % count)

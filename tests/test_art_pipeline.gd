@@ -9,6 +9,15 @@ func expect(value: bool, label: String) -> void:
 func _init() -> void:
 	var a := Animator.new()
 	expect(a.current_texture() == null, "missing official frames must use fallback")
+	var idle_only: SpriteFrames = preload("res://assets/art/animation/mouse-idle-frames.tres")
+	a = Animator.new(idle_only)
+	expect(a.has_idle_set(), "approved directional idle resource must be usable independently")
+	for facing in Animator.DIRECTIONS:
+		a.direction = facing
+		a.animation = "idle_" + facing
+		expect(a.current_texture() != null and a.current_texture().resource_path.ends_with("idle_%s/00.png" % facing), "idle view must match %s facing" % facing)
+		a.animation = "walk_" + facing
+		expect(a.current_texture() != null and a.current_texture().resource_path.ends_with("idle_%s/00.png" % facing), "missing walk cycle must safely display %s facing" % facing)
 	for pair in [[Vector2.DOWN, "down"], [Vector2.UP, "up"], [Vector2.LEFT, "left"], [Vector2.RIGHT, "right"]]:
 		a.update(pair[0] * 26, 0.1)
 		expect(a.animation == "walk_" + pair[1], "movement direction")
