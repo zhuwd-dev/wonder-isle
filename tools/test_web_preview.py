@@ -38,10 +38,28 @@ def inject_save_fixture(page, save_key: str, fixture_path: Path) -> None:
             opening.onsuccess = () => {
                 const transaction = opening.result.transaction('FILE_DATA', 'readwrite');
                 const store = transaction.objectStore('FILE_DATA');
+                const timestamp = new Date();
+                const segments = key.split('/').filter(Boolean);
+                let parent = '';
+                for (const segment of segments.slice(0, -1)) {
+                    parent += '/' + segment;
+                    const directoryKey = parent;
+                    const existingDirectory = store.get(directoryKey);
+                    existingDirectory.onsuccess = () => {
+                        if (!existingDirectory.result) {
+                            store.put({ timestamp, mode: 0x41ED }, directoryKey);
+                        }
+                    };
+                }
                 const existing = store.get(key);
                 existing.onsuccess = () => {
                     const record = existing.result || {};
-                    record.timestamp = new Date();
+                    record.timestamp = timestamp;
+                    // IDBFS needs the POSIX mode to recreate the entry
+                    // during its next populate sync. A JSON record with no
+                    // mode is readable from IndexedDB but is not a file to
+                    // Godot's virtual filesystem.
+                    record.mode = record.mode || 0x81B6; // regular file, 0666
                     record.contents = contents;
                     store.put(record, key);
                 };
