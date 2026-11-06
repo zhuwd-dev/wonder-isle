@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "mouse": {
-    "enabled": false,
+    "enabled": true,
     "idle_enabled": true,
     "canvas": [
       256,
