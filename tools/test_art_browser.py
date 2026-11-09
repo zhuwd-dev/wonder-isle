@@ -37,6 +37,8 @@ def main():
             errors = []
             page.on('pageerror', lambda error: errors.append(str(error)))
             page.goto(f'http://127.0.0.1:{server.server_port}/index.html?test_telemetry=1', wait_until='load')
+            if page.locator('#launch-screen').is_visible():
+                page.get_by_role('button', name='开始游戏').click()
             expected = json.loads((project_root / 'assets/art/production-art.json').read_text())['mouse']['enabled']
             assert nav.position()['official_mouse_frames'] == expected, 'runtime art state differs from the enabled resource contract'
             page.mouse.click(800, 600)

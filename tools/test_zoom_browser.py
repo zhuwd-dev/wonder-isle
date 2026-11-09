@@ -31,6 +31,8 @@ def main():
             errors = []
             page.on('pageerror', lambda error: errors.append(str(error)))
             page.goto(f'http://127.0.0.1:{server.server_port}/index.html?test_telemetry=1', wait_until='load')
+            if page.locator('#launch-screen').is_visible():
+                page.get_by_role('button', name='开始游戏').click()
             assert abs(nav.position()['camera_zoom'] - 1.0) < 0.01
             page.screenshot(path=str(artifacts / 'c-zoom-full.png'))
             page.mouse.move(600, 400)

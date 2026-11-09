@@ -58,6 +58,8 @@ def main():
             for unsupported in (False, True):
                 failure = browser.new_page()
                 failure.add_init_script("""(() => {
+                    try { delete Navigator.prototype.serviceWorker; } catch (_) {}
+                    try { delete navigator.serviceWorker; } catch (_) {}
                     if (UNSUPPORTED) Object.defineProperty(window, 'WebGL2RenderingContext', {value: undefined, configurable: true});
                     Object.defineProperty(window,'Engine',{configurable:true,get(){return undefined},set(engine){
                         Object.defineProperty(window,'Engine',{configurable:true,writable:true,value:engine});

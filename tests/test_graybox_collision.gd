@@ -20,6 +20,7 @@ func _run() -> void:
 		return
 	var main_scene = load("res://scenes/boot/Main.tscn")
 	var main = main_scene.instantiate()
+	root.size = Vector2i(1280, 720)
 	root.add_child(main)
 	await process_frame
 	_expect(main.get("save_path") == test_save_path, "碰撞测试必须使用专用存档路径")

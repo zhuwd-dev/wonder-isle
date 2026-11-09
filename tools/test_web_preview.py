@@ -775,6 +775,8 @@ def main() -> int:
                 failure_page = browser.new_page()
                 failure_page.add_init_script(
                     """(() => {
+                        try { delete Navigator.prototype.serviceWorker; } catch (_) {}
+                        try { delete navigator.serviceWorker; } catch (_) {}
                         Object.defineProperty(window, 'Engine', {
                             configurable: true,
                             get() { return undefined; },

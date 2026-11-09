@@ -16,6 +16,7 @@ func _init() -> void:
 func _run() -> void:
 	var scene := load("res://scenes/boot/Main.tscn")
 	var main = scene.instantiate()
+	root.size = Vector2i(1280, 720)
 	root.add_child(main)
 	await process_frame
 	_expect(not expected_save_path.is_empty(), "测试必须提供专用存档路径")

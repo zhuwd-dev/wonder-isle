@@ -21,6 +21,7 @@ func _run() -> void:
 		return
 	var scene := load("res://scenes/boot/Main.tscn")
 	main = scene.instantiate()
+	root.size = Vector2i(1280, 720)
 	root.add_child(main)
 	await process_frame
 	_expect(main.get("save_path") == save_path, "Q011 runtime must use the isolated save path")

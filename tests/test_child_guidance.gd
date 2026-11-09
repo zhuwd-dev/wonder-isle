@@ -9,6 +9,7 @@ func _init() -> void:
 	call_deferred("run")
 func run() -> void:
 	var main = load("res://scenes/boot/Main.tscn").instantiate()
+	root.size = Vector2i(1280, 720)
 	root.add_child(main)
 	main.game_state.reset()
 	var s = main.game_state

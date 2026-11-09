@@ -621,6 +621,12 @@ func _camera_viewport_size() -> Vector2:
 
 func _camera_fit_scale() -> float:
 	var viewport_size := _camera_viewport_size()
+	var viewport_aspect := viewport_size.x / maxf(viewport_size.y, 1.0)
+	var world_aspect := WORLD_SIZE.x / WORLD_SIZE.y
+	if viewport_aspect > world_aspect:
+		# Wide phones and desktop monitors use the full width. The island art is
+		# cropped slightly at the top and bottom instead of leaving gray bars.
+		return viewport_size.x / WORLD_SIZE.x
 	return minf(viewport_size.x / WORLD_SIZE.x, viewport_size.y / WORLD_SIZE.y)
 
 
