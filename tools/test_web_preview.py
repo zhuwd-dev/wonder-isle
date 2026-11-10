@@ -359,35 +359,69 @@ def main() -> int:
                     touch = page.context.new_cdp_session(page)
                     touch.send("Emulation.setTouchEmulationEnabled", {"enabled": True, "maxTouchPoints": 1})
                     stick_origin = (68, page.viewport_size["height"] - 83)
+                    stick_point = stick_origin
+                    jump_point = None
 
                     def touch_stick_start():
+                        nonlocal stick_point
+                        stick_point = stick_origin
                         touch.send("Input.dispatchTouchEvent", {"type": "touchStart", "touchPoints": [{"x": stick_origin[0], "y": stick_origin[1], "id": 1, "radiusX": 8, "radiusY": 8, "force": 1}]})
 
                     def touch_stick_direction(dx, dy):
+                        nonlocal stick_point
                         length = max((dx * dx + dy * dy) ** 0.5, 1.0)
                         x = stick_origin[0] + round(dx / length * 48)
                         y = stick_origin[1] + round(dy / length * 48)
-                        touch.send("Input.dispatchTouchEvent", {"type": "touchMove", "touchPoints": [{"x": x, "y": y, "id": 1, "radiusX": 8, "radiusY": 8, "force": 1}]})
+                        stick_point = (x, y)
+                        points = [{"x": x, "y": y, "id": 1, "radiusX": 8, "radiusY": 8, "force": 1}]
+                        if jump_point is not None:
+                            points.append({"x": jump_point[0], "y": jump_point[1], "id": 2, "radiusX": 8, "radiusY": 8, "force": 1})
+                        touch.send("Input.dispatchTouchEvent", {"type": "touchMove", "touchPoints": points})
+
+                    def touch_jump_start():
+                        nonlocal jump_point
+                        race_state = navigator.competition_position()
+                        jump_point = (
+                            round(race_state["action_position"][0] + race_state["action_size"][0] * 0.5),
+                            round(race_state["action_position"][1] + race_state["action_size"][1] * 0.5),
+                        )
+                        touch.send("Input.dispatchTouchEvent", {"type": "touchStart", "touchPoints": [
+                            {"x": stick_point[0], "y": stick_point[1], "id": 1, "radiusX": 8, "radiusY": 8, "force": 1},
+                            {"x": jump_point[0], "y": jump_point[1], "id": 2, "radiusX": 8, "radiusY": 8, "force": 1},
+                        ]})
 
                     def touch_stick_end():
+                        nonlocal jump_point
                         touch.send("Input.dispatchTouchEvent", {"type": "touchEnd", "touchPoints": []})
+                        jump_point = None
 
-                    def touch_walk_to(target, timeout=12):
+                    def touch_walk_to(target, timeout=12, jump=False):
                         deadline = time.monotonic() + timeout
                         last_position = None
                         last_progress = time.monotonic()
                         touch_stick_start()
+                        if jump:
+                            touch_jump_start()
+                        previous_position = None
+                        moved_while_airborne = False
+                        peak_jump_height = 0.0
+                        reached_target = False
                         try:
                             while time.monotonic() < deadline:
                                 state = navigator.competition_position()
-                                if state["screen"] == 2:
+                                if state["screen"] == 3:
                                     return state
                                 dx = target[0] - state["x"]
                                 dy = target[1] - state["y"]
                                 if abs(dx) <= 18 and abs(dy) <= 18:
-                                    return state
+                                    reached_target = True
+                                    break
                                 touch_stick_direction(dx, dy)
                                 position = (state["x"], state["y"])
+                                peak_jump_height = max(peak_jump_height, state["jump_height"])
+                                if previous_position is not None and state["jump_active"] and abs(position[0] - previous_position[0]) + abs(position[1] - previous_position[1]) > 0.5:
+                                    moved_while_airborne = True
+                                previous_position = position
                                 if last_position is None or abs(position[0] - last_position[0]) + abs(position[1] - last_position[1]) > 1:
                                     last_position = position
                                     last_progress = time.monotonic()
@@ -396,6 +430,13 @@ def main() -> int:
                                 page.wait_for_timeout(80)
                         finally:
                             touch_stick_end()
+                        if reached_target and jump:
+                            if not moved_while_airborne:
+                                raise AssertionError("Joystick did not move while the second touch pressed jump")
+                            if peak_jump_height < 18.0:
+                                raise AssertionError(f"Jump did not reach the hurdle clearance: peak={peak_jump_height}")
+                        if reached_target:
+                            return navigator.competition_position()
                         raise AssertionError(f"Timed out using mobile joystick to reach {target}: {navigator.competition_position()}")
 
                     touch_walk_to((state["x"], 270))
@@ -404,7 +445,16 @@ def main() -> int:
                         raise AssertionError(f"Could not walk to R01 entrance: {state}")
                     page.mouse.click(page.viewport_size["width"] - 54, page.viewport_size["height"] - 30)
                     wait_competition_screen(1)
-                    page.screenshot(path=str(artifact_dir / "web-v20-r01-start-mobile.png"), full_page=True)
+                    page.screenshot(path=str(artifact_dir / "web-v21-r01-briefing-mobile.png"), full_page=True)
+                    state = navigator.competition_position()
+                    page.mouse.click(
+                        round(state["action_position"][0] + state["action_size"][0] * 0.5),
+                        round(state["action_position"][1] + state["action_size"][1] * 0.5),
+                    )
+                    state = wait_competition_screen(2)
+                    if state["clock_running"] is not True:
+                        raise AssertionError(f"Race clock did not start from the briefing: {state}")
+                    page.screenshot(path=str(artifact_dir / "web-v21-r01-start-mobile.png"), full_page=True)
 
                     def walk_competition_to(target, timeout=12):
                         deadline = time.monotonic() + timeout
@@ -412,7 +462,7 @@ def main() -> int:
                         last_position = None
                         while time.monotonic() < deadline:
                             state = navigator.competition_position()
-                            if state["screen"] == 2:
+                            if state["screen"] == 3:
                                 return state
                             dx = target[0] - state["x"]
                             dy = target[1] - state["y"]
@@ -430,15 +480,54 @@ def main() -> int:
                         raise AssertionError(f"Timed out walking R01 waypoint {target}: {state}")
 
                     center_x = state["world_width"] * 0.5
-                    for waypoint in ((center_x - 320, 446), (center_x - 245, 388), (center_x - 150, 320), (center_x - 15, 270), (center_x + 115, 276), (center_x + 200, 285), (center_x + 300, 276), (center_x + 385, 225), (center_x + 410, 150)):
+                    for waypoint in ((center_x - 320, 446), (center_x - 245, 388), (center_x - 150, 320), (center_x - 15, 270)):
                         state = walk_competition_to(waypoint)
-                        if abs(waypoint[0] - (center_x + 200)) < 1:
-                            page.screenshot(path=str(artifact_dir / "web-v20-r01-obstacle-mobile.png"), full_page=True)
-                    state = wait_competition_screen(2)
-                    page.screenshot(path=str(artifact_dir / "web-v20-r01-finish-mobile.png"), full_page=True)
+                    if state["checkpoint_index"] < 1:
+                        raise AssertionError(f"Middle checkpoint did not activate: {state}")
+                    race_checkpoint = tuple(state["race_checkpoint"])
+                    touch_walk_to((race_checkpoint[0] + 30, race_checkpoint[1]))
+                    state = navigator.competition_position()
+                    checkpoint_x = state["checkpoint_position"][0] + state["checkpoint_size"][0] * 0.5
+                    checkpoint_y = state["checkpoint_position"][1] + state["checkpoint_size"][1] * 0.5
+                    race_time_before_recovery = state["race_time"]
+                    page.mouse.click(round(checkpoint_x), round(checkpoint_y))
+                    page.wait_for_timeout(100)
+                    state = navigator.competition_position()
+                    if abs(state["x"] - race_checkpoint[0]) > 2 or state["race_time"] < race_time_before_recovery:
+                        raise AssertionError(f"Checkpoint recovery failed to preserve race state: {state}")
+                    for width, height, label in ((1280, 720, "1280x720"), (1630, 870, "1630x870")):
+                        page.set_viewport_size({"width": width, "height": height})
+                        page.wait_for_timeout(400)
+                        resized_state = navigator.competition_position()
+                        checkpoint_rect = (*resized_state["checkpoint_position"], *resized_state["checkpoint_size"])
+                        jump_rect = (*resized_state["action_position"], *resized_state["action_size"])
+                        back_rect = (*resized_state["back_position"], *resized_state["back_size"])
+                        for name, rect in (("checkpoint", checkpoint_rect), ("jump", jump_rect)):
+                            x, y, rect_width, rect_height = rect
+                            if x < 0 or y < 0 or x + rect_width > width or y + rect_height > height:
+                                raise AssertionError(f"R01 {name} control is clipped at {label}: {rect}")
+                        if checkpoint_rect[1] < back_rect[1] + back_rect[3] + 2:
+                            raise AssertionError(f"R01 back/checkpoint controls overlap at {label}: back={back_rect}, checkpoint={checkpoint_rect}")
+                        if checkpoint_rect[1] + checkpoint_rect[3] >= jump_rect[1]:
+                            raise AssertionError(f"R01 checkpoint and jump controls overlap at {label}")
+                        page.screenshot(path=str(artifact_dir / f"web-v21-r01-checkpoint-{label}.png"), full_page=True)
+                    page.set_viewport_size({"width": 844, "height": 390})
+                    page.wait_for_timeout(400)
+                    state = navigator.competition_position()
+                    state = walk_competition_to((center_x + 115, 276))
+                    state = touch_walk_to((center_x + 250, 285), jump=True)
+                    page.screenshot(path=str(artifact_dir / "web-v21-r01-obstacle-mobile.png"), full_page=True)
+                    for waypoint in ((center_x + 250, 330), (center_x + 300, 340), (center_x + 360, 320), (center_x + 385, 225), (center_x + 410, 150)):
+                        state = walk_competition_to(waypoint)
+                    state = wait_competition_screen(3)
+                    if state["clock_running"] is not False or state["race_time"] <= 0.0:
+                        raise AssertionError(f"Finish did not stop the clock and report elapsed time: {state}")
+                    page.screenshot(path=str(artifact_dir / "web-v21-r01-finish-mobile.png"), full_page=True)
                     page.mouse.click(int(page.viewport_size["width"] * 0.5 - 104), int(page.viewport_size["height"] * 0.63 + 35))
-                    wait_competition_screen(1)
-                    page.screenshot(path=str(artifact_dir / "web-v20-r01-replay-mobile.png"), full_page=True)
+                    state = wait_competition_screen(2)
+                    if state["checkpoint_index"] != 0 or state["race_time"] > 0.3 or state["clock_running"] is not True:
+                        raise AssertionError(f"Replay did not reset current race state: {state}")
+                    page.screenshot(path=str(artifact_dir / "web-v21-r01-replay-mobile.png"), full_page=True)
                     page.mouse.click(page.viewport_size["width"] - 54, 24)
                     wait_competition_screen(0)
                     page.screenshot(path=str(artifact_dir / "web-v20-competition-hub-mobile-return.png"), full_page=True)
@@ -463,10 +552,11 @@ def main() -> int:
                     competition_screenshots = {
                         "competition_gate_mobile": str(artifact_dir / "web-v20-life-island-gate-mobile.png"),
                         "competition_hub_mobile": str(artifact_dir / "web-v20-competition-hub-mobile.png"),
-                        "r01_start_mobile": str(artifact_dir / "web-v20-r01-start-mobile.png"),
-                        "r01_obstacle_mobile": str(artifact_dir / "web-v20-r01-obstacle-mobile.png"),
-                        "r01_finish_mobile": str(artifact_dir / "web-v20-r01-finish-mobile.png"),
-                        "r01_replay_mobile": str(artifact_dir / "web-v20-r01-replay-mobile.png"),
+                        "r01_briefing_mobile": str(artifact_dir / "web-v21-r01-briefing-mobile.png"),
+                        "r01_start_mobile": str(artifact_dir / "web-v21-r01-start-mobile.png"),
+                        "r01_obstacle_mobile": str(artifact_dir / "web-v21-r01-obstacle-mobile.png"),
+                        "r01_finish_mobile": str(artifact_dir / "web-v21-r01-finish-mobile.png"),
+                        "r01_replay_mobile": str(artifact_dir / "web-v21-r01-replay-mobile.png"),
                         "competition_hub_after_return_mobile": str(artifact_dir / "web-v20-competition-hub-mobile-return.png"),
                         "competition_hub_1280x720": str(artifact_dir / "web-v20-competition-hub-1280x720.png"),
                         "competition_hub_1630x870": str(artifact_dir / "web-v20-competition-hub-1630x870.png"),
