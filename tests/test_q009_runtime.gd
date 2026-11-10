@@ -82,6 +82,8 @@ func _run() -> void:
 		if delivery_id < 2:
 			_expect(not main.game_state.is_q009_complete(), "the birdhouse must remain under construction until all three deliveries")
 	_expect(main.game_state.is_q009_complete(), "three birdhouse deliveries must complete the task")
+	_expect(main.player_position == main.Q009_BIRDHOUSE_POSITION + Vector2(-54, -48), "the player must be released onto the clear path when the completed birdhouse becomes solid")
+	_expect(main._is_walkable(main.player_position), "the player must not be trapped inside the completed birdhouse collision footprint")
 	_expect(main._is_walkable(Vector2(600, 480)), "the completed birdhouse base must leave the west-side exit lane open")
 	_expect(main.game_state.q009_bird_interaction_unlocked(), "Q009 completion must unlock bird interaction")
 	_expect(main._should_show_q009_task_card(), "the completed birdhouse card must keep its optional greeting available during Q010")

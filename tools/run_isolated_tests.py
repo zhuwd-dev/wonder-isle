@@ -29,6 +29,7 @@ def regression_cases(save_path: Path) -> list[tuple[str, str, list[str]]]:
 
     add("save-path", "test_save_path_isolation.gd", ("--", "--test-save-path", str(save_path)))
     add("gamestate", "test_game_state.gd")
+    add("competition-session", "test_competition_session.gd")
     add("art-pipeline", "test_art_pipeline.gd")
     save_test("child-guidance", "test_child_guidance.gd", ("--",))
     save_test("graybox", "test_graybox_collision.gd", ("--",))
@@ -64,8 +65,8 @@ def regression_cases(save_path: Path) -> list[tuple[str, str, list[str]]]:
         save_test(label, "test_disk_save_cycle.gd", ("--", mode))
     save_test("disk-probe", "probe_disk_load.gd", ("--",))
 
-    if len(cases) != 74:
-        raise AssertionError(f"Expected 74 regression cases, found {len(cases)}")
+    if len(cases) != 75:
+        raise AssertionError(f"Expected 75 regression cases, found {len(cases)}")
     return cases
 
 

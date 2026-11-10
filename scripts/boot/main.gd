@@ -6,6 +6,7 @@ const GroundFocus = preload("res://scripts/visual/ground_focus.gd")
 const SceneArt = preload("res://scripts/visual/scene_art_registry.gd")
 const UI_FONT = preload("res://assets/fonts/NotoSansCJKsc-GameSubset.otf")
 const PlayerAnimation = preload("res://scripts/visual/player_animation.gd")
+const CompetitionSessionScene: PackedScene = preload("res://scenes/competition/CompetitionSession.tscn")
 const MOUSE_FRAMES: SpriteFrames = preload("res://assets/art/animation/mouse-frames.tres")
 const MOUSE_IDLE_FRAMES: SpriteFrames = preload("res://assets/art/animation/mouse-idle-frames.tres")
 const MOUSE_ART: Texture2D = preload("res://assets/art/characters/mouse.png")
@@ -79,6 +80,8 @@ const HOUSE_INTERACTION_RADIUS := 88.0
 const HOUSE_RECT := Rect2(448, 442, 144, 116)
 const Q012_RABBIT_POSITION := Vector2(592, 226)
 const RABBIT_HOME_POSITION := Vector2(430, 195)
+const COMPETITION_GATE_POSITION := Vector2(150, 520)
+const COMPETITION_GATE_RADIUS := 92.0
 const Q006_DECOR_LEFT_BOUNDS := Rect2(64, 114, 652, 532)
 const Q006_DECOR_LEFT_ISLAND_POLYGON := [
 	Vector2(64, 148), Vector2(94, 126), Vector2(170, 118), Vector2(286, 126),
@@ -184,6 +187,7 @@ const VISUAL_PALETTE := {
 }
 
 var game_state
+var competition_session: Control
 var save_path := SAVE_PATH
 var player_position := Vector2(250, 500)
 var player_facing := Vector2.RIGHT
@@ -325,6 +329,8 @@ func _ready() -> void:
 
 
 func _physics_process(delta: float) -> void:
+	if competition_session != null:
+		return
 	animation_time += delta
 	rabbit_target_remaining = maxf(0.0, rabbit_target_remaining - delta)
 	rabbit_intro_remaining = maxf(0.0, rabbit_intro_remaining - delta)
@@ -408,6 +414,8 @@ func _tick_transient_message(delta: float) -> void:
 
 
 func _input(event: InputEvent) -> void:
+	if competition_session != null:
+		return
 	# Let modal menu and confirmation controls receive pointer/key input without
 	# forwarding the same event into world movement or collection logic.
 	if (game_menu_popup != null and game_menu_popup.visible) or (restart_confirmation != null and restart_confirmation.visible):
@@ -1087,7 +1095,11 @@ func _update_interact_button() -> void:
 	var action_ready := false
 	var action_tooltip := "走近当前目标，使用互动按钮"
 
-	if q011_mode:
+	if player_position.distance_to(COMPETITION_GATE_POSITION) <= COMPETITION_GATE_RADIUS and not _q010_seed_interaction_nearby():
+		action_label = "去竞技岛" if game_state.is_complete() else "先修小桥"
+		action_ready = game_state.is_complete()
+		action_tooltip = "前往欢乐竞技岛" if action_ready else "完成 Q001 修好小桥后开放"
+	elif q011_mode:
 		action_label = "放物品"
 		action_tooltip = "把右下角托盘物品拖进左侧空槽"
 	elif build_mode:
@@ -1242,6 +1254,8 @@ func _should_show_interact_button() -> bool:
 		return false
 	if game_state.is_q012_complete() and celebration_remaining > 0.0:
 		return false
+	if player_position.distance_to(COMPETITION_GATE_POSITION) <= COMPETITION_GATE_RADIUS:
+		return true
 	if game_state.can_start_q012():
 		return true
 	if player_position.distance_to(_rabbit_position()) <= COLLECTION_RADIUS:
@@ -1279,6 +1293,10 @@ func _nearest_uncollected_q005_plant() -> int:
 
 func _nearest_uncollected_q010_seed() -> int:
 	return _nearest_available_position(Q010_SEED_POSITIONS, game_state.q010_seeds_collected, COLLECTION_RADIUS)
+
+
+func _q010_seed_interaction_nearby() -> bool:
+	return _can_use_q010_side_task() and game_state.can_start_q010() and _nearest_uncollected_q010_seed() >= 0
 
 
 func _nearest_uncollected_wood() -> int:
@@ -1695,6 +1713,14 @@ func _pointer_up(position: Vector2, _screen_position := Vector2(-1.0, -1.0)) -> 
 
 
 func _try_collect_nearby() -> void:
+	if not build_mode and not q011_mode and player_position.distance_to(COMPETITION_GATE_POSITION) <= COMPETITION_GATE_RADIUS and not _q010_seed_interaction_nearby():
+		if game_state.is_complete():
+			_open_competition_session()
+		else:
+			message = "先和兔子一起修好小桥，竞技岛就会开放。"
+			message_color = Color("fff1a8")
+		queue_redraw()
+		return
 	if game_state.is_q012_complete() and celebration_remaining > 0.0:
 		return
 	if game_state.can_start_q012():
@@ -1959,6 +1985,7 @@ func _try_q009_interaction() -> bool:
 			_start_task_transition(Q009_BIRDHOUSE_POSITION, "鸟屋逐渐搭起来")
 			_save_game()
 			if game_state.is_q009_complete():
+				_release_player_from_completed_birdhouse()
 				_start_task_transition(Q009_BIRDHOUSE_POSITION, "小鸟有新家了")
 				message = "鸟屋建好了！去小鸟身边和它打个招呼。"
 				message_color = Color("fff1a8")
@@ -2148,6 +2175,21 @@ func _player_overlaps_solid_obstacle(foot: Vector2) -> bool:
 		if foot.distance_to(decor_position) < decor_radius + PLAYER_COLLISION_HALF_WIDTH:
 			return true
 	return false
+
+
+func _release_player_from_completed_birdhouse() -> void:
+	var footprint := Rect2(Q009_BIRDHOUSE_POSITION + Vector2(-26, -12), Vector2(52, 44))
+	var foot_rect := Rect2(
+		player_position + PLAYER_FOOT_OFFSET - Vector2(PLAYER_COLLISION_HALF_WIDTH, PLAYER_COLLISION_HALF_DEPTH),
+		Vector2(PLAYER_COLLISION_HALF_WIDTH * 2.0, PLAYER_COLLISION_HALF_DEPTH * 2.0)
+	)
+	if not foot_rect.intersects(footprint):
+		return
+	var safe_exit := Q009_BIRDHOUSE_POSITION + Vector2(-54, -48)
+	if _is_walkable(safe_exit):
+		player_position = safe_exit
+	else:
+		push_warning("Could not find the usual west-side exit from the completed birdhouse")
 
 
 func _board_rect(board_id: int) -> Rect2:
@@ -2442,7 +2484,33 @@ func _loaded_progress_message() -> String:
 	return "已恢复进度：主线任务已完成，可以继续自由探索。"
 
 
+func _open_competition_session() -> void:
+	if competition_session != null or not game_state.is_complete():
+		return
+	competition_session = CompetitionSessionScene.instantiate() as Control
+	competition_session.close_requested.connect(_close_competition_session)
+	add_child(competition_session)
+	for control in [menu_button, task_card_button, build_button, q011_button, interact_button, zoom_out_button, zoom_in_button, zoom_reset_button]:
+		if control != null:
+			control.visible = false
+
+
+func _close_competition_session() -> void:
+	if competition_session == null:
+		return
+	competition_session.queue_free()
+	competition_session = null
+	for control in [menu_button, task_card_button, zoom_out_button, zoom_in_button, zoom_reset_button]:
+		if control != null:
+			control.visible = true
+	_refresh_build_controls()
+	_update_interact_button()
+	queue_redraw()
+
+
 func _draw() -> void:
+	if competition_session != null:
+		return
 	var font := UI_FONT
 	draw_rect(Rect2(Vector2.ZERO, _camera_viewport_size()), VISUAL_PALETTE["sky"], true)
 	_set_world_draw_transform()
@@ -2573,6 +2641,7 @@ func _draw_world(font: Font) -> void:
 	_draw_environment_glimmers()
 	_draw_river()
 	_draw_bridge()
+	_draw_competition_entrance()
 	_draw_rabbit_area(font)
 	_draw_region_area(font)
 	_draw_seed_area(font)
@@ -2597,6 +2666,25 @@ func _draw_world(font: Font) -> void:
 	_draw_boards(font)
 	if not player_drawn:
 		_draw_player()
+
+
+func _draw_competition_entrance() -> void:
+	var anchor := COMPETITION_GATE_POSITION
+	_draw_ellipse_custom(anchor + Vector2(2, 21), Vector2(49, 11), Color(0.15, 0.20, 0.12, 0.24))
+	draw_rect(Rect2(anchor.x - 45, anchor.y - 3, 90, 27), Color("8d5f3d"), true)
+	draw_rect(Rect2(anchor.x - 39, anchor.y + 1, 78, 17), Color("d6a468"), true)
+	for index in range(4):
+		var x := anchor.x - 30 + index * 20
+		draw_line(Vector2(x, anchor.y - 1), Vector2(x, anchor.y + 16), Color("9a6946"), 2.0)
+	for index in range(5):
+		draw_arc(anchor + Vector2(0, -20), 24.0 + float(index) * 6.0, PI, TAU, 28, [Color("e86c70"), Color("f1a362"), Color("f1d46e"), Color("82bd74"), Color("67b5ca")][index], 4.5)
+	draw_rect(Rect2(anchor.x - 35, anchor.y - 32, 10, 37), Color("885939"), true)
+	draw_rect(Rect2(anchor.x + 25, anchor.y - 32, 10, 37), Color("885939"), true)
+	var gate_label := "欢乐竞技岛" if game_state.is_complete() else "修桥后开放"
+	draw_string(UI_FONT, anchor + Vector2(-43, 55), gate_label, HORIZONTAL_ALIGNMENT_LEFT, 160.0, 16, Color("294438"))
+	if player_position.distance_to(anchor) <= COMPETITION_GATE_RADIUS:
+		_draw_ellipse_custom(anchor + Vector2(0, 18), Vector2(61, 18), Color(1.0, 0.91, 0.56, 0.15 + 0.06 * sin(animation_time * 3.0)))
+		draw_arc(anchor + Vector2(0, 5), 58.0 + sin(animation_time * 3.0) * 3.0, 0.0, TAU, 36, Color("fff0ac", 0.82), 2.2)
 
 
 func _player_is_behind_cottage() -> bool:

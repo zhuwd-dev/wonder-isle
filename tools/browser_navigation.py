@@ -10,6 +10,8 @@ class Navigator:
         self.page = page
         self.state = None
         self.state_received_at = 0.0
+        self.competition_state = None
+        self.competition_state_received_at = 0.0
         match = re.search(r"const GODOT_CONFIG = (\{[^;]+\});", index_html)
         if not match:
             raise AssertionError("Cannot enable read-only browser telemetry: export args missing")
@@ -26,6 +28,9 @@ class Navigator:
         if message.text.startswith("TEST_POSITION "):
             self.state = json.loads(message.text[len("TEST_POSITION "):])
             self.state_received_at = time.monotonic()
+        elif message.text.startswith("TEST_COMPETITION "):
+            self.competition_state = json.loads(message.text[len("TEST_COMPETITION "):])
+            self.competition_state_received_at = time.monotonic()
 
     def position(self):
         deadline = time.monotonic() + 15
@@ -36,6 +41,25 @@ class Navigator:
         if time.monotonic() - self.state_received_at > 3:
             raise AssertionError(f"Game telemetry stopped updating; cannot diagnose a collision from stale coordinates: {self.state}")
         return dict(self.state)
+
+    def wait_for_fresh_state(self, after=0.0, timeout=15):
+        """Wait for a reloaded Godot page to emit telemetry from its new instance."""
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            if self.state is not None and self.state_received_at > after and time.monotonic() - self.state_received_at <= 3:
+                return dict(self.state)
+            self.page.wait_for_timeout(50)
+        raise AssertionError(f"Godot did not emit fresh browser telemetry after reload: {self.state}")
+
+    def competition_position(self):
+        deadline = time.monotonic() + 12
+        while self.competition_state is None and time.monotonic() < deadline:
+            self.page.wait_for_timeout(50)
+        if self.competition_state is None:
+            raise AssertionError("Competition session did not emit browser telemetry")
+        if time.monotonic() - self.competition_state_received_at > 3:
+            raise AssertionError(f"Competition telemetry stopped updating: {self.competition_state}")
+        return dict(self.competition_state)
 
     def axis(self, axis, target, tolerance=12):
         self.page.mouse.click(800, 600)

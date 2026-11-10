@@ -53,6 +53,15 @@ func has_idle_set() -> bool:
 			return false
 	return true
 
+func current_frame_index() -> int:
+	if frames == null or not frames.has_animation(animation):
+		return 0
+	var count := frames.get_frame_count(animation)
+	if count <= 0:
+		return 0
+	return int(elapsed * frames.get_animation_speed(animation)) % count
+
+
 func current_texture() -> Texture2D:
 	if not has_idle_set():
 		return null
@@ -62,4 +71,4 @@ func current_texture() -> Texture2D:
 	var count := frames.get_frame_count(selected_animation)
 	if count <= 0:
 		return null
-	return frames.get_frame_texture(selected_animation, int(elapsed * frames.get_animation_speed(selected_animation)) % count)
+	return frames.get_frame_texture(selected_animation, current_frame_index())

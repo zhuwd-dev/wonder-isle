@@ -12,6 +12,7 @@ import subprocess
 import sys
 import tempfile
 import threading
+import time
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
@@ -332,6 +333,146 @@ def main() -> int:
                         }
                     )
 
+                    # V2.0 browser loop: unlock the gate from the Q001 fixture,
+                    # enter the hub, start R01, follow the marked track, replay,
+                    # and return to the original life-island instance.
+                    page.set_viewport_size({"width": 844, "height": 390})
+                    page.wait_for_timeout(300)
+                    navigator.move_until_ready("a", "去竞技岛")
+                    page.screenshot(path=str(artifact_dir / "web-v20-life-island-gate-mobile.png"), full_page=True)
+                    page.keyboard.press("e")
+
+                    def wait_competition_screen(expected_screen, timeout=12):
+                        deadline = time.monotonic() + timeout
+                        while time.monotonic() < deadline:
+                            state = navigator.competition_position()
+                            if state["screen"] == expected_screen:
+                                return state
+                            page.wait_for_timeout(50)
+                        raise AssertionError(f"Competition screen {expected_screen} not reached: {navigator.competition_position()}")
+
+                    state = wait_competition_screen(0)
+                    page.screenshot(path=str(artifact_dir / "web-v20-competition-hub-mobile.png"), full_page=True)
+                    # Use Chromium's touch input path for the mobile competition
+                    # walkthrough rather than keyboard input. The origin is the
+                    # on-screen joystick's default center at 844x390.
+                    touch = page.context.new_cdp_session(page)
+                    touch.send("Emulation.setTouchEmulationEnabled", {"enabled": True, "maxTouchPoints": 1})
+                    stick_origin = (68, page.viewport_size["height"] - 83)
+
+                    def touch_stick_start():
+                        touch.send("Input.dispatchTouchEvent", {"type": "touchStart", "touchPoints": [{"x": stick_origin[0], "y": stick_origin[1], "id": 1, "radiusX": 8, "radiusY": 8, "force": 1}]})
+
+                    def touch_stick_direction(dx, dy):
+                        length = max((dx * dx + dy * dy) ** 0.5, 1.0)
+                        x = stick_origin[0] + round(dx / length * 48)
+                        y = stick_origin[1] + round(dy / length * 48)
+                        touch.send("Input.dispatchTouchEvent", {"type": "touchMove", "touchPoints": [{"x": x, "y": y, "id": 1, "radiusX": 8, "radiusY": 8, "force": 1}]})
+
+                    def touch_stick_end():
+                        touch.send("Input.dispatchTouchEvent", {"type": "touchEnd", "touchPoints": []})
+
+                    def touch_walk_to(target, timeout=12):
+                        deadline = time.monotonic() + timeout
+                        last_position = None
+                        last_progress = time.monotonic()
+                        touch_stick_start()
+                        try:
+                            while time.monotonic() < deadline:
+                                state = navigator.competition_position()
+                                if state["screen"] == 2:
+                                    return state
+                                dx = target[0] - state["x"]
+                                dy = target[1] - state["y"]
+                                if abs(dx) <= 18 and abs(dy) <= 18:
+                                    return state
+                                touch_stick_direction(dx, dy)
+                                position = (state["x"], state["y"])
+                                if last_position is None or abs(position[0] - last_position[0]) + abs(position[1] - last_position[1]) > 1:
+                                    last_position = position
+                                    last_progress = time.monotonic()
+                                elif time.monotonic() - last_progress > 2.0:
+                                    raise AssertionError(f"Mobile touch movement blocked near target {target}: {state}")
+                                page.wait_for_timeout(80)
+                        finally:
+                            touch_stick_end()
+                        raise AssertionError(f"Timed out using mobile joystick to reach {target}: {navigator.competition_position()}")
+
+                    touch_walk_to((state["x"], 270))
+                    state = navigator.competition_position()
+                    if state["screen"] != 0 or state["y"] > 300:
+                        raise AssertionError(f"Could not walk to R01 entrance: {state}")
+                    page.mouse.click(page.viewport_size["width"] - 54, page.viewport_size["height"] - 30)
+                    wait_competition_screen(1)
+                    page.screenshot(path=str(artifact_dir / "web-v20-r01-start-mobile.png"), full_page=True)
+
+                    def walk_competition_to(target, timeout=12):
+                        deadline = time.monotonic() + timeout
+                        last_progress = time.monotonic()
+                        last_position = None
+                        while time.monotonic() < deadline:
+                            state = navigator.competition_position()
+                            if state["screen"] == 2:
+                                return state
+                            dx = target[0] - state["x"]
+                            dy = target[1] - state["y"]
+                            if abs(dx) <= 18 and abs(dy) <= 18:
+                                return state
+                            position = (state["x"], state["y"])
+                            if last_position is None or abs(position[0] - last_position[0]) + abs(position[1] - last_position[1]) > 1:
+                                last_position = position
+                                last_progress = time.monotonic()
+                            elif time.monotonic() - last_progress > 2.0:
+                                raise AssertionError(f"R01 movement blocked near target {target}: {state}")
+                            touch_walk_to(target, timeout=max(1, deadline - time.monotonic()))
+                            page.wait_for_timeout(60)
+                        state = navigator.competition_position()
+                        raise AssertionError(f"Timed out walking R01 waypoint {target}: {state}")
+
+                    center_x = state["world_width"] * 0.5
+                    for waypoint in ((center_x - 320, 446), (center_x - 245, 388), (center_x - 150, 320), (center_x - 15, 270), (center_x + 115, 276), (center_x + 200, 285), (center_x + 300, 276), (center_x + 385, 225), (center_x + 410, 150)):
+                        state = walk_competition_to(waypoint)
+                        if abs(waypoint[0] - (center_x + 200)) < 1:
+                            page.screenshot(path=str(artifact_dir / "web-v20-r01-obstacle-mobile.png"), full_page=True)
+                    state = wait_competition_screen(2)
+                    page.screenshot(path=str(artifact_dir / "web-v20-r01-finish-mobile.png"), full_page=True)
+                    page.mouse.click(int(page.viewport_size["width"] * 0.5 - 104), int(page.viewport_size["height"] * 0.63 + 35))
+                    wait_competition_screen(1)
+                    page.screenshot(path=str(artifact_dir / "web-v20-r01-replay-mobile.png"), full_page=True)
+                    page.mouse.click(page.viewport_size["width"] - 54, 24)
+                    wait_competition_screen(0)
+                    page.screenshot(path=str(artifact_dir / "web-v20-competition-hub-mobile-return.png"), full_page=True)
+                    page.set_viewport_size({"width": 1280, "height": 720})
+                    page.wait_for_timeout(500)
+                    page.screenshot(path=str(artifact_dir / "web-v20-competition-hub-1280x720.png"), full_page=True)
+                    page.set_viewport_size({"width": 1630, "height": 870})
+                    page.wait_for_timeout(500)
+                    page.screenshot(path=str(artifact_dir / "web-v20-competition-hub-1630x870.png"), full_page=True)
+                    page.set_viewport_size({"width": 1280, "height": 720})
+                    page.wait_for_timeout(300)
+                    return_started_at = time.monotonic()
+                    page.mouse.click(page.viewport_size["width"] - 70, 46)
+                    page.wait_for_timeout(750)
+                    while time.monotonic() < return_started_at + 3 and navigator.state_received_at <= return_started_at:
+                        page.wait_for_timeout(50)
+                    if navigator.position()["bridge"] is not True:
+                        raise AssertionError("Returning from the competition did not restore Q001 state")
+                    touch.send("Emulation.setTouchEmulationEnabled", {"enabled": False})
+                    touch.detach()
+                    page.set_viewport_size({"width": 1280, "height": 720})
+                    competition_screenshots = {
+                        "competition_gate_mobile": str(artifact_dir / "web-v20-life-island-gate-mobile.png"),
+                        "competition_hub_mobile": str(artifact_dir / "web-v20-competition-hub-mobile.png"),
+                        "r01_start_mobile": str(artifact_dir / "web-v20-r01-start-mobile.png"),
+                        "r01_obstacle_mobile": str(artifact_dir / "web-v20-r01-obstacle-mobile.png"),
+                        "r01_finish_mobile": str(artifact_dir / "web-v20-r01-finish-mobile.png"),
+                        "r01_replay_mobile": str(artifact_dir / "web-v20-r01-replay-mobile.png"),
+                        "competition_hub_after_return_mobile": str(artifact_dir / "web-v20-competition-hub-mobile-return.png"),
+                        "competition_hub_1280x720": str(artifact_dir / "web-v20-competition-hub-1280x720.png"),
+                        "competition_hub_1630x870": str(artifact_dir / "web-v20-competition-hub-1630x870.png"),
+                    }
+                    result.update(competition_screenshots)
+
                 with tempfile.TemporaryDirectory(prefix="wonder-isle-seed-planted-") as temp_dir:
                     fixture_path = Path(temp_dir) / "seed-planted-save.json"
                     subprocess.run(
@@ -510,37 +651,32 @@ def main() -> int:
                             remaining_id = next(
                                 index for index, collected in enumerate(plant_flags) if not collected
                             )
-                            attempts = 1 if harvest_step == 1 else 5
+                            # A ready interaction is a single action. Retrying the
+                            # click while IndexedDB is still committing can harvest
+                            # the neighboring flower too and advance the live quest
+                            # before the test observes the saved count.
+                            navigator.go(("y", 520), ("x", (1028, 1080, 1132)[remaining_id]))
+                            navigator.move_until_ready("w", "采花")
+                            page.mouse.click(1_214, 662)
                             harvested_save = {}
-                            for _attempt in range(attempts):
-                                # Approach from the open south side. An exact
-                                # y=480 waypoint can brush the eastern rocks
-                                # after input-release drift on slower frames.
-                                navigator.go(("y", 520), ("x", (1028, 1080, 1132)[remaining_id]))
-                                navigator.move_until_ready("w", "采花")
-                                page.mouse.click(1_214, 662)
-                                page.wait_for_timeout(500)
-                                for _ in range(24 if harvest_step == 1 else 6):
-                                    harvested_save = page.evaluate(
-                                        """async key => new Promise((resolve, reject) => {
-                                            const opening = indexedDB.open('/userfs');
-                                            opening.onerror = () => reject(opening.error);
-                                            opening.onsuccess = () => {
-                                                const transaction = opening.result.transaction('FILE_DATA', 'readonly');
-                                                const request = transaction.objectStore('FILE_DATA').get(key);
-                                                request.onsuccess = () => resolve(JSON.parse(new TextDecoder().decode(new Uint8Array(request.result.contents))));
-                                                request.onerror = () => reject(request.error);
-                                            };
-                                        })""",
-                                        save_key,
-                                    )
-                                    plant_flags = harvested_save.get("q005_plants_collected", [])
-                                    if isinstance(plant_flags, list) and sum(bool(flag) for flag in plant_flags) >= expected_count:
-                                        break
-                                    page.wait_for_timeout(500)
+                            for _ in range(24):
+                                harvested_save = page.evaluate(
+                                    """async key => new Promise((resolve, reject) => {
+                                        const opening = indexedDB.open('/userfs');
+                                        opening.onerror = () => reject(opening.error);
+                                        opening.onsuccess = () => {
+                                            const transaction = opening.result.transaction('FILE_DATA', 'readonly');
+                                            const request = transaction.objectStore('FILE_DATA').get(key);
+                                            request.onsuccess = () => resolve(JSON.parse(new TextDecoder().decode(new Uint8Array(request.result.contents))));
+                                            request.onerror = () => reject(request.error);
+                                        };
+                                    })""",
+                                    save_key,
+                                )
                                 plant_flags = harvested_save.get("q005_plants_collected", [])
                                 if isinstance(plant_flags, list) and sum(bool(flag) for flag in plant_flags) >= expected_count:
                                     break
+                                page.wait_for_timeout(500)
                             page.screenshot(
                                 path=str(artifact_dir / f"web-q005-harvest-{harvest_step + 1}.png"),
                                 full_page=True,

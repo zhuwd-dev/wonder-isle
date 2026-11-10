@@ -56,7 +56,10 @@ func _run() -> void:
 	_expect(main._q010_prompt_text() == "种子收藏：已收集 0/3 个指定种子。", "Q010 must show its progress prompt")
 
 	for seed_id in range(3):
-		main.player_position = main.Q010_SEED_POSITIONS[seed_id]
+		main.player_position = Vector2(180.0, 435.0) if seed_id == 0 else main.Q010_SEED_POSITIONS[seed_id]
+		if seed_id == 0:
+			main._update_interact_button()
+			_expect(main.interaction_button_label == "收种子", "Q010 seed action must take priority when it overlaps the competition gate radius")
 		_press_interact()
 		_expect(main.game_state.q010_seeds_collected[seed_id], "runtime interaction must collect Q010 seed %d" % seed_id)
 		_expect(main.game_state.q010_seed_count() == seed_id + 1, "Q010 runtime progress must count collected seeds")
