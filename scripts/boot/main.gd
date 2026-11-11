@@ -201,6 +201,7 @@ var camera_touch_points := {}
 var camera_pinch_consumed := {}
 var camera_pinch_active := false
 var animation_time := 0.0
+var mobile_ui_scale_cache := 1.0
 var player_walk_phase := 0.0
 var player_is_moving := false
 var turtle_position := Q005_TURTLE_POSITION
@@ -320,6 +321,8 @@ func _ready() -> void:
 	_create_environment_focus()
 	_create_controls()
 	get_viewport().size_changed.connect(_layout_controls)
+	get_viewport().size_changed.connect(_update_mobile_ui_scale)
+	_update_mobile_ui_scale()
 	_layout_controls()
 	if message_remaining_seconds <= 0.0 and not message.is_empty():
 		message_remaining_seconds = 4.0
@@ -368,7 +371,7 @@ func _physics_process(delta: float) -> void:
 		test_telemetry_elapsed += delta
 		if test_telemetry_elapsed >= 0.033:
 			test_telemetry_elapsed = 0.0
-			print("TEST_POSITION ", JSON.stringify({"x": player_position.x, "y": player_position.y, "turtle_x": turtle_position.x, "turtle_y": turtle_position.y, "action": interaction_button_label, "ready": interaction_button_ready, "bridge": game_state.bridge_repaired, "planting_hint": _can_show_planting_hint(), "garden_focus": garden_focus_level, "house_delivery": _house_delivery_available(), "house_focus": house_focus_level, "fox_greeting": _fox_should_greet_player(), "build_mode": build_mode, "guide_stage": IslandGuidance.stage(game_state, build_mode, q011_mode), "camera_zoom": camera_zoom, "animation": player_animation.animation, "official_mouse_frames": SceneArt.mouse_enabled() and player_animation.has_complete_set(), "move_input": [direction.x, direction.y], "right_clear": _is_walkable(player_position + Vector2(4, 0)), "left_clear": _is_walkable(player_position + Vector2(-4, 0)), "q005_completed": game_state.is_q005_complete(), "q010_completed": game_state.is_q010_complete(), "q011_completed": game_state.is_q011_complete(), "build_revision": build_revision}))
+			print("TEST_POSITION ", JSON.stringify({"x": player_position.x, "y": player_position.y, "turtle_x": turtle_position.x, "turtle_y": turtle_position.y, "action": interaction_button_label, "ready": interaction_button_ready, "bridge": game_state.bridge_repaired, "planting_hint": _can_show_planting_hint(), "garden_focus": garden_focus_level, "house_delivery": _house_delivery_available(), "house_focus": house_focus_level, "fox_greeting": _fox_should_greet_player(), "build_mode": build_mode, "guide_stage": IslandGuidance.stage(game_state, build_mode, q011_mode), "camera_zoom": camera_zoom, "animation": player_animation.animation, "official_mouse_frames": SceneArt.mouse_enabled() and player_animation.has_complete_set(), "move_input": [direction.x, direction.y], "mobile_ui_scale": _mobile_ui_scale(), "task_details_open": task_details_open, "task_card_size": [task_card_button.size.x, task_card_button.size.y] if is_instance_valid(task_card_button) else [0.0, 0.0], "right_clear": _is_walkable(player_position + Vector2(4, 0)), "left_clear": _is_walkable(player_position + Vector2(-4, 0)), "q005_completed": game_state.is_q005_complete(), "q010_completed": game_state.is_q010_complete(), "q011_completed": game_state.is_q011_complete(), "build_revision": build_revision}))
 	queue_redraw()
 
 
@@ -638,6 +641,29 @@ func _camera_fit_scale() -> float:
 	return minf(viewport_size.x / WORLD_SIZE.x, viewport_size.y / WORLD_SIZE.y)
 
 
+func _update_mobile_ui_scale() -> void:
+	# The Web export keeps a 1280x720 logical window while CSS scales its canvas
+	# to the browser viewport. Read the CSS viewport once on resize so phone text
+	# can be compensated without enlarging the game world or polling JS per frame.
+	var window_size := DisplayServer.window_get_size()
+	var viewport_height := float(window_size.y)
+	var viewport_aspect := float(window_size.x) / maxf(viewport_height, 1.0)
+	if OS.has_feature("web"):
+		var browser_height := float(JavaScriptBridge.eval("window.innerHeight || 0"))
+		var browser_aspect := float(JavaScriptBridge.eval("window.innerWidth / Math.max(window.innerHeight, 1)"))
+		if browser_height > 0.0 and browser_aspect > 0.0:
+			viewport_height = browser_height
+			viewport_aspect = browser_aspect
+	if viewport_aspect < 1.25 or viewport_height >= float(WORLD_SIZE.y):
+		mobile_ui_scale_cache = 1.0
+		return
+	mobile_ui_scale_cache = clampf(float(WORLD_SIZE.y) / maxf(viewport_height, 1.0), 1.0, 1.65)
+
+
+func _mobile_ui_scale() -> float:
+	return mobile_ui_scale_cache
+
+
 func _camera_zoom_scale() -> float:
 	return _camera_fit_scale() * camera_zoom
 
@@ -859,7 +885,7 @@ func _create_controls() -> void:
 	task_card_button = Button.new()
 	task_card_button.name = "TaskCardButton"
 	task_card_button.position = Vector2(18, 14)
-	task_card_button.size = Vector2(360, 68)
+	task_card_button.size = _task_card_control_size()
 	task_card_button.tooltip_text = "点击查看当前任务说明"
 	task_card_button.focus_mode = Control.FOCUS_NONE
 	task_card_button.pressed.connect(_toggle_task_details)
@@ -1044,7 +1070,7 @@ func _layout_controls() -> void:
 	q011_button.position = Vector2(layout_width - 420.0, 88.0)
 	interact_button.position = Vector2(layout_width - INTERACT_BUTTON_SIZE.x - 8.0, maxf(8.0, visible_size.y - INTERACT_BUTTON_SIZE.y - 12.0))
 	interact_button.pivot_offset = INTERACT_BUTTON_SIZE * 0.5
-	task_card_button.size = Vector2(400.0, 196.0) if task_details_open else Vector2(360.0, 68.0)
+	task_card_button.size = _task_card_control_size()
 	if game_menu_popup.visible:
 		game_menu_popup.position = Vector2i(roundi(menu_button.position.x), roundi(menu_button.position.y + menu_button.size.y))
 	_update_interact_button()
@@ -1074,8 +1100,14 @@ func _cancel_restart_confirmation() -> void:
 func _toggle_task_details() -> void:
 	task_details_open = not task_details_open
 	if task_card_button != null:
-		task_card_button.size = Vector2(400, 196) if task_details_open else Vector2(360, 68)
+		task_card_button.size = _task_card_control_size()
 	queue_redraw()
+
+
+func _task_card_control_size() -> Vector2:
+	if _mobile_ui_scale() > 1.0:
+		return Vector2(440, 284) if task_details_open else Vector2(420, 84)
+	return Vector2(400, 196) if task_details_open else Vector2(360, 68)
 
 
 func _update_interact_button_animation() -> void:
@@ -1702,7 +1734,7 @@ func _pointer_up(position: Vector2, _screen_position := Vector2(-1.0, -1.0)) -> 
 			rabbit_dialog_open = false
 			task_details_open = false
 			if task_card_button != null:
-				task_card_button.size = Vector2(360, 68)
+				task_card_button.size = _task_card_control_size()
 			_start_task_transition(BRIDGE_RECT.get_center(), "小桥修好了")
 			message = "太棒了！小桥修好了，右侧区域已经开放！"
 			message_color = Color("fff1a8")
@@ -2384,7 +2416,7 @@ func _restart_game() -> void:
 	if restart_confirmation != null:
 		restart_confirmation.visible = false
 	if task_card_button != null:
-		task_card_button.size = Vector2(360, 68)
+		task_card_button.size = _task_card_control_size()
 	player_position = Vector2(250, 500)
 	turtle_position = Q005_TURTLE_POSITION
 	player_facing = Vector2.RIGHT
@@ -3572,11 +3604,21 @@ func _draw_fox(position: Vector2) -> void:
 	_draw_character_sprite(FOX_ART, position, 78.0, 0.40, 0.8, 1.5)
 
 func _draw_boards(font: Font) -> void:
+	var target_board := -1
+	if not game_state.is_complete() and IslandGuidance.stage(game_state, build_mode, q011_mode) == "q001_collect":
+		target_board = _guide_first_index(game_state.collected)
 	for board_id in range(GameState.BOARD_TOTAL):
 		if not game_state.collected[board_id]:
 			_draw_board_at(BOARD_POSITIONS[board_id], VISUAL_PALETTE["board"], false)
-			var is_current_target := IslandGuidance.stage(game_state, build_mode, q011_mode) == "q001_collect" and board_id == _guide_first_index(game_state.collected)
-			if is_current_target or player_position.distance_to(BOARD_POSITIONS[board_id]) <= COLLECTION_RADIUS:
+			var is_current_target := board_id == target_board
+			if is_current_target:
+				# A warm, low-to-ground beacon makes the next board easier to spot
+				# across the island while keeping the hint inside the storybook art.
+				var board_anchor: Vector2 = BOARD_POSITIONS[board_id]
+				var pulse := 0.5 + (sin(animation_time * 2.3 + float(board_id)) + 1.0) * 0.25
+				_draw_ellipse_custom(board_anchor + Vector2(0, 18), Vector2(36 + pulse * 7.0, 8 + pulse * 2.0), Color(1.0, 0.84, 0.43, 0.10 + pulse * 0.06))
+				_draw_world_target_glimmer(board_anchor + Vector2(0, -27), 0.66 + float(board_id) * 0.09, Color("ffe7a1"))
+			elif player_position.distance_to(BOARD_POSITIONS[board_id]) <= COLLECTION_RADIUS:
 				_draw_world_target_glimmer(BOARD_POSITIONS[board_id] + Vector2(0, -27), 0.66 + float(board_id) * 0.09, Color("ffe7a1"))
 
 
@@ -3695,25 +3737,33 @@ func _draw_pond_stone_at(position: Vector2, color: Color, lifted: bool) -> void:
 
 
 func _draw_task_card(font: Font) -> void:
-	var card_rect := Rect2(18, 14, 360, 68)
+	var mobile_scale := _mobile_ui_scale()
+	var is_mobile := mobile_scale > 1.0
+	var card_rect := Rect2(18, 14, 420 if is_mobile else 360, 84 if is_mobile else 68)
 	_draw_soft_panel(card_rect, Color("fff9ed", 0.95), Color("d5bd83", 0.94), 19, 0.12)
 	var guidance := _guidance_details()
-	_draw_guide_icon(guidance["source"], Rect2(25, 27, 54, 40))
+	_draw_guide_icon(guidance["source"], Rect2(25, 27, 54, 40) if not is_mobile else Rect2(26, 31, 60, 46))
 	var title := "修好小桥" if not game_state.is_complete() else _hud_title_text().replace("奇趣小岛 · ", "")
-	draw_string(font, Vector2(86, 43), title, HORIZONTAL_ALIGNMENT_LEFT, 188, 20, VISUAL_PALETTE["ink"])
-	draw_string(font, Vector2(86, 65), _task_card_progress_text(), HORIZONTAL_ALIGNMENT_LEFT, 238, 14, Color("566d58"))
-	var badge := Rect2(286, 25, 78, 25)
+	var title_size := 20 if not is_mobile else roundi(20 * mobile_scale)
+	var progress_size := 14 if not is_mobile else roundi(14 * mobile_scale)
+	var title_width := 188 if not is_mobile else 190
+	var progress_width := 238 if not is_mobile else 214
+	draw_string(font, Vector2(86, 43 if not is_mobile else 48), title, HORIZONTAL_ALIGNMENT_LEFT, title_width, title_size, VISUAL_PALETTE["ink"])
+	draw_string(font, Vector2(86, 65 if not is_mobile else 74), _task_card_progress_text(), HORIZONTAL_ALIGNMENT_LEFT, progress_width, progress_size, Color("566d58"))
+	var badge := Rect2(286, 25, 78, 25) if not is_mobile else Rect2(304, 25, 120, 30)
 	_draw_panel(badge, Color("e8efd5"), Color("a8bd85"), 12)
-	draw_string(font, badge.position + Vector2(4, 17), _task_stage_label(), HORIZONTAL_ALIGNMENT_CENTER, badge.size.x - 8, 12, Color("425d48"))
-	draw_line(Vector2(350, 59), Vector2(355, 64), Color("78966b"), 1.8, true)
-	draw_line(Vector2(355, 64), Vector2(360, 59), Color("78966b"), 1.8, true)
+	var badge_font_size := 12 if not is_mobile else roundi(11 * mobile_scale)
+	draw_string(font, badge.position + Vector2(4, 19 if not is_mobile else 21), _task_stage_label(), HORIZONTAL_ALIGNMENT_CENTER, badge.size.x - 8, badge_font_size, Color("425d48"))
+	var chevron_x := 350.0 if not is_mobile else 405.0
+	draw_line(Vector2(chevron_x, 59), Vector2(chevron_x + 5, 64), Color("78966b"), 1.8, true)
+	draw_line(Vector2(chevron_x + 5, 64), Vector2(chevron_x + 10, 59), Color("78966b"), 1.8, true)
 	if not task_details_open:
 		return
-	var details_rect := Rect2(18, 88, 400, 124)
+	var details_rect := Rect2(18, 88, 440 if is_mobile else 400, 210 if is_mobile else 124)
 	_draw_soft_panel(details_rect, Color("fff9ed", 0.96), Color("d5bd83", 0.94), 18, 0.12)
-	draw_string(font, details_rect.position + Vector2(16, 24), "任务说明", HORIZONTAL_ALIGNMENT_LEFT, 110, 14, Color("8a7049"))
+	draw_string(font, details_rect.position + Vector2(16, 28), "任务说明", HORIZONTAL_ALIGNMENT_LEFT, 140, 14 if not is_mobile else roundi(14 * mobile_scale), Color("8a7049"))
 	var detail_text := _task_prompt_text() + "\n" + _task_action_hint_text()
-	draw_multiline_string(font, details_rect.position + Vector2(16, 46), detail_text, HORIZONTAL_ALIGNMENT_LEFT, details_rect.size.x - 32, 13, 4, VISUAL_PALETTE["ink"])
+	draw_multiline_string(font, details_rect.position + Vector2(16, 58), detail_text, HORIZONTAL_ALIGNMENT_LEFT, details_rect.size.x - 32, 13 if not is_mobile else roundi(13 * mobile_scale), 4, VISUAL_PALETTE["ink"])
 
 
 func _task_card_progress_text() -> String:
@@ -3826,6 +3876,7 @@ func _draw_check_badge(center: Vector2) -> void:
 
 
 func _draw_touch_hint(font: Font) -> void:
+	var mobile_scale := _mobile_ui_scale()
 	var visible_height := size.y
 	var hint_y := minf(664.0, maxf(8.0, visible_height - 52.0))
 	var joystick_center := _virtual_joystick_center()
@@ -3837,16 +3888,19 @@ func _draw_touch_hint(font: Font) -> void:
 	draw_line(Vector2(221, hint_y + 17), Vector2(225, hint_y + 21), Color("b79655"), 1.8, true)
 	draw_line(Vector2(221, hint_y + 25), Vector2(225, hint_y + 21), Color("b79655"), 1.8, true)
 	_draw_guide_icon(guidance["destination"], Rect2(228, hint_y + 6, 30, 30))
-	draw_string(font, Vector2(266, hint_y + 27.0), _compact_action_hint_text(), HORIZONTAL_ALIGNMENT_LEFT, 535, 14, Color("334c3d"))
+	draw_string(font, Vector2(266, hint_y + 27.0), _compact_action_hint_text(), HORIZONTAL_ALIGNMENT_LEFT, 535, 14 if mobile_scale == 1.0 else roundi(14 * mobile_scale), Color("334c3d"))
 	var move_hint := Rect2(24, joystick_center.y - 82.0, 142, 26)
 	_draw_panel(move_hint, Color("fff8e8", 0.92), Color("c4c998"), 12)
-	draw_string(font, move_hint.position + Vector2(9, 18), "拖动圆盘移动", HORIZONTAL_ALIGNMENT_LEFT, 126, 13, Color("4e6953"))
+	draw_string(font, move_hint.position + Vector2(9, 18), "拖动圆盘移动", HORIZONTAL_ALIGNMENT_LEFT, 126, 13 if mobile_scale == 1.0 else roundi(13 * mobile_scale), Color("4e6953"))
 	_draw_virtual_joystick()
 
 
 func _compact_action_hint_text() -> String:
 	if not game_state.is_complete():
 		if game_state.board_count() < GameState.BOARD_TOTAL:
+			var target_board := _guide_first_index(game_state.collected)
+			if target_board >= 0 and player_position.distance_to(BOARD_POSITIONS[target_board]) > COLLECTION_RADIUS:
+				return "沿着金色微光找下一块木板"
 			return "靠近木板，按 E 或右下角「收木板」"
 		return "拖动托盘里的木板到桥面缺口"
 	return _task_action_hint_text()

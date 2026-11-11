@@ -72,16 +72,18 @@ def main():
                         nav.axis('x', 820)
                         page.wait_for_timeout(400)
                         page.screenshot(path=str(artifacts / 'bridge-middle-keyboard.png'))
-                    # The pond occupies the immediate east side of the upper
-                    # bridge approach. Reach the open bank, walk around its
-                    # south tip, then verify the player can reach the bank.
+                    # Shore rocks occupy the direct lower-east approach. Use
+                    # the clear north bank waypoint before reaching the open
+                    # east bank; then cross the bank vertically.
                     nav.axis('x', 930)
-                    nav.axis('y', 390, tolerance=8)
+                    nav.axis('y', 340, tolerance=8)
                     nav.axis('x', 960)
+                    nav.axis('y', 390, tolerance=8)
                     right = nav.position()
                     assert right['x'] >= 923 and right['bridge'] and right['right_clear'], f'left to right failed: {right}'
                     page.screenshot(path=str(artifacts / f'bridge-right-{crossing % 5}.png')) if crossing < 5 else None
                     nav.axis('x', 930)
+                    nav.axis('y', 340, tolerance=8)
                     nav.axis('y', lane, tolerance=8)
                     if crossing < 5 and lane >= 380:
                         page.screenshot(path=str(artifacts / f'bridge-lower-right-{lane}.png'))
@@ -119,10 +121,9 @@ def main():
                 diagonal = nav.position()
                 assert diagonal['x'] > lower['x'] and diagonal['y'] >= 300, f'diagonal input failed: {diagonal}'
                 print('PASS bridge railings and diagonal input', upper, lower, diagonal, flush=True)
-                nav.axis('y', 339, tolerance=8)
-                nav.axis('x', 930)
-                nav.axis('y', 390, tolerance=8)
+                nav.axis('y', 340, tolerance=8)
                 nav.axis('x', 960)
+                nav.axis('y', 390, tolerance=8)
                 print('PASS bridge traversal after save reload', nav.position(), flush=True)
                 if errors:
                     raise AssertionError(f'browser errors: {errors}')

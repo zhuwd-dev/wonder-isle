@@ -126,13 +126,14 @@ def main() -> int:
 
     try:
         with sync_playwright() as playwright:
-            launch_options: dict[str, object] = {"headless": True}
+            launch_options: dict[str, object] = {"headless": os.environ.get("WEB_TEST_HEADFUL") != "1"}
             chromium_path = os.environ.get("CHROMIUM_PATH")
             if chromium_path:
                 launch_options["executable_path"] = chromium_path
             browser = playwright.chromium.launch(**launch_options)
+            context = browser.new_context(viewport={"width": 1280, "height": 720}, device_scale_factor=1)
             try:
-                page = browser.new_page(viewport={"width": 1280, "height": 720}, device_scale_factor=1)
+                page = context.new_page()
                 page.on(
                     "console",
                     lambda message: result["console_errors"].append(message.text)
@@ -157,6 +158,16 @@ def main() -> int:
 
                 page.wait_for_selector("canvas", timeout=60_000)
                 page.wait_for_timeout(3_000)
+
+                def wait_for_task_details(is_open):
+                    deadline = time.monotonic() + 4.0
+                    last_state = None
+                    while time.monotonic() < deadline:
+                        last_state = navigator.position()
+                        if last_state.get("task_details_open") is is_open:
+                            return last_state
+                        page.wait_for_timeout(50)
+                    raise AssertionError(f"Task details did not switch to {is_open}: {last_state}")
                 godot_config_match = re.search(r"const GODOT_CONFIG = (\{[^;]+\});", index_html)
                 if godot_config_match is None:
                     raise AssertionError("Web export has no Godot startup configuration")
@@ -237,6 +248,13 @@ def main() -> int:
                     raise AssertionError(f"Unexpected wide-screen canvas bounds: {wide_canvas_box}")
                 page.screenshot(path=str(artifact_dir / "web-wide-1630x870.png"), full_page=True)
                 result["wide_canvas_box"] = wide_canvas_box
+                page.set_viewport_size({"width": 932, "height": 430})
+                page.wait_for_timeout(750)
+                phone_canvas_box = page.locator("canvas").first.bounding_box()
+                if phone_canvas_box is None or phone_canvas_box["x"] != 0 or phone_canvas_box["y"] != 0 or phone_canvas_box["width"] < 930 or phone_canvas_box["height"] < 428:
+                    raise AssertionError(f"Unexpected 932x430 phone landscape canvas bounds: {phone_canvas_box}")
+                page.screenshot(path=str(artifact_dir / "web-phone-landscape-932x430.png"), full_page=True)
+                result["phone_932x430_canvas_box"] = phone_canvas_box
                 page.set_viewport_size({"width": 844, "height": 390})
                 page.wait_for_timeout(750)
                 touch_canvas_box = page.locator("canvas").first.bounding_box()
@@ -247,7 +265,7 @@ def main() -> int:
                 page.close()
 
                 # Use a fresh engine instance at desktop size for deterministic game input.
-                page = browser.new_page(viewport={"width": 1280, "height": 720}, device_scale_factor=1)
+                page = context.new_page()
                 navigator = Navigator(page, index_html)
                 page.on(
                     "console",
@@ -269,6 +287,29 @@ def main() -> int:
                 )
                 page.wait_for_selector("canvas", timeout=60_000)
                 page.wait_for_timeout(3_000)
+
+                page.set_viewport_size({"width": 932, "height": 430})
+                page.wait_for_timeout(500)
+                phone_state = navigator.position()
+                if not 1.0 < phone_state["mobile_ui_scale"] <= 1.65:
+                    raise AssertionError(f"Mobile UI scale was not applied at 932x430: {phone_state}")
+                page.screenshot(path=str(artifact_dir / "web-q001-phone-932x430-collapsed.png"), full_page=True)
+                page.mouse.click(180, 45)
+                wait_for_task_details(True)
+                page.screenshot(path=str(artifact_dir / "web-q001-phone-932x430-expanded.png"), full_page=True)
+                page.mouse.click(180, 45)
+                wait_for_task_details(False)
+                page.set_viewport_size({"width": 1280, "height": 720})
+                page.wait_for_timeout(500)
+                desktop_ui_state = navigator.position()
+                if desktop_ui_state["mobile_ui_scale"] >= phone_state["mobile_ui_scale"]:
+                    raise AssertionError(f"Mobile UI scale did not return to desktop sizing after resize: phone={phone_state}, desktop={desktop_ui_state}")
+                result["phone_ui_932x430"] = {
+                    "collapsed_screenshot": str(artifact_dir / "web-q001-phone-932x430-collapsed.png"),
+                    "expanded_screenshot": str(artifact_dir / "web-q001-phone-932x430-expanded.png"),
+                    "phone_scale": phone_state["mobile_ui_scale"],
+                    "desktop_scale_after_resize": desktop_ui_state["mobile_ui_scale"],
+                }
 
                 # Build isolated Q001 fixtures to verify each visual state in the
                 # current Web export without touching a real browser save.
@@ -395,10 +436,36 @@ def main() -> int:
                         touch.send("Input.dispatchTouchEvent", {"type": "touchEnd", "touchPoints": []})
                         jump_point = None
 
+                    race_metrics = {
+                        "wall_start": None,
+                        "input_held_wall_seconds": 0.0,
+                        "observed_position_change_wall_seconds": 0.0,
+                        "stationary_while_input_held_wall_seconds": 0.0,
+                        "sustained_block_events": [],
+                        "focus_pause_wall_seconds": 0.0,
+                        "stages": [],
+                    }
+
+                    def mark_race_stage(name, race_state):
+                        if name == "start":
+                            race_metrics["wall_start"] = time.monotonic()
+                        wall_start = race_metrics["wall_start"]
+                        race_metrics["stages"].append({
+                            "stage": name,
+                            "status": "reached",
+                            "game_seconds": race_state.get("race_time"),
+                            "wall_seconds": round(time.monotonic() - wall_start, 3) if wall_start is not None else None,
+                            "position": [race_state.get("x"), race_state.get("y")],
+                            "checkpoint_index": race_state.get("checkpoint_index"),
+                        })
+
                     def touch_walk_to(target, timeout=12, jump=False):
                         deadline = time.monotonic() + timeout
                         last_position = None
                         last_progress = time.monotonic()
+                        input_started_at = time.monotonic()
+                        last_sample_at = input_started_at
+                        last_sample_position = None
                         touch_stick_start()
                         if jump:
                             touch_jump_start()
@@ -409,6 +476,17 @@ def main() -> int:
                         try:
                             while time.monotonic() < deadline:
                                 state = navigator.competition_position()
+                                sample_at = time.monotonic()
+                                current_position = (state["x"], state["y"])
+                                if race_metrics["wall_start"] is not None and last_sample_position is not None:
+                                    sample_span = min(sample_at - last_sample_at, 0.25)
+                                    displacement = abs(current_position[0] - last_sample_position[0]) + abs(current_position[1] - last_sample_position[1])
+                                    if displacement > 0.5:
+                                        race_metrics["observed_position_change_wall_seconds"] += sample_span
+                                    else:
+                                        race_metrics["stationary_while_input_held_wall_seconds"] += sample_span
+                                last_sample_at = sample_at
+                                last_sample_position = current_position
                                 if state["screen"] == 3:
                                     return state
                                 dx = target[0] - state["x"]
@@ -426,10 +504,13 @@ def main() -> int:
                                     last_position = position
                                     last_progress = time.monotonic()
                                 elif time.monotonic() - last_progress > 2.0:
+                                    race_metrics["sustained_block_events"].append({"target": list(target), "position": list(position), "stationary_seconds": round(time.monotonic() - last_progress, 3)})
                                     raise AssertionError(f"Mobile touch movement blocked near target {target}: {state}")
                                 page.wait_for_timeout(80)
                         finally:
                             touch_stick_end()
+                            if race_metrics["wall_start"] is not None:
+                                race_metrics["input_held_wall_seconds"] += time.monotonic() - input_started_at
                         if reached_target and jump:
                             if not moved_while_airborne:
                                 raise AssertionError("Joystick did not move while the second touch pressed jump")
@@ -454,7 +535,45 @@ def main() -> int:
                     state = wait_competition_screen(2)
                     if state["clock_running"] is not True:
                         raise AssertionError(f"Race clock did not start from the briefing: {state}")
+                    mark_race_stage("start", state)
                     page.screenshot(path=str(artifact_dir / "web-v21-r01-start-mobile.png"), full_page=True)
+
+                    # Exercise a real Chromium tab-focus transition while the
+                    # race is moving. The second page is deliberately a blank
+                    # tab; no game state is injected or changed by the test.
+                    page.keyboard.down("d")
+                    page.wait_for_timeout(300)
+                    before_blur = navigator.competition_position()
+                    if before_blur["x"] <= state["x"] or before_blur["race_time"] <= state["race_time"]:
+                        raise AssertionError(f"R01 keyboard movement/timer did not advance before blur: {before_blur}")
+                    focus_tab = context.new_page()
+                    focus_tab.set_content("<title>Focus test tab</title><p>Background page for focus simulation.</p>")
+                    focus_tab.bring_to_front()
+                    page.wait_for_timeout(350)
+                    blur_started_at = time.monotonic()
+                    focus_state = page.evaluate("() => ({visibility_state: document.visibilityState, hidden: document.hidden, has_focus: document.hasFocus()})")
+                    focus_tab.close()
+                    if focus_state["hidden"] or not focus_state["has_focus"]:
+                        page.bring_to_front()
+                        page.wait_for_timeout(350)
+                        page.keyboard.up("d")
+                        after_blur = navigator.competition_position()
+                        if after_blur.get("clock_paused") or after_blur["race_time"] - before_blur["race_time"] > 0.55:
+                            raise AssertionError(f"Race timer did not pause/resume across Chromium tab focus: before={before_blur}, after={after_blur}")
+                        page.wait_for_timeout(250)
+                        after_release = navigator.competition_position()
+                        if abs(after_release["x"] - after_blur["x"]) > 3:
+                            raise AssertionError(f"Movement input remained active after focus restoration: before={after_blur}, after={after_release}")
+                        race_metrics["focus_pause_wall_seconds"] += time.monotonic() - blur_started_at
+                        result["focus_pause_browser_test"] = {"status": "passed", "during_other_tab": focus_state}
+                        page.screenshot(path=str(artifact_dir / "web-v21-r01-focus-restored-mobile.png"), full_page=True)
+                    else:
+                        page.keyboard.up("d")
+                        result["focus_pause_browser_test"] = {
+                            "status": "not_tested",
+                            "reason": "headless Chromium did not hide or blur the game page when another context page was foregrounded",
+                            "during_other_tab": focus_state,
+                        }
 
                     def walk_competition_to(target, timeout=12):
                         deadline = time.monotonic() + timeout
@@ -484,6 +603,7 @@ def main() -> int:
                         state = walk_competition_to(waypoint)
                     if state["checkpoint_index"] < 1:
                         raise AssertionError(f"Middle checkpoint did not activate: {state}")
+                    mark_race_stage("checkpoint", state)
                     race_checkpoint = tuple(state["race_checkpoint"])
                     touch_walk_to((race_checkpoint[0] + 30, race_checkpoint[1]))
                     state = navigator.competition_position()
@@ -516,13 +636,30 @@ def main() -> int:
                     state = navigator.competition_position()
                     state = walk_competition_to((center_x + 115, 276))
                     state = touch_walk_to((center_x + 250, 285), jump=True)
+                    mark_race_stage("low_hurdle_cleared", state)
                     page.screenshot(path=str(artifact_dir / "web-v21-r01-obstacle-mobile.png"), full_page=True)
                     for waypoint in ((center_x + 250, 330), (center_x + 300, 340), (center_x + 360, 320), (center_x + 385, 225), (center_x + 410, 150)):
                         state = walk_competition_to(waypoint)
+                        if waypoint == (center_x + 300, 340):
+                            mark_race_stage("high_log_passed", state)
                     state = wait_competition_screen(3)
                     if state["clock_running"] is not False or state["race_time"] <= 0.0:
                         raise AssertionError(f"Finish did not stop the clock and report elapsed time: {state}")
                     page.screenshot(path=str(artifact_dir / "web-v21-r01-finish-mobile.png"), full_page=True)
+                    mark_race_stage("finish", state)
+                    race_wall_total = time.monotonic() - race_metrics["wall_start"]
+                    result["r01_timing_diagnostics"] = {
+                        "clock_type": "game_seconds is RaceClock monotonic elapsed time; wall_seconds uses Python monotonic time",
+                        "race_wall_seconds": round(race_wall_total, 3),
+                        "input_held_wall_seconds": round(race_metrics["input_held_wall_seconds"], 3),
+                        "automation_and_no_input_wall_seconds": round(max(0.0, race_wall_total - race_metrics["input_held_wall_seconds"]), 3),
+                        "observed_position_change_wall_seconds": round(race_metrics["observed_position_change_wall_seconds"], 3),
+                        "stationary_while_input_held_wall_seconds": round(race_metrics["stationary_while_input_held_wall_seconds"], 3),
+                        "sustained_block_events": race_metrics["sustained_block_events"],
+                        "focus_pause_wall_seconds": round(race_metrics["focus_pause_wall_seconds"], 3),
+                        "stages": race_metrics["stages"],
+                        "measurement_limit": "position-change time is browser-sampled, not frame-perfect movement duration",
+                    }
                     page.mouse.click(int(page.viewport_size["width"] * 0.5 - 104), int(page.viewport_size["height"] * 0.63 + 35))
                     state = wait_competition_screen(2)
                     if state["checkpoint_index"] != 0 or state["race_time"] > 0.3 or state["clock_running"] is not True:
@@ -998,7 +1135,7 @@ def main() -> int:
                         page.screenshot(path=str(build_adjustment_screenshot_path), full_page=True)
                         result["q011_build_adjustment_screenshot"] = str(build_adjustment_screenshot_path)
 
-                failure_page = browser.new_page()
+                failure_page = context.new_page()
                 failure_page.add_init_script(
                     """(() => {
                         try { delete Navigator.prototype.serviceWorker; } catch (_) {}
@@ -1053,6 +1190,7 @@ def main() -> int:
                 result["webgl2_fallback_screenshot"] = str(fallback_screenshot)
                 failure_page.close()
             finally:
+                context.close()
                 browser.close()
     finally:
         server.shutdown()

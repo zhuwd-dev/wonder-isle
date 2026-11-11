@@ -161,6 +161,12 @@ func _ui_scale_factor() -> float:
 	return minf(get_viewport_rect().size.y / maxf(_physical_viewport_size().y, 1.0), 3.0)
 
 func _physics_process(delta: float) -> void:
+	if screen == Screen.RACE and race_clock.paused:
+		# A hidden browser can keep receiving physics ticks. Freeze gameplay as well
+		# as the timer, and discard any joystick state that survived focus loss.
+		_clear_touch_input()
+		_emit_test_telemetry(delta)
+		return
 	animation_clock += delta
 	checkpoint_hint_time = maxf(0.0, checkpoint_hint_time - delta)
 	if screen == Screen.FINISH:
@@ -233,6 +239,7 @@ func _emit_test_telemetry(delta: float) -> void:
 		"jump_active": jump_motion.active,
 		"jump_height": jump_motion.height(),
 		"clock_running": race_clock.running,
+		"clock_paused": race_clock.paused,
 		"race_time": race_clock.elapsed_seconds(),
 		"message": message,
 		"animation": player_animation.animation,
@@ -389,8 +396,14 @@ func _clear_touch_input() -> void:
 func _notification(what: int) -> void:
 	if what in [NOTIFICATION_WM_WINDOW_FOCUS_OUT, NOTIFICATION_APPLICATION_PAUSED]:
 		race_clock.pause()
+		_clear_touch_input()
+		for action in ["move_left", "move_right", "move_up", "move_down"]:
+			if InputMap.has_action(action):
+				Input.action_release(action)
+		queue_redraw()
 	elif what in [NOTIFICATION_WM_WINDOW_FOCUS_IN, NOTIFICATION_APPLICATION_RESUMED]:
 		race_clock.resume()
+		queue_redraw()
 
 func _update_buttons() -> void:
 	if not is_instance_valid(action_button):
