@@ -106,6 +106,7 @@ func _run() -> void:
 	session.call("_start_race")
 	_expect(session.get("screen") == 2 and session.get("checkpoint_index") == 0, "replay resets race and checkpoint state")
 	_expect(session.get("jump_motion").height() == 0.0, "replay clears airborne state")
+	_test_resized_race()
 	session.call("_return_to_hub")
 	_expect(session.get("screen") == 0 and not session.get("race_clock").running, "returning to the hub releases race state")
 	session.call("_notification", Node.NOTIFICATION_WM_WINDOW_FOCUS_OUT)
@@ -148,6 +149,30 @@ func _run() -> void:
 	island.queue_free()
 	await process_frame
 	_quit_with_report()
+
+func _test_resized_race() -> void:
+	# Resize in both directions with an active checkpoint. The player's route,
+	# saved recovery point and obstacles must stay in the same coordinate frame.
+	session.call("_update_world_layout", Vector2(1280, 720))
+	session.set("player_position", session.call("_checkpoint_positions")[0])
+	session.call("_update_checkpoints")
+	var start_offset: Vector2 = session.get("player_position") - session.call("_race_start_position")
+	var low_offset: Vector2 = session.call("_low_hurdle_position") - session.call("_race_start_position")
+	var high_offset: Vector2 = session.call("_high_log_position") - session.call("_race_start_position")
+	for view in [Vector2(1630, 870), Vector2(844, 390), Vector2(932, 430), Vector2(1280, 720)]:
+		session.call("_update_world_layout", view)
+		var start: Vector2 = session.call("_race_start_position")
+		_expect((session.get("player_position") - start).is_equal_approx(start_offset), "resize preserves player progress at %s" % view)
+		_expect((session.call("_low_hurdle_position") - start).is_equal_approx(low_offset), "resize keeps low hurdle aligned at %s" % view)
+		_expect((session.call("_high_log_position") - start).is_equal_approx(high_offset), "resize keeps high log aligned at %s" % view)
+		session.set("player_position", session.get("player_position") + Vector2(20, 0))
+		session.call("_return_to_checkpoint")
+		_expect(session.get("player_position").is_equal_approx(session.call("_checkpoint_positions")[0]), "resized recovery returns to visible checkpoint at %s" % view)
+	# Before the first marker, the saved checkpoint is the start line.
+	session.call("_start_race")
+	session.call("_update_world_layout", Vector2(844, 390))
+	_expect(session.get("race_checkpoint").is_equal_approx(session.call("_race_start_position")), "resize before checkpoint preserves the saved start line")
+	session.call("_update_world_layout", Vector2(1280, 720))
 
 func _on_close_requested() -> void:
 	close_count += 1

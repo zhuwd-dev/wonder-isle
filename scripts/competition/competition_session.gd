@@ -120,6 +120,7 @@ func _make_button(label: String, button_size: Vector2) -> Button:
 
 func _layout_controls() -> void:
 	var view := get_viewport_rect().size
+	_update_world_layout(view)
 	var output_size := _physical_viewport_size()
 	var ui_scale := _ui_scale_factor()
 	back_button.size = Vector2(170, 60) * ui_scale
@@ -484,10 +485,10 @@ func _constrain_to_race_route(position: Vector2) -> Vector2:
 	return position
 
 func _low_hurdle_position() -> Vector2:
-	return Vector2(world_width * 0.625, 276.0)
+	return Vector2(world_width * 0.5 + 160.0, 276.0)
 
 func _high_log_position() -> Vector2:
-	return Vector2(world_width * 0.695, 285.0)
+	return Vector2(world_width * 0.5 + 249.6, 285.0)
 
 func _checkpoint_positions() -> Array[Vector2]:
 	var points := _race_points()
@@ -512,17 +513,24 @@ func _update_checkpoints() -> void:
 			_update_buttons()
 			return
 
+func _update_world_layout(view: Vector2) -> void:
+	# Route coordinates are centered in the expanded world. Rebase every saved
+	# race position together so recovery remains correct after a window resize.
+	var previous_world_width := world_width
+	world_scale = view.y / DESIGN_SIZE.y
+	world_width = maxf(DESIGN_SIZE.x, view.x / maxf(world_scale, 0.001))
+	var shift := (world_width - previous_world_width) * 0.5
+	if not is_zero_approx(shift):
+		player_position.x += shift
+		last_player_position = player_position
+		if screen != Screen.HUB:
+			race_checkpoint.x += shift
+	world_offset = Vector2(view.x * 0.5 - world_width * world_scale * 0.5, 0.0)
+
 func _draw() -> void:
 	var view := get_viewport_rect().size
 	draw_rect(Rect2(Vector2.ZERO, view), Color("bfe8ec"), true)
 	draw_circle(Vector2(view.x * 0.80, view.y * 0.13), minf(view.y * 0.10, 48.0), Color("ffdf93"))
-	var previous_world_width := world_width
-	world_scale = view.y / DESIGN_SIZE.y
-	world_width = maxf(DESIGN_SIZE.x, view.x / maxf(world_scale, 0.001))
-	if absf(world_width - previous_world_width) > 1.0:
-		player_position.x += (world_width - previous_world_width) * 0.5
-		last_player_position = player_position
-	world_offset = Vector2(view.x * 0.5 - world_width * world_scale * 0.5, 0.0)
 	draw_set_transform(world_offset, 0.0, Vector2.ONE * world_scale)
 	if screen == Screen.HUB:
 		_draw_hub()

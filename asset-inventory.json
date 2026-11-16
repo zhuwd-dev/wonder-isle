@@ -1,0 +1,770 @@
+[
+  {
+    "path": "assets/art/characters/bird.png",
+    "size": [
+      466,
+      595
+    ],
+    "mode": "RGBA",
+    "transparent_pct": 47.17,
+    "partial_alpha_pct": 52.45,
+    "transparent_colored_rgb_pct": 0.18,
+    "sha256": "4fc64050d6cc57accefcd9bed9ca185a480bf034f9a85366102063dd419c7fe3"
+  },
+  {
+    "path": "assets/art/characters/fox.png",
+    "size": [
+      445,
+      615
+    ],
+    "mode": "RGBA",
+    "transparent_pct": 40.32,
+    "partial_alpha_pct": 59.35,
+    "transparent_colored_rgb_pct": 0.04,
+    "sha256": "c0f0c81f8d51408c827f495cb5e67084dc43ae0a9556aa7df0464c80b93bc101"
+  },
+  {
+    "path": "assets/art/characters/mouse/idle_down/00.png",
+    "size": [
+      256,
+      256
+    ],
+    "mode": "RGBA",
+    "transparent_pct": 62.82,
+    "partial_alpha_pct": 36.38,
+    "transparent_colored_rgb_pct": 0.0,
+    "sha256": "5ab013c4f4266b12524c7acd883b6d64255139ed2ecced1b7b3ad41fb8d822e7"
+  },
+  {
+    "path": "assets/art/characters/mouse/idle_left/00.png",
+    "size": [
+      256,
+      256
+    ],
+    "mode": "RGBA",
+    "transparent_pct": 72.75,
+    "partial_alpha_pct": 26.57,
+    "transparent_colored_rgb_pct": 0.0,
+    "sha256": "f39dee4646c7e9245a9318d29e708d163cd1e7b2e49279a666e64233ca5b9a5f"
+  },
+  {
+    "path": "assets/art/characters/mouse/idle_right/00.png",
+    "size": [
+      256,
+      256
+    ],
+    "mode": "RGBA",
+    "transparent_pct": 72.41,
+    "partial_alpha_pct": 26.92,
+    "transparent_colored_rgb_pct": 0.0,
+    "sha256": "9d8c56b11774baccf25d5173a84e0254cbcf7ce03e691783cda867bc1b68ae8c"
+  },
+  {
+    "path": "assets/art/characters/mouse/idle_up/00.png",
+    "size": [
+      256,
+      256
+    ],
+    "mode": "RGBA",
+    "transparent_pct": 63.73,
+    "partial_alpha_pct": 35.44,
+    "transparent_colored_rgb_pct": 0.0,
+    "sha256": "8e99dd74f24cacd6d5a1f73534688cde01a64caf2f1c0c72d91f8ee0a77d2efb"
+  },
+  {
+    "path": "assets/art/characters/mouse/walk_down/00.png",
+    "size": [
+      256,
+      256
+    ],
+    "mode": "RGBA",
+    "transparent_pct": 63.13,
+    "partial_alpha_pct": 36.87,
+    "transparent_colored_rgb_pct": 0.0,
+    "sha256": "da05f6e058b54168c089409199bbd9e7b9e3e0d03974a1661d81a506ac71134f"
+  },
+  {
+    "path": "assets/art/characters/mouse/walk_down/01.png",
+    "size": [
+      256,
+      256
+    ],
+    "mode": "RGBA",
+    "transparent_pct": 62.83,
+    "partial_alpha_pct": 37.17,
+    "transparent_colored_rgb_pct": 0.0,
+    "sha256": "b52ad469e89bb82d2c6951be79db1d7ad1b8d75ed1c040c71e39a7b5930319a9"
+  },
+  {
+    "path": "assets/art/characters/mouse/walk_down/02.png",
+    "size": [
+      256,
+      256
+    ],
+    "mode": "RGBA",
+    "transparent_pct": 63.79,
+    "partial_alpha_pct": 36.2,
+    "transparent_colored_rgb_pct": 0.0,
+    "sha256": "ef710eaf318a44279419f126fe74a37ae946d65096f4518c2e83a31cbea9a3de"
+  },
+  {
+    "path": "assets/art/characters/mouse/walk_down/03.png",
+    "size": [
+      256,
+      256
+    ],
+    "mode": "RGBA",
+    "transparent_pct": 62.97,
+    "partial_alpha_pct": 37.03,
+    "transparent_colored_rgb_pct": 0.0,
+    "sha256": "d810b3a7d4f2cc1358ecf8abf8325b32084f5e8f32e5754643f248de5f15e092"
+  },
+  {
+    "path": "assets/art/characters/mouse/walk_down/04.png",
+    "size": [
+      256,
+      256
+    ],
+    "mode": "RGBA",
+    "transparent_pct": 62.97,
+    "partial_alpha_pct": 37.03,
+    "transparent_colored_rgb_pct": 0.0,
+    "sha256": "9287cbecb9a9d5e920dcb03d197f23a7c8e56adf174ca387c2241c020adae1ea"
+  },
+  {
+    "path": "assets/art/characters/mouse/walk_down/05.png",
+    "size": [
+      256,
+      256
+    ],
+    "mode": "RGBA",
+    "transparent_pct": 63.57,
+    "partial_alpha_pct": 36.43,
+    "transparent_colored_rgb_pct": 0.0,
+    "sha256": "0aad33ff3ee624ba53ae74022a7558a0f0bdbace63cb4bb4fffc10d9b317c72b"
+  },
+  {
+    "path": "assets/art/characters/mouse/walk_left/00.png",
+    "size": [
+      256,
+      256
+    ],
+    "mode": "RGBA",
+    "transparent_pct": 70.53,
+    "partial_alpha_pct": 29.47,
+    "transparent_colored_rgb_pct": 0.0,
+    "sha256": "ab9df285689f9db9459d980d5981dc416823363cb276e7059de9338a68ac9aec"
+  },
+  {
+    "path": "assets/art/characters/mouse/walk_left/01.png",
+    "size": [
+      256,
+      256
+    ],
+    "mode": "RGBA",
+    "transparent_pct": 71.38,
+    "partial_alpha_pct": 28.62,
+    "transparent_colored_rgb_pct": 0.0,
+    "sha256": "81c4c92897943b2d01abad36b3f10f42a0c9b536a86176da75a3f2c6608e1c34"
+  },
+  {
+    "path": "assets/art/characters/mouse/walk_left/02.png",
+    "size": [
+      256,
+      256
+    ],
+    "mode": "RGBA",
+    "transparent_pct": 72.42,
+    "partial_alpha_pct": 27.57,
+    "transparent_colored_rgb_pct": 0.0,
+    "sha256": "645a73794b4b6678fe076f155546596a130b17469c9874b3d4e551d8ff63a61e"
+  },
+  {
+    "path": "assets/art/characters/mouse/walk_left/03.png",
+    "size": [
+      256,
+      256
+    ],
+    "mode": "RGBA",
+    "transparent_pct": 70.8,
+    "partial_alpha_pct": 29.2,
+    "transparent_colored_rgb_pct": 0.0,
+    "sha256": "91bffbe08fd3f65892a898334838ae9c57b27b799694b18d1a2fe72beeab0fbe"
+  },
+  {
+    "path": "assets/art/characters/mouse/walk_left/04.png",
+    "size": [
+      256,
+      256
+    ],
+    "mode": "RGBA",
+    "transparent_pct": 72.04,
+    "partial_alpha_pct": 27.96,
+    "transparent_colored_rgb_pct": 0.0,
+    "sha256": "9fa3500be96a6ba32f3fa69c883e22b59c61ba321ce8d9d2ddd5d45d4d77af5a"
+  },
+  {
+    "path": "assets/art/characters/mouse/walk_left/05.png",
+    "size": [
+      256,
+      256
+    ],
+    "mode": "RGBA",
+    "transparent_pct": 70.59,
+    "partial_alpha_pct": 29.41,
+    "transparent_colored_rgb_pct": 0.0,
+    "sha256": "01f6a3602b24435a343a10fa79bcc30f0d94952ebbb911d1e9776c673e996ded"
+  },
+  {
+    "path": "assets/art/characters/mouse/walk_right/00.png",
+    "size": [
+      256,
+      256
+    ],
+    "mode": "RGBA",
+    "transparent_pct": 69.68,
+    "partial_alpha_pct": 30.29,
+    "transparent_colored_rgb_pct": 0.0,
+    "sha256": "461777c49995569cc38a227f6c3ddcfe0c59285fe07670e5efa6fa331f1900c2"
+  },
+  {
+    "path": "assets/art/characters/mouse/walk_right/01.png",
+    "size": [
+      256,
+      256
+    ],
+    "mode": "RGBA",
+    "transparent_pct": 70.78,
+    "partial_alpha_pct": 29.21,
+    "transparent_colored_rgb_pct": 0.0,
+    "sha256": "cc9bf65cabab02c811729ea54880cc032fd00c54019aab4ed1ceec743a2e9ffe"
+  },
+  {
+    "path": "assets/art/characters/mouse/walk_right/02.png",
+    "size": [
+      256,
+      256
+    ],
+    "mode": "RGBA",
+    "transparent_pct": 71.89,
+    "partial_alpha_pct": 28.1,
+    "transparent_colored_rgb_pct": 0.0,
+    "sha256": "0b52baff50509e223b78a3a10b47a2eed8b090e91d9e022775ea9cc1d62415b1"
+  },
+  {
+    "path": "assets/art/characters/mouse/walk_right/03.png",
+    "size": [
+      256,
+      256
+    ],
+    "mode": "RGBA",
+    "transparent_pct": 71.35,
+    "partial_alpha_pct": 28.64,
+    "transparent_colored_rgb_pct": 0.0,
+    "sha256": "3e617e7dda5f887a0f5c2c9814d92ddc174f7896f8dbc1df43554c776c68b8b8"
+  },
+  {
+    "path": "assets/art/characters/mouse/walk_right/04.png",
+    "size": [
+      256,
+      256
+    ],
+    "mode": "RGBA",
+    "transparent_pct": 70.99,
+    "partial_alpha_pct": 29.0,
+    "transparent_colored_rgb_pct": 0.0,
+    "sha256": "2ac4f9607544cd48b257f56609fc95dea96692f56961b549c844071bd799615c"
+  },
+  {
+    "path": "assets/art/characters/mouse/walk_right/05.png",
+    "size": [
+      256,
+      256
+    ],
+    "mode": "RGBA",
+    "transparent_pct": 71.11,
+    "partial_alpha_pct": 28.88,
+    "transparent_colored_rgb_pct": 0.0,
+    "sha256": "0638f0f0faf358acf056a29f8b78a882068c1623b00a6ea86566470c839691ef"
+  },
+  {
+    "path": "assets/art/characters/mouse/walk_up/00.png",
+    "size": [
+      256,
+      256
+    ],
+    "mode": "RGBA",
+    "transparent_pct": 62.81,
+    "partial_alpha_pct": 37.19,
+    "transparent_colored_rgb_pct": 0.0,
+    "sha256": "7c94a7bfbcaf660a2209be88245a1cd8db7f96e51dddc8a576a34fcee6ccfaa2"
+  },
+  {
+    "path": "assets/art/characters/mouse/walk_up/01.png",
+    "size": [
+      256,
+      256
+    ],
+    "mode": "RGBA",
+    "transparent_pct": 64.44,
+    "partial_alpha_pct": 35.56,
+    "transparent_colored_rgb_pct": 0.0,
+    "sha256": "113d2a20006dee28037f7e96abe796bb76e2bce479203cacbd1e8397e68340b8"
+  },
+  {
+    "path": "assets/art/characters/mouse/walk_up/02.png",
+    "size": [
+      256,
+      256
+    ],
+    "mode": "RGBA",
+    "transparent_pct": 64.13,
+    "partial_alpha_pct": 35.87,
+    "transparent_colored_rgb_pct": 0.0,
+    "sha256": "7975e6ac79a9f05717f207590c755c4dde60a9771de00688f769ccba63fa8c91"
+  },
+  {
+    "path": "assets/art/characters/mouse/walk_up/03.png",
+    "size": [
+      256,
+      256
+    ],
+    "mode": "RGBA",
+    "transparent_pct": 64.43,
+    "partial_alpha_pct": 35.57,
+    "transparent_colored_rgb_pct": 0.0,
+    "sha256": "35ad820319d447da512a91f2ca83d857d494243aed9fbc86e342ff3e33a4ed76"
+  },
+  {
+    "path": "assets/art/characters/mouse/walk_up/04.png",
+    "size": [
+      256,
+      256
+    ],
+    "mode": "RGBA",
+    "transparent_pct": 64.26,
+    "partial_alpha_pct": 35.74,
+    "transparent_colored_rgb_pct": 0.0,
+    "sha256": "1e16b89b5aad0b8408c4eced5b5feaa4eb958c05d4d118c33e1c921968fa769c"
+  },
+  {
+    "path": "assets/art/characters/mouse/walk_up/05.png",
+    "size": [
+      256,
+      256
+    ],
+    "mode": "RGBA",
+    "transparent_pct": 62.92,
+    "partial_alpha_pct": 37.08,
+    "transparent_colored_rgb_pct": 0.0,
+    "sha256": "ea7bec952b8caa78ea65b4193acd077b843e36390cddbf478df213f1c74fdf21"
+  },
+  {
+    "path": "assets/art/characters/mouse.png",
+    "size": [
+      471,
+      640
+    ],
+    "mode": "RGBA",
+    "transparent_pct": 42.82,
+    "partial_alpha_pct": 56.79,
+    "transparent_colored_rgb_pct": 0.1,
+    "sha256": "23d081f16a28b9b3588940be3a354bd5c55f098782f7f26cf03a2d32b8f49875"
+  },
+  {
+    "path": "assets/art/characters/rabbit.png",
+    "size": [
+      536,
+      594
+    ],
+    "mode": "RGBA",
+    "transparent_pct": 46.21,
+    "partial_alpha_pct": 53.62,
+    "transparent_colored_rgb_pct": 0.06,
+    "sha256": "055ea4897a5b4ef60fd98eae545cdea14dc40367a61e5748ac16ed5979ad1d6c"
+  },
+  {
+    "path": "assets/art/characters/turtle.png",
+    "size": [
+      504,
+      597
+    ],
+    "mode": "RGBA",
+    "transparent_pct": 33.38,
+    "partial_alpha_pct": 66.29,
+    "transparent_colored_rgb_pct": 0.12,
+    "sha256": "1943e3102a892308d0ea4b7991aa017f931ac9a11762bc576432157941b0eb53"
+  },
+  {
+    "path": "assets/art/competition/competition-hub.png",
+    "size": [
+      1672,
+      941
+    ],
+    "mode": "RGB",
+    "transparent_pct": 0.0,
+    "partial_alpha_pct": 0.0,
+    "transparent_colored_rgb_pct": 0.0,
+    "sha256": "3e82d8e06c01e4931e6dc1dfd3dca19d1d2d740c25645ff044f462be23e11e34"
+  },
+  {
+    "path": "assets/art/competition/meadow-log-obstacle.png",
+    "size": [
+      1774,
+      887
+    ],
+    "mode": "RGBA",
+    "transparent_pct": 74.45,
+    "partial_alpha_pct": 25.55,
+    "transparent_colored_rgb_pct": 0.0,
+    "sha256": "b9e140b955630c89e98140cad84815687ed0c4b495ec2228bb6f0bcbd5933fc5"
+  },
+  {
+    "path": "assets/art/competition/rainbow-meadow-race.png",
+    "size": [
+      1672,
+      941
+    ],
+    "mode": "RGB",
+    "transparent_pct": 0.0,
+    "partial_alpha_pct": 0.0,
+    "transparent_colored_rgb_pct": 0.0,
+    "sha256": "2c19203f4ae925bdaecac29a933b11a662c6548a693beac62253b6ae1c1c459a"
+  },
+  {
+    "path": "assets/art/decorations/garden-fence.png",
+    "size": [
+      256,
+      161
+    ],
+    "mode": "RGBA",
+    "transparent_pct": 47.86,
+    "partial_alpha_pct": 50.37,
+    "transparent_colored_rgb_pct": 0.4,
+    "sha256": "cf2dadb093f0c4fe1cbf06a8ee44477d5503f4bd691a13c01f612b2c4ed8cd58"
+  },
+  {
+    "path": "assets/art/decorations/garden-lantern.png",
+    "size": [
+      187,
+      256
+    ],
+    "mode": "RGBA",
+    "transparent_pct": 41.21,
+    "partial_alpha_pct": 57.26,
+    "transparent_colored_rgb_pct": 0.55,
+    "sha256": "6791ce1bfb5739a87684b81bc13188aaa36251a654811636ea5d7a284638df31"
+  },
+  {
+    "path": "assets/art/decorations/terracotta-planter.png",
+    "size": [
+      181,
+      240
+    ],
+    "mode": "RGBA",
+    "transparent_pct": 41.94,
+    "partial_alpha_pct": 56.36,
+    "transparent_colored_rgb_pct": 0.45,
+    "sha256": "dcce3e942f288c699b51bde24773ed6a0b4dd3a54522a315f5b7227688cb2b21"
+  },
+  {
+    "path": "assets/art/environment/bridge/bridge-deck-plank.png",
+    "size": [
+      1560,
+      1008
+    ],
+    "mode": "RGBA",
+    "transparent_pct": 71.18,
+    "partial_alpha_pct": 28.82,
+    "transparent_colored_rgb_pct": 0.01,
+    "sha256": "0312ff2caa46638a9ad3aab98f87c9157242c42a9b7b634dee37b49df35a1b06"
+  },
+  {
+    "path": "assets/art/environment/bridge/woodland-footbridge-complete.png",
+    "size": [
+      1560,
+      1008
+    ],
+    "mode": "RGBA",
+    "transparent_pct": 58.44,
+    "partial_alpha_pct": 41.56,
+    "transparent_colored_rgb_pct": 0.01,
+    "sha256": "c3c59ecb564485b3f16e532b1a9b773e259833ee0aa94cc1838802f9826cfe2b"
+  },
+  {
+    "path": "assets/art/environment/bridge/woodland-footbridge-damaged.png",
+    "size": [
+      1560,
+      1008
+    ],
+    "mode": "RGBA",
+    "transparent_pct": 59.97,
+    "partial_alpha_pct": 40.02,
+    "transparent_colored_rgb_pct": 0.03,
+    "sha256": "3a843b8e7f947d881fcfeb1cd175f3a6bcefea66145c59699e98cdf4d7f31623"
+  },
+  {
+    "path": "assets/art/environment/buildings/birdhouse-complete.png",
+    "size": [
+      297,
+      400
+    ],
+    "mode": "RGBA",
+    "transparent_pct": 47.61,
+    "partial_alpha_pct": 51.59,
+    "transparent_colored_rgb_pct": 0.16,
+    "sha256": "d23a18363b497c129a503df3ebc74961edc50dcef036e76d9422e7ba9f34346c"
+  },
+  {
+    "path": "assets/art/environment/buildings/birdhouse-construction.png",
+    "size": [
+      300,
+      400
+    ],
+    "mode": "RGBA",
+    "transparent_pct": 54.11,
+    "partial_alpha_pct": 44.82,
+    "transparent_colored_rgb_pct": 0.33,
+    "sha256": "23a52e8cdd2f33c5b4a0526210acb2b3ae6a32c8c22c3f059bfd4cb3cf260e17"
+  },
+  {
+    "path": "assets/art/environment/buildings/fox-cottage-complete.png",
+    "size": [
+      613,
+      560
+    ],
+    "mode": "RGBA",
+    "transparent_pct": 31.75,
+    "partial_alpha_pct": 67.95,
+    "transparent_colored_rgb_pct": 0.05,
+    "sha256": "364a0ada3f282252692cee470d623f5b51622581d1987132eb146cbb83db16d7"
+  },
+  {
+    "path": "assets/art/environment/buildings/fox-cottage-construction.png",
+    "size": [
+      626,
+      560
+    ],
+    "mode": "RGBA",
+    "transparent_pct": 29.44,
+    "partial_alpha_pct": 70.11,
+    "transparent_colored_rgb_pct": 0.11,
+    "sha256": "068316bfe115b00d31b4a50bb7790b4d5908b521d06628bbed21e4175173b073"
+  },
+  {
+    "path": "assets/art/environment/farmland/garden-soil-bed.png",
+    "size": [
+      800,
+      294
+    ],
+    "mode": "RGBA",
+    "transparent_pct": 26.07,
+    "partial_alpha_pct": 73.87,
+    "transparent_colored_rgb_pct": 0.04,
+    "sha256": "7ad7c16064748aca1fdde63391356a269f773b5aa44f4380efa7e1d80c76edcf"
+  },
+  {
+    "path": "assets/art/environment/floating-garden-bg.jpg",
+    "size": [
+      1280,
+      720
+    ],
+    "mode": "RGB",
+    "transparent_pct": 0.0,
+    "partial_alpha_pct": 0.0,
+    "transparent_colored_rgb_pct": 0.0,
+    "sha256": "c2751a060b92ac41125ef7bee473d4f4bd6e20842f5c92e1daecd0daf9ff71c9"
+  },
+  {
+    "path": "assets/art/environment/pond/natural-pond.png",
+    "size": [
+      840,
+      497
+    ],
+    "mode": "RGBA",
+    "transparent_pct": 26.98,
+    "partial_alpha_pct": 72.94,
+    "transparent_colored_rgb_pct": 0.03,
+    "sha256": "9a185c2b732bd2c18d54897be3f0f2173a5e078e8108a126e5c4adb72d041681"
+  },
+  {
+    "path": "assets/art/environment/woodland-footbridge.png",
+    "size": [
+      640,
+      414
+    ],
+    "mode": "RGBA",
+    "transparent_pct": 62.63,
+    "partial_alpha_pct": 37.37,
+    "transparent_colored_rgb_pct": 2.18,
+    "sha256": "d48e75536fa45930d07ee13726a602b8afcfbdf5b2a3b10e4a997d276eb6a374"
+  },
+  {
+    "path": "assets/art/plants/flowering-unlocked.png",
+    "size": [
+      128,
+      128
+    ],
+    "mode": "RGBA",
+    "transparent_pct": 57.66,
+    "partial_alpha_pct": 39.69,
+    "transparent_colored_rgb_pct": 0.0,
+    "sha256": "da305271e46b081075c148a99dadb16c2cd44158edabb92ae8e959a1bf4eeb8a"
+  },
+  {
+    "path": "assets/art/plants/flowering.png",
+    "size": [
+      128,
+      128
+    ],
+    "mode": "RGBA",
+    "transparent_pct": 66.63,
+    "partial_alpha_pct": 31.14,
+    "transparent_colored_rgb_pct": 0.0,
+    "sha256": "5e418c168c3faca3302ab1241fcf07b0f7b1f6f8ecdf8b111eb07d8c4a477293"
+  },
+  {
+    "path": "assets/art/plants/growing.png",
+    "size": [
+      128,
+      128
+    ],
+    "mode": "RGBA",
+    "transparent_pct": 72.02,
+    "partial_alpha_pct": 26.01,
+    "transparent_colored_rgb_pct": 0.0,
+    "sha256": "0d3dc9fd84901168407d0b29fca84ee4d3930d2f580e5c8baf523fd9d06feda9"
+  },
+  {
+    "path": "assets/art/plants/harvested-unlocked.png",
+    "size": [
+      128,
+      128
+    ],
+    "mode": "RGBA",
+    "transparent_pct": 68.18,
+    "partial_alpha_pct": 29.33,
+    "transparent_colored_rgb_pct": 0.0,
+    "sha256": "d6817cbc680159fab9f97a23a86e158db8503f7230ef55e67c901702170e5dd3"
+  },
+  {
+    "path": "assets/art/plants/harvested.png",
+    "size": [
+      128,
+      128
+    ],
+    "mode": "RGBA",
+    "transparent_pct": 73.28,
+    "partial_alpha_pct": 24.56,
+    "transparent_colored_rgb_pct": 0.0,
+    "sha256": "0fa0f3c590c32f6697451950238c9d229e681660e034d4d9c41c15411648678c"
+  },
+  {
+    "path": "assets/art/plants/seedling.png",
+    "size": [
+      128,
+      128
+    ],
+    "mode": "RGBA",
+    "transparent_pct": 82.98,
+    "partial_alpha_pct": 15.36,
+    "transparent_colored_rgb_pct": 0.0,
+    "sha256": "7437883e96d67fb20a8a1e9e38c868be6edb19cb98c25081b3b9d408f01ac5f5"
+  },
+  {
+    "path": "assets/art/props/island-wood-crate.png",
+    "size": [
+      313,
+      320
+    ],
+    "mode": "RGBA",
+    "transparent_pct": 37.33,
+    "partial_alpha_pct": 61.99,
+    "transparent_colored_rgb_pct": 0.02,
+    "sha256": "34b8a9f371c78174a1fb0b3977a83e77aad66a9dbd16a6a07c465a80ca976370"
+  },
+  {
+    "path": "assets/art/props/river-stone.png",
+    "size": [
+      110,
+      80
+    ],
+    "mode": "RGBA",
+    "transparent_pct": 23.85,
+    "partial_alpha_pct": 74.03,
+    "transparent_colored_rgb_pct": 0.23,
+    "sha256": "1ccf9c6798479c804032963a34d6d7164035e9f774406ab518defc786cf6c7a7"
+  },
+  {
+    "path": "assets/art/props/seed-pouch.png",
+    "size": [
+      1560,
+      1008
+    ],
+    "mode": "RGBA",
+    "transparent_pct": 52.17,
+    "partial_alpha_pct": 47.81,
+    "transparent_colored_rgb_pct": 0.02,
+    "sha256": "37f731d6a56dc431b758123c7dcb7a996056399b256bf7aeb556feec5b497c85"
+  },
+  {
+    "path": "assets/art/props/watering-can.png",
+    "size": [
+      128,
+      128
+    ],
+    "mode": "RGBA",
+    "transparent_pct": 63.53,
+    "partial_alpha_pct": 34.64,
+    "transparent_colored_rgb_pct": 0.0,
+    "sha256": "98b8029027a4ec647cba357c2c5eef29ec2e9a11af479ad94a2bb8ed1d4c12a2"
+  },
+  {
+    "path": "assets/art/props/weathered-planks.png",
+    "size": [
+      320,
+      287
+    ],
+    "mode": "RGBA",
+    "transparent_pct": 52.8,
+    "partial_alpha_pct": 46.62,
+    "transparent_colored_rgb_pct": 0.07,
+    "sha256": "27c477fdc0f483726f9f1378f67f557ef7b0200782e0a6dd952969eb42c077e2"
+  },
+  {
+    "path": "assets/art/pwa/apple-touch-icon.png",
+    "size": [
+      180,
+      180
+    ],
+    "mode": "RGBA",
+    "transparent_pct": 0.0,
+    "partial_alpha_pct": 20.4,
+    "transparent_colored_rgb_pct": 0.0,
+    "sha256": "06c5ecd71fe9213d35b36d4d599e9a211473e61bc0157ccf62e06391ee36d0bf"
+  },
+  {
+    "path": "assets/art/pwa/icon-192.png",
+    "size": [
+      192,
+      192
+    ],
+    "mode": "RGBA",
+    "transparent_pct": 0.0,
+    "partial_alpha_pct": 19.78,
+    "transparent_colored_rgb_pct": 0.0,
+    "sha256": "829d4a1fec965310f39859e6902bacae2003b5f7212ffe8509b9865c9c305988"
+  },
+  {
+    "path": "assets/art/pwa/icon-512.png",
+    "size": [
+      512,
+      512
+    ],
+    "mode": "RGBA",
+    "transparent_pct": 0.0,
+    "partial_alpha_pct": 16.92,
+    "transparent_colored_rgb_pct": 0.0,
+    "sha256": "d788a320d3ebfb0390b3acdfc80665012315675a515cf5a904c34da1f5f344ad"
+  }
+]

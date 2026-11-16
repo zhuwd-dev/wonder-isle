@@ -411,8 +411,13 @@ def main() -> int:
                     def touch_stick_direction(dx, dy):
                         nonlocal stick_point
                         length = max((dx * dx + dy * dy) ** 0.5, 1.0)
-                        x = stick_origin[0] + round(dx / length * 48)
-                        y = stick_origin[1] + round(dy / length * 48)
+                        # Ease the real joystick near a waypoint to avoid
+                        # overshooting between telemetry samples. Stay outside
+                        # the game's 14-unit deadzone without changing arrival
+                        # tolerances or bypassing the ordinary touch input path.
+                        radius = min(48, max(18, length * 0.35)) * page.viewport_size["height"] / 720
+                        x = stick_origin[0] + round(dx / length * radius)
+                        y = stick_origin[1] + round(dy / length * radius)
                         stick_point = (x, y)
                         points = [{"x": x, "y": y, "id": 1, "radiusX": 8, "radiusY": 8, "force": 1}]
                         if jump_point is not None:
@@ -630,15 +635,29 @@ def main() -> int:
                             raise AssertionError(f"R01 back/checkpoint controls overlap at {label}: back={back_rect}, checkpoint={checkpoint_rect}")
                         if checkpoint_rect[1] + checkpoint_rect[3] >= jump_rect[1]:
                             raise AssertionError(f"R01 checkpoint and jump controls overlap at {label}")
+                        expected_checkpoint = (resized_state["world_width"] * 0.5 - 15, 270)
+                        if any(abs(actual - expected) > 2 for actual, expected in zip(resized_state["race_checkpoint"], expected_checkpoint)):
+                            raise AssertionError(f"R01 saved checkpoint drifted after resize at {label}: {resized_state}")
+                        page.mouse.click(round(checkpoint_rect[0] + checkpoint_rect[2] * 0.5),
+                                         round(checkpoint_rect[1] + checkpoint_rect[3] * 0.5))
+                        page.wait_for_timeout(150)
+                        recovered_state = navigator.competition_position()
+                        if abs(recovered_state["x"] - expected_checkpoint[0]) > 2 or abs(recovered_state["y"] - expected_checkpoint[1]) > 2:
+                            raise AssertionError(f"R01 resized recovery missed the visible checkpoint at {label}: {recovered_state}")
                         page.screenshot(path=str(artifact_dir / f"web-v21-r01-checkpoint-{label}.png"), full_page=True)
                     page.set_viewport_size({"width": 844, "height": 390})
                     page.wait_for_timeout(400)
                     state = navigator.competition_position()
                     state = walk_competition_to((center_x + 115, 276))
-                    state = touch_walk_to((center_x + 250, 285), jump=True)
+                    # Land between the low hurdle (+160) and the high log
+                    # (+249.6), then take the lower lane around the high log.
+                    # Approach from the southern lane and preserve that
+                    # offset while jumping over the low hurdle, clear of the
+                    # nearby high-log collision radius.
+                    state = touch_walk_to((center_x + 205, 330), jump=True)
                     mark_race_stage("low_hurdle_cleared", state)
                     page.screenshot(path=str(artifact_dir / "web-v21-r01-obstacle-mobile.png"), full_page=True)
-                    for waypoint in ((center_x + 250, 330), (center_x + 300, 340), (center_x + 360, 320), (center_x + 385, 225), (center_x + 410, 150)):
+                    for waypoint in ((center_x + 205, 340), (center_x + 300, 340), (center_x + 360, 320), (center_x + 385, 225), (center_x + 410, 150)):
                         state = walk_competition_to(waypoint)
                         if waypoint == (center_x + 300, 340):
                             mark_race_stage("high_log_passed", state)
@@ -1034,14 +1053,13 @@ def main() -> int:
                     page.screenshot(path=str(ending_screenshot_path), full_page=True)
 
                     page.mouse.click(800, 600)
-                    # Walk around the cottage on the left island, then approach
-                    # the rabbit from the north. The former eastward sweep
-                    # relied on crossing the river directly, which the
-                    # production collision map correctly prevents.
-                    for key, duration_ms in (("w", 380), ("d", 1_300), ("w", 650)):
-                        page.keyboard.down(key)
-                        page.wait_for_timeout(duration_ms)
-                        page.keyboard.up(key)
+                    # Follow the open grass above the cottage using observed
+                    # coordinates, then approach until interaction is ready.
+                    # Fixed key durations can stop outside the rabbit's range
+                    # on a slower browser and falsely report a save failure.
+                    navigator.axis("y", 340)
+                    navigator.axis("x", 590)
+                    navigator.move_until_ready("w", "庆祝")
                     # Retry the right-thumb interaction in place to tolerate
                     # small browser frame-rate differences without walking
                     # away from the target.
