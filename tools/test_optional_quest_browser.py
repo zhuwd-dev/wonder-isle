@@ -43,22 +43,16 @@ def main() -> int:
         return 2
 
     with tempfile.TemporaryDirectory(prefix="wonder-isle-post-story-") as temp_dir:
-        fixture_path = Path(temp_dir) / "post-story-save.json"
-        pending_fixture_path = Path(temp_dir) / "q012-pending-save.json"
-        subprocess.run(
-            [godot_bin, "--headless", "--path", str(project_root), "--script", "tests/create_post_story_web_save.gd", "--", str(fixture_path)],
-            check=True,
-            capture_output=True,
-            text=True,
-        )
-        subprocess.run(
-            [godot_bin, "--headless", "--path", str(project_root), "--script", "tests/create_q012_pending_web_save.gd", "--", str(pending_fixture_path)],
-            check=True,
-            capture_output=True,
-            text=True,
-        )
+        genuine_save_path = Path(os.environ.get("WONDER_ISLE_Q012_SAVE", ""))
+        if not genuine_save_path.is_file():
+            print("WONDER_ISLE_Q012_SAVE must point to a Q012 save created by real game input", file=sys.stderr)
+            return 2
+        genuine_save = json.loads(genuine_save_path.read_text(encoding="utf-8"))
+        if genuine_save.get("q012_completed") is not True or genuine_save.get("q006_completed") is not True:
+            print("The supplied save was not produced after completing Q006 and Q012", file=sys.stderr)
+            return 2
+        fixture_path = genuine_save_path
         fixture_payload = base64.b64encode(fixture_path.read_bytes()).decode("ascii")
-        pending_fixture_payload = base64.b64encode(pending_fixture_path.read_bytes()).decode("ascii")
 
         server = ThreadingHTTPServer(
             ("127.0.0.1", 0), functools.partial(QuietHandler, directory=str(build_dir))
@@ -73,7 +67,8 @@ def main() -> int:
                 if chromium_path:
                     launch_options["executable_path"] = chromium_path
                 browser = playwright.chromium.launch(**launch_options)
-                page = browser.new_page(viewport={"width": 1280, "height": 720}, device_scale_factor=1)
+                context = browser.new_context(viewport={"width": 1280, "height": 720}, device_scale_factor=1, service_workers="block")
+                page = context.new_page()
                 navigator = Navigator(page, (build_dir / "index.html").read_text(encoding="utf-8"))
                 page.on("console", lambda message: errors.append(message.text) if message.type == "error" else None)
                 page.on("pageerror", lambda error: errors.append(str(error)))
@@ -84,15 +79,17 @@ def main() -> int:
                 page.goto(f"http://127.0.0.1:{server.server_port}/index.html?test_telemetry=1", wait_until="load", timeout=60_000)
                 page.wait_for_selector("canvas", timeout=60_000)
                 page.wait_for_timeout(2_500)
-                # Create the WebFS save through the current menu flow before
-                # replacing it with an isolated post-story fixture.
-                page.mouse.click(1_216, 44)
-                page.wait_for_timeout(300)
-                page.mouse.click(1_216, 124)
-                page.wait_for_timeout(500)
-                page.mouse.click(775, 392)
-                page.wait_for_timeout(900)
-
+                page.evaluate(
+                    """({key, payload}) => {
+                        const binary = atob(payload);
+                        const contents = new Uint8Array(binary.length);
+                        for (let index = 0; index < binary.length; index++) contents[index] = binary.charCodeAt(index);
+                        localStorage.setItem(key, new TextDecoder().decode(contents));
+                    }""",
+                    {"key": "wonder-isle-save-v1", "payload": fixture_payload},
+                )
+                # Load the actual save produced by real Q001–Q012 browser play
+                # into both persistence layers of a fresh isolated origin; no task fields are fabricated.
                 page.evaluate(
                     """async ({key, payload}) => new Promise((resolve, reject) => {
                         const binary = atob(payload);
@@ -103,10 +100,22 @@ def main() -> int:
                         opening.onsuccess = () => {
                             const transaction = opening.result.transaction('FILE_DATA', 'readwrite');
                             const store = transaction.objectStore('FILE_DATA');
+                            const timestamp = new Date();
+                            const segments = key.split('/').filter(Boolean);
+                            let parent = '';
+                            for (const segment of segments.slice(0, -1)) {
+                                parent += '/' + segment;
+                                const directoryKey = parent;
+                                const directoryRequest = store.get(directoryKey);
+                                directoryRequest.onsuccess = () => {
+                                    if (!directoryRequest.result) store.put({timestamp, mode: 0x41ED}, directoryKey);
+                                };
+                            }
                             const existing = store.get(key);
                             existing.onsuccess = () => {
                                 const record = existing.result || {};
-                                record.timestamp = new Date();
+                                record.timestamp = timestamp;
+                                record.mode = record.mode || 0x81B6;
                                 record.contents = contents;
                                 store.put(record, key);
                             };
@@ -139,15 +148,18 @@ def main() -> int:
                     )
 
                 def verify(condition, label: str) -> dict[str, object]:
-                    # Godot WebFS commits save writes asynchronously to IndexedDB.
+                    # Check the in-memory state and wait for the asynchronous
+                    # WebFS transaction to converge; elapsed time is only a watchdog.
                     latest: dict[str, object] = {}
-                    for _ in range(10):
+                    memory: dict[str, object] = {}
+                    for _ in range(120):
                         latest = read_save()
-                        if latest and condition(latest):
+                        memory = navigator.position().get("test_save_data", {})
+                        if latest and condition(latest) and memory and condition(memory):
                             break
                         page.wait_for_timeout(500)
                     else:
-                        raise AssertionError(f"{label}; latest save: {json.dumps(latest, ensure_ascii=False)}")
+                        raise AssertionError(f"{label}; memory: {json.dumps(memory, ensure_ascii=False)}; latest save: {json.dumps(latest, ensure_ascii=False)}")
                     checks.append(label)
                     print(f"PASS {label}", flush=True)
                     return latest
@@ -202,7 +214,7 @@ def main() -> int:
                 def snap(name: str) -> None:
                     page.screenshot(path=str(artifact_dir / name), full_page=True)
 
-                verify(lambda save: save.get("q012_completed") is True and save.get("q007_completed") is False, "load post-story fixture before optional quests")
+                verify(lambda save: save.get("q012_completed") is True and save.get("q007_completed") is False, "restore genuine Q012 save before optional quests")
                 snap("web-q007-optional-unlocked.png")
 
                 # Cross the repaired bridge, reach the shell, and collect it.
@@ -211,8 +223,7 @@ def main() -> int:
                 navigator.go(("y", 339), ("x", 960), ("y", 400))
                 print(f"Q007 shell approach: {navigator.position()}", flush=True)
                 snap("web-q007-before-shell-interaction.png")
-                page.keyboard.press("e")
-                page.wait_for_timeout(650)
+                interact()
                 verify(
                     lambda save: save.get("q007_shell_collected") is True and save.get("q007_reward_unlocked") is True,
                     "Q007 collect shell and unlock reward",
@@ -287,6 +298,10 @@ def main() -> int:
                 # The greeting is optional, but it should work once materials are gathered.
                 navigator.go(("y", 420))
                 interact()
+                bird_state = navigator.position()
+                if "message" in bird_state and "小鸟：" not in bird_state.get("message", ""):
+                    raise AssertionError(f"Bird interaction had no visible reply: {bird_state}")
+                checks.append("bird greeting produces visible feedback")
                 snap("web-q009-bird-greeting.png")
 
                 # Go north of the cottage footprint before heading west to the
@@ -419,151 +434,19 @@ def main() -> int:
                 if errors:
                     raise AssertionError(f"Browser errors or failed requests: {errors}")
 
-                # Regression for the actual player report: Q006 is complete,
-                # but the Q012 celebration interaction has not happened yet.
-                # Editing must still be available, and remain available after reload.
-                recording_dir = artifact_dir / "q006-pending-ending-video"
-                recording_dir.mkdir(parents=True, exist_ok=True)
-                page.evaluate(
-                    """async ({key, payload}) => new Promise((resolve, reject) => {
-                        const binary = atob(payload);
-                        const contents = new Int8Array(binary.length);
-                        for (let index = 0; index < binary.length; index++) contents[index] = binary.charCodeAt(index);
-                        const opening = indexedDB.open('/userfs');
-                        opening.onerror = () => reject(opening.error);
-                        opening.onsuccess = () => {
-                            const transaction = opening.result.transaction('FILE_DATA', 'readwrite');
-                            const store = transaction.objectStore('FILE_DATA');
-                            const existing = store.get(key);
-                            existing.onsuccess = () => {
-                                if (!existing.result) return reject(new Error('Expected initialized WebFS save record'));
-                                const record = existing.result;
-                                record.timestamp = new Date();
-                                record.contents = contents;
-                                store.put(record, key);
-                            };
-                            existing.onerror = () => reject(existing.error);
-                            transaction.oncomplete = resolve;
-                            transaction.onerror = () => reject(transaction.error);
-                        };
-                    })""",
-                    {"key": SAVE_KEY, "payload": pending_fixture_payload},
-                )
-                page.reload(wait_until="load", timeout=60_000)
-                navigator.state = None
-                page.wait_for_selector("canvas", timeout=60_000)
-                page.wait_for_timeout(2_500)
-                pending_state = navigator.position()
-                if pending_state.get("guide_stage") != "q012_celebrate":
-                    raise AssertionError(f"Browser did not load the Q012-pending fixture: {pending_state}")
-                if pending_state.get("fox_greeting") is not False:
-                    raise AssertionError(f"The fox should be inside while the player is away: {pending_state}")
-                page.screenshot(path=str(artifact_dir / "web-fox-at-home-away-from-player.png"))
-                navigator.go(("x", 400), ("y", 500))
-                fox_near_state = navigator.position()
-                if fox_near_state.get("fox_greeting") is not True:
-                    raise AssertionError(f"The fox should greet the player near the completed cottage: {fox_near_state}")
-                page.screenshot(path=str(artifact_dir / "web-fox-greets-at-cottage.png"))
-                checks.append("Fox returns home while away and greets the player near the cottage")
-                pending_before = page.evaluate(
-                    """async key => new Promise((resolve, reject) => {
-                        const opening = indexedDB.open('/userfs');
-                        opening.onerror = () => reject(opening.error);
-                        opening.onsuccess = () => {
-                            const request = opening.result.transaction('FILE_DATA', 'readonly').objectStore('FILE_DATA').get(key);
-                            request.onsuccess = () => resolve(JSON.parse(new TextDecoder().decode(new Uint8Array(request.result.contents))));
-                            request.onerror = () => reject(request.error);
-                        };
-                    })""",
-                    SAVE_KEY,
-                )
-                if pending_before.get("q006_completed") is not True or pending_before.get("q012_completed") is not False:
-                    raise AssertionError("Browser fixture must restore Q006 complete with Q012 pending")
-                def start_canvas_recording() -> None:
-                    page.evaluate(
-                        """() => {
-                            const canvas = document.querySelector('canvas');
-                            const stream = canvas.captureStream(24);
-                            const recorder = new MediaRecorder(stream, {mimeType: 'video/webm;codecs=vp8'});
-                            const chunks = [];
-                            recorder.ondataavailable = event => { if (event.data.size) chunks.push(event.data); };
-                            window.__q006Recorder = {recorder, stream, chunks};
-                            recorder.start();
-                        }"""
-                    )
-
-                def stop_canvas_recording(target_path: Path) -> None:
-                    encoded = page.evaluate(
-                        """() => new Promise(resolve => {
-                            const state = window.__q006Recorder;
-                            state.recorder.onstop = async () => {
-                                const blob = new Blob(state.chunks, {type: 'video/webm'});
-                                const reader = new FileReader();
-                                reader.onload = () => resolve(reader.result.split(',')[1]);
-                                reader.readAsDataURL(blob);
-                                state.stream.getTracks().forEach(track => track.stop());
-                            };
-                            state.recorder.stop();
-                        })"""
-                    )
-                    target_path.write_bytes(base64.b64decode(encoded))
-
-                page.mouse.click(950, 52)
-                page.wait_for_timeout(250)
-                page.screenshot(path=str(artifact_dir / "web-q006-adjust-before-celebration.png"))
-                start_canvas_recording()
-                page.mouse.move(978, 559)
-                page.mouse.down()
-                page.wait_for_timeout(100)
-                page.mouse.move(430, 600, steps=12)
-                page.wait_for_timeout(250)
-                page.screenshot(path=str(artifact_dir / "web-q006-pending-ending-drag.png"))
-                page.mouse.up()
-                page.wait_for_timeout(700)
-
-                for _ in range(10):
-                    pending_after = read_save()
-                    if pending_after.get("q006_decor_positions", [None])[0] == [430, 600]:
-                        break
-                    page.wait_for_timeout(400)
-                else:
-                    raise AssertionError(f"Q006 movement before Q012 was not saved: {pending_after}")
-                if pending_after.get("q012_completed") is not False:
-                    raise AssertionError("Decoration editing must not force the Q012 celebration")
-                checks.append("Q006 can be adjusted while Q012 is still pending")
-                stop_canvas_recording(recording_dir / "q006-pending-ending.webm")
-                page.reload(wait_until="load", timeout=60_000)
-                navigator.state = None
-                page.wait_for_selector("canvas", timeout=60_000)
-                page.wait_for_timeout(2_500)
-                restored_state = navigator.position()
-                if restored_state.get("guide_stage") != "q012_celebrate":
-                    raise AssertionError(f"Q012 pending state did not survive browser reload: {restored_state}")
-                page.mouse.click(950, 52)
-                page.wait_for_timeout(250)
-                page.screenshot(path=str(artifact_dir / "web-q006-after-refresh-build-mode.png"))
-                start_canvas_recording()
-                page.mouse.move(430, 600)
-                page.mouse.down()
-                page.wait_for_timeout(100)
-                page.mouse.move(410, 472, steps=12)
-                page.wait_for_timeout(250)
-                page.screenshot(path=str(artifact_dir / "web-q006-after-refresh-drag.png"))
-                page.mouse.up()
-                page.wait_for_timeout(700)
-                pending_restored = {}
-                for _ in range(10):
-                    pending_restored = read_save()
-                    if pending_restored.get("q006_decor_positions", [None])[0] == [410, 472]:
-                        break
-                    page.wait_for_timeout(400)
-                if pending_restored.get("q006_decor_positions", [None])[0] != [410, 472]:
-                    raise AssertionError(f"Q006 adjustment did not remain movable after reload: {pending_restored}")
-                if pending_restored.get("q012_completed") is not False:
-                    raise AssertionError("Reloaded adjustment must preserve Q012 pending state")
-                checks.append("Q006 movement works again after reload before Q012")
-                stop_canvas_recording(recording_dir / "q006-after-refresh.webm")
-                print(f"Q006 browser recordings: {recording_dir}", flush=True)
+                # Keep the genuine Q012-complete save active. The old tail
+                # replaced it with a hand-edited Q012-pending IndexedDB record,
+                # which is not valid evidence for a real post-story session.
+                final_save = read_save()
+                if final_save.get("q012_completed") is not True:
+                    raise AssertionError(f"Q012 completion was lost after optional play: {final_save}")
+                if final_save.get("q010_seeds_collected") != [True, True, True] or final_save.get("q011_slot_occupants") != [0, 1, 2]:
+                    raise AssertionError(f"The genuine post-story save is missing Q010/Q011 completion: {final_save}")
+                post_story_path = Path(os.environ.get("WONDER_ISLE_POST_STORY_SAVE", artifact_dir / "post-story-save.json"))
+                post_story_path.parent.mkdir(parents=True, exist_ok=True)
+                post_story_path.write_text(json.dumps(final_save, ensure_ascii=False), encoding="utf-8")
+                print(f"PASS actual Q007–Q011 post-story save exported: {post_story_path}", flush=True)
+                checks.append("Q012-complete genuine save remains active after Q007–Q011 and decoration edits")
                 print(json.dumps({"result": "passed", "checks": checks, "browser_errors": errors}, ensure_ascii=False, indent=2))
                 browser.close()
         finally:

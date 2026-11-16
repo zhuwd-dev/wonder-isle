@@ -28,6 +28,15 @@ class QuietHandler(SimpleHTTPRequestHandler):
 def inject_save_fixture(page, save_key: str, fixture_path: Path) -> None:
     fixture_base64 = base64.b64encode(fixture_path.read_bytes()).decode("ascii")
     page.evaluate(
+        """payload => {
+            const binary = atob(payload);
+            const contents = new Uint8Array(binary.length);
+            for (let index = 0; index < binary.length; index++) contents[index] = binary.charCodeAt(index);
+            localStorage.setItem("wonder-isle-save-v1", new TextDecoder().decode(contents));
+        }""",
+        fixture_base64,
+    )
+    page.evaluate(
         """async ({key, payload}) => new Promise((resolve, reject) => {
             const binary = atob(payload);
             const contents = new Int8Array(binary.length);
@@ -131,7 +140,7 @@ def main() -> int:
             if chromium_path:
                 launch_options["executable_path"] = chromium_path
             browser = playwright.chromium.launch(**launch_options)
-            context = browser.new_context(viewport={"width": 1280, "height": 720}, device_scale_factor=1)
+            context = browser.new_context(viewport={"width": 1280, "height": 720}, device_scale_factor=1, service_workers="block")
             try:
                 page = context.new_page()
                 page.on(

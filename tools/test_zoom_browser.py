@@ -25,7 +25,7 @@ def main():
             if os.environ.get('CHROMIUM_PATH'):
                 options['executable_path'] = os.environ['CHROMIUM_PATH']
             browser = p.chromium.launch(**options)
-            context = browser.new_context(viewport={'width': 1280, 'height': 720}, has_touch=True)
+            context = browser.new_context(viewport={'width': 1280, 'height': 720}, has_touch=True, service_workers='block')
             page = context.new_page()
             nav = Navigator(page, (build / 'index.html').read_text())
             errors = []

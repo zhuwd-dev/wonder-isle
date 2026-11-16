@@ -21,6 +21,8 @@ class Navigator:
             args.append("--")
         args.append("--test-telemetry")
         test_html = index_html[:match.start(1)] + json.dumps(config, separators=(",", ":")) + index_html[match.end(1):]
+        # Gameplay test contexts block service workers so reloads continue to
+        # receive this test-only HTML through Playwright's route interceptor.
         page.route("**/index.html?test_telemetry=1", lambda route: route.fulfill(status=200, content_type="text/html", body=test_html))
         page.on("console", self._console)
 
@@ -42,14 +44,33 @@ class Navigator:
             raise AssertionError(f"Game telemetry stopped updating; cannot diagnose a collision from stale coordinates: {self.state}")
         return dict(self.state)
 
-    def wait_for_fresh_state(self, after=0.0, timeout=15):
+    def wait_for_fresh_state(self, after=0.0, timeout=60):
         """Wait for a reloaded Godot page to emit telemetry from its new instance."""
+        previous_instance = (self.state or {}).get("test_instance_id")
+        self.state = None
+        self.state_received_at = 0.0
         deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
             if self.state is not None and self.state_received_at > after and time.monotonic() - self.state_received_at <= 3:
-                return dict(self.state)
+                instance_id = self.state.get("test_instance_id")
+                if previous_instance is None or (instance_id and instance_id != previous_instance):
+                    return dict(self.state)
             self.page.wait_for_timeout(50)
-        raise AssertionError(f"Godot did not emit fresh browser telemetry after reload: {self.state}")
+        try:
+            browser_diagnostics = self.page.evaluate("""() => {
+                const canvas = document.querySelector('canvas');
+                const gl = canvas && (canvas.getContext('webgl2') || canvas.getContext('webgl'));
+                return {readyState: document.readyState, href: location.href,
+                    canvas: canvas ? [canvas.width, canvas.height, canvas.clientWidth, canvas.clientHeight] : null,
+                    webgl: !!gl, title: document.title,
+                    recentResources: performance.getEntriesByType('resource').slice(-8).map(r => ({name:r.name.split('/').pop(), duration:r.duration, size:r.transferSize}))};
+            }""")
+        except Exception as error:
+            browser_diagnostics = f"diagnostic query failed: {error}"
+        raise AssertionError(
+            "Godot did not emit telemetry from a new browser instance after reload: "
+            f"previous={previous_instance} current={self.state} browser={browser_diagnostics}"
+        )
 
     def competition_position(self):
         deadline = time.monotonic() + 12

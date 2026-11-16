@@ -35,10 +35,11 @@ def main():
                 if os.environ.get('CHROMIUM_PATH'):
                     options['executable_path'] = os.environ['CHROMIUM_PATH']
                 browser = p.chromium.launch(**options)
-                page_options = {'viewport': {'width': 1280, 'height': 720}}
+                context_options = {'viewport': {'width': 1280, 'height': 720}, 'service_workers': 'block'}
                 if os.environ.get('BRIDGE_VIDEO_DIR'):
-                    page_options['record_video_dir'] = os.environ['BRIDGE_VIDEO_DIR']
-                page = browser.new_page(**page_options)
+                    context_options['record_video_dir'] = os.environ['BRIDGE_VIDEO_DIR']
+                context = browser.new_context(**context_options)
+                page = context.new_page()
                 nav = Navigator(page, (build / 'index.html').read_text())
                 errors = []
                 page.on('pageerror', lambda error: errors.append(str(error)))

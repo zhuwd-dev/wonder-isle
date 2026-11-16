@@ -2,6 +2,10 @@
 set -euo pipefail
 
 project_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
+WEB_TEST_ARTIFACTS="${WEB_TEST_ARTIFACTS:-$project_root/tests/artifacts}"
+export WEB_TEST_ARTIFACTS
+export WONDER_ISLE_Q012_SAVE="${WONDER_ISLE_Q012_SAVE:-$WEB_TEST_ARTIFACTS/q012-save-from-game.json}"
+export WONDER_ISLE_POST_STORY_SAVE="${WONDER_ISLE_POST_STORY_SAVE:-$WEB_TEST_ARTIFACTS/post-story-save.json}"
 
 export XDG_DATA_HOME="${XDG_DATA_HOME:-/tmp/wonder-isle-godot-data}"
 export XDG_CONFIG_HOME="${XDG_CONFIG_HOME:-/tmp/wonder-isle-godot-config}"
@@ -57,4 +61,5 @@ fi
 "$python_bin" "$project_root/tools/test_zoom_browser.py" "$build_dir"
 "$python_bin" "$project_root/tools/test_art_browser.py" "$build_dir"
 "$python_bin" "$project_root/tools/test_optional_quest_browser.py" "$build_dir"
+"$python_bin" "$project_root/tools/test_free_life_browser.py" "$build_dir"
 "$python_bin" "$project_root/tools/test_web_reload.py" "$build_dir"

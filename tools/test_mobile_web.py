@@ -83,6 +83,15 @@ def main() -> int:
                 if not mobile_box or mobile_box["x"] != 0 or mobile_box["y"] != 0 or mobile_box["width"] < 842 or mobile_box["height"] < 388:
                     raise AssertionError(f"canvas does not occupy the landscape phone viewport: {mobile_box}")
                 result["mobile_canvas"] = mobile_box
+                mobile.set_viewport_size({"width": 932, "height": 430})
+                mobile.wait_for_timeout(250)
+                wide_phone_box = mobile.locator("canvas").bounding_box()
+                mobile.screenshot(path=str(output_dir / "mobile-adapt-932x430.png"), full_page=True)
+                if not wide_phone_box or wide_phone_box["x"] != 0 or wide_phone_box["y"] != 0 or wide_phone_box["width"] < 930 or wide_phone_box["height"] < 428:
+                    raise AssertionError(f"canvas does not occupy the 932x430 phone viewport: {wide_phone_box}")
+                result["mobile_932x430_canvas"] = wide_phone_box
+                mobile.set_viewport_size({"width": 844, "height": 390})
+                mobile.wait_for_timeout(250)
                 result["start_button_fullscreen"] = bool(mobile.evaluate("!!document.fullscreenElement"))
                 if mobile.evaluate("!!document.fullscreenElement"):
                     mobile.evaluate("document.exitFullscreen()")

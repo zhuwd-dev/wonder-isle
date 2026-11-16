@@ -19,6 +19,7 @@ const BRIDGE_ART: Texture2D = preload("res://assets/art/environment/bridge/woodl
 const PLANK_ART: Texture2D = preload("res://assets/art/props/weathered-planks.png")
 const CRATE_ART: Texture2D = preload("res://assets/art/props/island-wood-crate.png")
 const SAVE_PATH := "user://qxisland_stage2_save.json"
+const WEB_SAVE_MIRROR_KEY := "wonder-isle-save-v1"
 const WORLD_SIZE := Vector2(1280, 720)
 const PLAYER_SPEED := 260.0
 const PLAYER_FOOT_OFFSET := Vector2(0, 36)
@@ -145,6 +146,8 @@ const INVENTORY_ORIGIN := Vector2(904, 624)
 const INVENTORY_STEP := 80.0
 const COLLECT_SPARKLE_DURATION := 0.72
 const Q005_GROWTH_DURATION := 1.4
+const FREE_PLANT_GROWTH_DURATION := 12.0
+const FISH_BITE_DURATION := 2.4
 const BRIDGE_REPAIR_DURATION := 1.05
 const CELEBRATION_DURATION := 2.4
 const TASK_TRANSITION_DURATION := 1.15
@@ -208,10 +211,13 @@ var turtle_position := Q005_TURTLE_POSITION
 var test_telemetry_enabled := false
 var test_telemetry_elapsed := 0.0
 var build_revision := "local"
+var test_instance_id := ""
 var collect_sparkle_remaining := 0.0
 var collect_sparkle_position := Vector2.ZERO
 var collect_sparkle_color := Color("fff1a8")
 var q005_growth_remaining := 0.0
+var free_plant_growth_remaining: Array[float] = [0.0, 0.0, 0.0]
+var fishing_bite_remaining := 0.0
 var watering_animation_remaining := 0.0
 var bridge_repair_remaining := 0.0
 var celebration_remaining := 0.0
@@ -305,6 +311,8 @@ var pond_collision_polygon := PackedVector2Array([
 
 func _ready() -> void:
 	test_telemetry_enabled = "--test-telemetry" in OS.get_cmdline_user_args()
+	if test_telemetry_enabled:
+		test_instance_id = str(Time.get_ticks_usec())
 	for arg in OS.get_cmdline_user_args():
 		if str(arg).begins_with("--build-revision="):
 			var revision := str(arg).trim_prefix("--build-revision=")
@@ -317,6 +325,11 @@ func _ready() -> void:
 	_configure_runtime_inputs()
 	_configure_save_path()
 	_load_game()
+	for plant_id in range(GameState.FREE_PLANT_TOTAL):
+		if game_state.free_plant_phase[plant_id] == 2:
+			free_plant_growth_remaining[plant_id] = FREE_PLANT_GROWTH_DURATION
+	if game_state.fishing_phase == 1:
+		fishing_bite_remaining = FISH_BITE_DURATION
 	rabbit_dialog_open = false
 	_create_environment_focus()
 	_create_controls()
@@ -339,6 +352,26 @@ func _physics_process(delta: float) -> void:
 	rabbit_intro_remaining = maxf(0.0, rabbit_intro_remaining - delta)
 	collect_sparkle_remaining = maxf(collect_sparkle_remaining - delta, 0.0)
 	q005_growth_remaining = maxf(q005_growth_remaining - delta, 0.0)
+	for plant_id in range(GameState.FREE_PLANT_TOTAL):
+		if game_state != null and game_state.free_plant_phase[plant_id] == 2:
+			free_plant_growth_remaining[plant_id] = maxf(0.0, free_plant_growth_remaining[plant_id] - delta)
+			if free_plant_growth_remaining[plant_id] <= 0.0 and game_state.mature_free_plant(plant_id):
+				message = "%s长大啦，可以收获了！" % Q010_SEED_LABELS[plant_id]
+				message_color = Color("fff1a8")
+				_save_game()
+	if game_state != null and game_state.fishing_phase == 1:
+		if player_position.distance_to(POND_RECT.get_center()) > POND_INTERACTION_RADIUS + 24.0:
+			game_state.cancel_fishing()
+			fishing_bite_remaining = 0.0
+			message = "你走远了，鱼竿收好了。想钓鱼时可以再回来。"
+			message_color = Color("fff7cf")
+			_save_game()
+		else:
+			fishing_bite_remaining = maxf(0.0, fishing_bite_remaining - delta)
+			if fishing_bite_remaining <= 0.0 and game_state.fish_bite():
+				message = "浮漂动啦！快点互动收竿。"
+				message_color = Color("fff1a8")
+				_save_game()
 	watering_animation_remaining = maxf(0.0, watering_animation_remaining - delta)
 	bridge_repair_remaining = maxf(bridge_repair_remaining - delta, 0.0)
 	celebration_remaining = maxf(celebration_remaining - delta, 0.0)
@@ -371,7 +404,7 @@ func _physics_process(delta: float) -> void:
 		test_telemetry_elapsed += delta
 		if test_telemetry_elapsed >= 0.033:
 			test_telemetry_elapsed = 0.0
-			print("TEST_POSITION ", JSON.stringify({"x": player_position.x, "y": player_position.y, "turtle_x": turtle_position.x, "turtle_y": turtle_position.y, "action": interaction_button_label, "ready": interaction_button_ready, "bridge": game_state.bridge_repaired, "planting_hint": _can_show_planting_hint(), "garden_focus": garden_focus_level, "house_delivery": _house_delivery_available(), "house_focus": house_focus_level, "fox_greeting": _fox_should_greet_player(), "build_mode": build_mode, "guide_stage": IslandGuidance.stage(game_state, build_mode, q011_mode), "camera_zoom": camera_zoom, "animation": player_animation.animation, "official_mouse_frames": SceneArt.mouse_enabled() and player_animation.has_complete_set(), "move_input": [direction.x, direction.y], "mobile_ui_scale": _mobile_ui_scale(), "task_details_open": task_details_open, "task_card_size": [task_card_button.size.x, task_card_button.size.y] if is_instance_valid(task_card_button) else [0.0, 0.0], "right_clear": _is_walkable(player_position + Vector2(4, 0)), "left_clear": _is_walkable(player_position + Vector2(-4, 0)), "q005_completed": game_state.is_q005_complete(), "q010_completed": game_state.is_q010_complete(), "q011_completed": game_state.is_q011_complete(), "build_revision": build_revision}))
+			print("TEST_POSITION ", JSON.stringify({"x": player_position.x, "y": player_position.y, "turtle_x": turtle_position.x, "turtle_y": turtle_position.y, "action": interaction_button_label, "ready": interaction_button_ready, "message": message, "bridge": game_state.bridge_repaired, "planting_hint": _can_show_planting_hint(), "garden_focus": garden_focus_level, "house_delivery": _house_delivery_available(), "house_focus": house_focus_level, "fox_greeting": _fox_should_greet_player(), "build_mode": build_mode, "guide_stage": IslandGuidance.stage(game_state, build_mode, q011_mode), "camera_zoom": camera_zoom, "animation": player_animation.animation, "official_mouse_frames": SceneArt.mouse_enabled() and player_animation.has_complete_set(), "move_input": [direction.x, direction.y], "mobile_ui_scale": _mobile_ui_scale(), "task_details_open": task_details_open, "task_card_size": [task_card_button.size.x, task_card_button.size.y] if is_instance_valid(task_card_button) else [0.0, 0.0], "right_clear": _is_walkable(player_position + Vector2(4, 0)), "left_clear": _is_walkable(player_position + Vector2(-4, 0)), "q005_completed": game_state.is_q005_complete(), "q010_completed": game_state.is_q010_complete(), "q011_completed": game_state.is_q011_complete(), "build_revision": build_revision, "test_instance_id": test_instance_id, "test_save_data": game_state.to_save_data()}))
 	queue_redraw()
 
 
@@ -1178,6 +1211,36 @@ func _update_interact_button() -> void:
 			else:
 				action_label = "采花"
 				action_tooltip = "沿着花圃寻找还没采过的花"
+	elif game_state.can_use_free_life() and _nearest_free_plant_id() >= 0:
+		var free_plant_id := _nearest_free_plant_id()
+		var free_phase: int = game_state.free_plant_phase[free_plant_id]
+		action_ready = true
+		match free_phase:
+			0:
+				action_label = "种%s" % Q010_SEED_LABELS[free_plant_id]
+				action_tooltip = "把收集的种子种进对应小花圃"
+			1:
+				action_label = "浇水"
+				action_tooltip = "给这株刚种下的植物浇水"
+			2:
+				action_label = "照料中"
+				action_ready = false
+				action_tooltip = "植物正在慢慢长大"
+			3:
+				action_label = "收获"
+				action_tooltip = "收获成熟植物，之后还可以再次种植"
+	elif game_state.is_q012_complete() and player_position.distance_to(POND_RECT.get_center()) <= POND_INTERACTION_RADIUS:
+		action_ready = true
+		match game_state.fishing_phase:
+			0:
+				action_label = "开始钓鱼"
+				action_tooltip = "在池塘边抛竿，等浮漂动了再收竿"
+			1:
+				action_label = "收竿"
+				action_tooltip = "等待浮漂；再点一次可以收竿退出"
+			2:
+				action_label = "收竿！"
+				action_tooltip = "有鱼咬钩了，点击收竿"
 	elif _can_use_q010_side_task() and game_state.can_start_q010():
 		action_label = "收种子"
 		action_ready = _nearest_uncollected_q010_seed() >= 0
@@ -1219,10 +1282,14 @@ func _update_interact_button() -> void:
 			action_label = "收材料"
 			action_ready = _nearest_uncollected_q009_material() >= 0
 			action_tooltip = "靠近树枝、羽毛或草绳并收集；集齐后到鸟屋交付"
-	elif _can_use_q009_side_task() and game_state.q009_bird_interaction_unlocked():
+	elif _can_use_q009_side_task() and game_state.q009_bird_interaction_unlocked() and player_position.distance_to(Q009_BIRD_POSITION) <= Q009_BIRD_INTERACTION_RADIUS:
 		action_label = "打招呼"
-		action_ready = player_position.distance_to(Q009_BIRD_POSITION) <= Q009_BIRD_INTERACTION_RADIUS
+		action_ready = true
 		action_tooltip = "靠近小鸟打招呼"
+	elif game_state.is_q004_complete() and player_position.distance_to(HOUSE_POSITION) <= 142.0:
+		action_label = "打招呼"
+		action_ready = true
+		action_tooltip = "去狐狸小屋旁和狐狸打招呼"
 	elif game_state.can_collect_seed():
 		action_label = "收种子"
 		action_ready = player_position.distance_to(SEED_POSITION) <= COLLECTION_RADIUS
@@ -1292,9 +1359,15 @@ func _should_show_interact_button() -> bool:
 		return true
 	if player_position.distance_to(_rabbit_position()) <= COLLECTION_RADIUS:
 		return true
+	if game_state.is_q004_complete() and player_position.distance_to(HOUSE_POSITION) <= 142.0:
+		return true
 	if _can_use_q007_side_task() and game_state.can_start_q007():
 		return true
 	if _can_start_q005_stage():
+		return true
+	if game_state.can_use_free_life() and _nearest_free_plant_id() >= 0:
+		return true
+	if game_state.is_q012_complete() and player_position.distance_to(POND_RECT.get_center()) <= POND_INTERACTION_RADIUS:
 		return true
 	if _can_use_q010_side_task() and game_state.can_start_q010():
 		return true
@@ -1306,8 +1379,8 @@ func _should_show_interact_button() -> bool:
 		return false
 	if _can_use_q011_mode():
 		return false
-	if _can_use_q009_side_task() and game_state.q009_bird_interaction_unlocked():
-		return player_position.distance_to(Q009_BIRD_POSITION) <= Q009_BIRD_INTERACTION_RADIUS
+	if _can_use_q009_side_task() and game_state.q009_bird_interaction_unlocked() and player_position.distance_to(Q009_BIRD_POSITION) <= Q009_BIRD_INTERACTION_RADIUS:
+		return true
 	if game_state.can_collect_seed() or game_state.can_plant_seed():
 		return true
 	if not game_state.is_complete():
@@ -1321,6 +1394,19 @@ func _nearest_uncollected_board() -> int:
 
 func _nearest_uncollected_q005_plant() -> int:
 	return _nearest_available_position(Q005_PLANT_POSITIONS, game_state.q005_plants_collected, Q005_INTERACTION_RADIUS)
+
+
+func _nearest_free_plant_id() -> int:
+	if game_state == null or not game_state.can_use_free_life():
+		return -1
+	var target_id := -1
+	var target_distance := Q005_INTERACTION_RADIUS
+	for plant_id in range(GameState.FREE_PLANT_TOTAL):
+		var distance: float = player_position.distance_to(Q005_PLANT_POSITIONS[plant_id])
+		if distance <= target_distance:
+			target_id = plant_id
+			target_distance = distance
+	return target_id
 
 
 func _nearest_uncollected_q010_seed() -> int:
@@ -1787,6 +1873,9 @@ func _try_collect_nearby() -> void:
 	if _can_start_q005_stage() and _try_q005_interaction():
 		queue_redraw()
 		return
+	if _try_free_plant_interaction():
+		queue_redraw()
+		return
 
 	if _try_pond_interaction():
 		queue_redraw()
@@ -1806,6 +1895,9 @@ func _try_collect_nearby() -> void:
 		return
 
 	if _can_use_q009_side_task() and game_state.q009_bird_interaction_unlocked() and _try_q009_bird_interaction():
+		queue_redraw()
+		return
+	if _try_fox_interaction():
 		queue_redraw()
 		return
 
@@ -1943,6 +2035,26 @@ func _try_q005_interaction() -> bool:
 func _try_pond_interaction() -> bool:
 	if not _can_show_pond_area() or player_position.distance_to(POND_RECT.get_center()) > POND_INTERACTION_RADIUS:
 		return false
+	if game_state.is_q012_complete():
+		if game_state.fishing_phase == 0:
+			if game_state.start_fishing():
+				fishing_bite_remaining = FISH_BITE_DURATION
+				message = "鱼竿抛进池塘啦，耐心等浮漂动起来。"
+				message_color = Color("d9ffd0")
+				_save_game()
+		elif game_state.fishing_phase == 1:
+			game_state.cancel_fishing()
+			fishing_bite_remaining = 0.0
+			message = "你收起鱼竿了，想继续时再抛竿吧。"
+			message_color = Color("fff7cf")
+			_save_game()
+		elif game_state.reel_fish():
+			fishing_bite_remaining = 0.0
+			_start_collect_sparkles(POND_RECT.get_center(), Color("a9e4e8"))
+			message = "钓到一条小鱼！累计 %d 条，还可以再钓。" % game_state.fish_count
+			message_color = Color("d9ffd0")
+			_save_game()
+		return true
 	if game_state.is_pond_complete():
 		pond_ripple_position = POND_RECT.get_center()
 		pond_ripple_remaining = 1.0
@@ -1954,12 +2066,53 @@ func _try_pond_interaction() -> bool:
 	return true
 
 
+func _try_free_plant_interaction() -> bool:
+	var plant_id := _nearest_free_plant_id()
+	if plant_id < 0:
+		return false
+	var plant_position: Vector2 = Q005_PLANT_POSITIONS[plant_id]
+	match game_state.free_plant_phase[plant_id]:
+		0:
+			if game_state.start_free_plant(plant_id):
+				message = "%s种下了！靠近它再浇水。" % Q010_SEED_LABELS[plant_id]
+				message_color = Color("d9ffd0")
+				_start_collect_sparkles(plant_position, Color("a9df88"))
+				_save_game()
+		1:
+			if game_state.water_free_plant(plant_id):
+				free_plant_growth_remaining[plant_id] = FREE_PLANT_GROWTH_DURATION
+				message = "%s喝饱水了，等它慢慢长大。" % Q010_SEED_LABELS[plant_id]
+				message_color = Color("d9ffd0")
+				_start_task_transition(plant_position, "植物开始生长")
+				_save_game()
+		2:
+			message = "%s正在长大，再过一会儿就能收获。" % Q010_SEED_LABELS[plant_id]
+			message_color = Color("fff7cf")
+		3:
+			if game_state.harvest_free_plant(plant_id):
+				free_plant_growth_remaining[plant_id] = 0.0
+				message = "收获了%s！已经收获 %d 次，还能继续种。" % [Q010_SEED_LABELS[plant_id], game_state.free_plant_harvests[plant_id]]
+				message_color = Color("fff1a8")
+				_start_collect_sparkles(plant_position, Color("f0cb72"))
+				_save_game()
+	return true
+
+
 func _try_turtle_interaction() -> bool:
 	if not game_state.is_pond_complete() or player_position.distance_to(turtle_position) > Q005_TURTLE_INTERACTION_RADIUS:
 		return false
 	message = "乌龟：谢谢你把池塘和花园照料得这么好！"
 	message_color = Color("d9ffd0")
 	_start_collect_sparkles(turtle_position, Color("a9df88"))
+	return true
+
+
+func _try_fox_interaction() -> bool:
+	if not game_state.is_q004_complete() or player_position.distance_to(HOUSE_POSITION) > 142.0:
+		return false
+	message = "狐狸：谢谢你帮我安顿下来！有空来小屋玩吧。"
+	message_color = Color("fff1a8")
+	_start_collect_sparkles(HOUSE_POSITION + Vector2(0, 24), Color("f0ba74"))
 	return true
 
 
@@ -2455,30 +2608,65 @@ func _restart_game() -> void:
 
 
 func _save_game() -> void:
+	var save_text := JSON.stringify(game_state.to_save_data())
+	# Godot's WebFS writes to memory first and commits to IndexedDB asynchronously.
+	# Keep a synchronous browser mirror so a refresh in that window can still
+	# restore the latest state; WebFS remains the canonical user:// save file.
+	var web_mirror_saved := _write_web_save_mirror(save_text)
 	var file := FileAccess.open(save_path, FileAccess.WRITE)
 	if file == null:
+		if web_mirror_saved:
+			_refresh_build_controls()
+			return
 		message = "进度暂时无法保存，请检查设备存储权限。"
 		message_color = Color("ffcfb3")
 		return
-	file.store_string(JSON.stringify(game_state.to_save_data()))
+	file.store_string(save_text)
 	file.flush()
 	file.close()
 	_refresh_build_controls()
 
 
 func _load_game() -> void:
+	var browser_save_text := _read_web_save_mirror()
+	if not browser_save_text.is_empty():
+		var browser_data = JSON.parse_string(browser_save_text)
+		if browser_data is Dictionary and game_state.load_save_data(browser_data):
+			message = _loaded_progress_message()
+			# Rehydrate user:// so WebFS will converge to the synchronous mirror.
+			_save_game()
+			return
 	if not FileAccess.file_exists(save_path):
 		return
 	var file := FileAccess.open(save_path, FileAccess.READ)
 	if file == null:
 		return
-	var data = JSON.parse_string(file.get_as_text())
+	var save_text := file.get_as_text()
+	file.close()
+	var data = JSON.parse_string(save_text)
 	if data is Dictionary and game_state.load_save_data(data):
 		message = _loaded_progress_message()
+		# Preserve existing saves in the immediate-refresh mirror on Web.
+		_write_web_save_mirror(save_text)
 		return
 	game_state.reset()
 	message = "存档格式无法识别，已安全开始新游戏。"
 	message_color = Color("ffe1b8")
+
+
+func _write_web_save_mirror(save_text: String) -> bool:
+	if not OS.has_feature("web"):
+		return false
+	var script := "(() => { try { window.localStorage.setItem('%s', %s); return true; } catch (_) {} try { window.sessionStorage.setItem('%s', %s); return true; } catch (_) { return false; } })()" % [WEB_SAVE_MIRROR_KEY, JSON.stringify(save_text), WEB_SAVE_MIRROR_KEY, JSON.stringify(save_text)]
+	return bool(JavaScriptBridge.eval(script, true))
+
+
+func _read_web_save_mirror() -> String:
+	if not OS.has_feature("web"):
+		return ""
+	var script := "(() => { try { const value = window.localStorage.getItem('%s'); if (value) return value; } catch (_) {} try { return window.sessionStorage.getItem('%s') || ''; } catch (_) { return ''; } })()" % [WEB_SAVE_MIRROR_KEY, WEB_SAVE_MIRROR_KEY]
+	var value = JavaScriptBridge.eval(script, true)
+	return str(value) if value is String else ""
 
 
 func _loaded_progress_message() -> String:
@@ -3068,6 +3256,13 @@ func _draw_pond_area(font: Font) -> void:
 			Vector2(POND_RECT.end.x - 48, y + sin(wave_phase + 2.2) * 1.2),
 		])
 		draw_polyline(wave, Color("e2fff5", 0.30), 1.4, true)
+	if game_state.is_q012_complete() and game_state.fishing_phase > 0:
+		var bobber_position := POND_RECT.get_center() + Vector2(20.0, sin(animation_time * 5.0) * 3.0)
+		var bobber_color := Color("f6d16f") if game_state.fishing_phase == 1 else Color("fff1a8")
+		_draw_ellipse_custom(bobber_position + Vector2(0, 4), Vector2(10, 4), Color(0.12, 0.28, 0.27, 0.22))
+		draw_line(bobber_position + Vector2(0, -7), bobber_position + Vector2(0, -15), Color("fff7df", 0.86), 1.8, true)
+		draw_circle(bobber_position, 5.0, bobber_color)
+		draw_arc(bobber_position, 8.0, 0.0, TAU, 24, Color(bobber_color, 0.72), 1.5)
 	for slot_id in range(GameState.POND_STONE_TOTAL):
 		var stone_id: int = game_state.pond_stone_install_order[slot_id]
 		if stone_id >= 0:
@@ -3150,8 +3345,17 @@ func _draw_q005_area(font: Font) -> void:
 			var eased_growth := growth_progress * growth_progress * (3.0 - 2.0 * growth_progress)
 			plant_scale = lerpf(0.35, 1.0, eased_growth)
 		var harvested: bool = game_state.q005_plants_collected[plant_id]
+		var wilted: bool = not game_state.q005_watered and not harvested
+		if game_state.can_use_free_life():
+			var free_phase: int = game_state.free_plant_phase[plant_id]
+			harvested = free_phase == 0
+			wilted = free_phase == 1
+			if free_phase == 2:
+				plant_scale = lerpf(0.35, 1.0, 1.0 - free_plant_growth_remaining[plant_id] / FREE_PLANT_GROWTH_DURATION)
+			else:
+				plant_scale = 1.0
 		_draw_ellipse_custom(Q005_PLANT_POSITIONS[plant_id] + Vector2(0, 14), Vector2(21, 6), Color(0.20, 0.39, 0.19, 0.18))
-		_draw_q005_plant_at(plant_position, harvested, game_state.is_q010_complete(), not game_state.q005_watered and not harvested, plant_scale)
+		_draw_q005_plant_at(plant_position, harvested, game_state.is_q010_complete(), wilted, plant_scale)
 		if game_state.q005_watered and not harvested and IslandGuidance.stage(game_state, build_mode, q011_mode) == "q005_harvest" and plant_id == _guide_first_index(game_state.q005_plants_collected):
 			_draw_world_target_glimmer(plant_position + Vector2(0, -20), 0.82, Color("fff0ba"))
 

@@ -21,7 +21,7 @@ const Q004_WOOD_TOTAL := 3
 const Q005_PLANT_TOTAL := 3
 const Q006_DECOR_TOTAL := 3
 const Q006_SLOT_TOTAL := 3
-const Q006_DEFAULT_POSITIONS := [Vector2(978, 559), Vector2(1072, 559), Vector2(1166, 559)]
+const Q006_DEFAULT_POSITIONS := [Vector2(978, 559), Vector2(1072, 559), Vector2(1130, 559)]
 const Q006_DECOR_IDS := ["wood_fence", "flower_pot", "yard_lamp"]
 const Q006_WINDMILL_ID := "windmill"
 const Q007_REWARD_DECOR_ID := "pearl_shell_decor"
@@ -32,6 +32,7 @@ const Q009_MATERIAL_IDS := ["q009_material_0", "q009_material_1", "q009_material
 const Q010_SEED_TOTAL := 3
 const Q010_SEED_IDS := ["q010_seed_0", "q010_seed_1", "q010_seed_2"]
 const Q011_ITEM_TOTAL := 3
+const FREE_PLANT_TOTAL := 3
 
 var collected: Array[bool] = [false, false, false]
 var placed: Array[bool] = [false, false, false]
@@ -70,6 +71,10 @@ var q009_completed := false
 var q010_seeds_collected: Array[bool] = [false, false, false]
 var q011_slot_occupants: Array[int] = [-1, -1, -1]
 var q012_completed := false
+var free_plant_phase: Array[int] = [0, 0, 0]
+var free_plant_harvests: Array[int] = [0, 0, 0]
+var fishing_phase := 0
+var fish_count := 0
 
 
 func reset() -> void:
@@ -110,6 +115,10 @@ func reset() -> void:
 	q010_seeds_collected = [false, false, false]
 	q011_slot_occupants = [-1, -1, -1]
 	q012_completed = false
+	free_plant_phase = [0, 0, 0]
+	free_plant_harvests = [0, 0, 0]
+	fishing_phase = 0
+	fish_count = 0
 
 
 func board_count() -> int:
@@ -653,6 +662,68 @@ func is_q012_complete() -> bool:
 	return q012_completed and is_q006_complete()
 
 
+func can_use_free_life() -> bool:
+	return is_q012_complete() and is_q010_complete()
+
+
+func start_free_plant(plant_id: int) -> bool:
+	if not can_use_free_life() or plant_id < 0 or plant_id >= FREE_PLANT_TOTAL or free_plant_phase[plant_id] != 0:
+		return false
+	free_plant_phase[plant_id] = 1
+	return true
+
+
+func water_free_plant(plant_id: int) -> bool:
+	if not can_use_free_life() or plant_id < 0 or plant_id >= FREE_PLANT_TOTAL or free_plant_phase[plant_id] != 1:
+		return false
+	free_plant_phase[plant_id] = 2
+	return true
+
+
+func mature_free_plant(plant_id: int) -> bool:
+	if plant_id < 0 or plant_id >= FREE_PLANT_TOTAL or free_plant_phase[plant_id] != 2:
+		return false
+	free_plant_phase[plant_id] = 3
+	return true
+
+
+func harvest_free_plant(plant_id: int) -> bool:
+	if not can_use_free_life() or plant_id < 0 or plant_id >= FREE_PLANT_TOTAL or free_plant_phase[plant_id] != 3:
+		return false
+	free_plant_phase[plant_id] = 0
+	free_plant_harvests[plant_id] += 1
+	return true
+
+
+func start_fishing() -> bool:
+	if not is_q012_complete() or not is_pond_complete() or fishing_phase != 0:
+		return false
+	fishing_phase = 1
+	return true
+
+
+func cancel_fishing() -> bool:
+	if fishing_phase == 0:
+		return false
+	fishing_phase = 0
+	return true
+
+
+func fish_bite() -> bool:
+	if fishing_phase != 1:
+		return false
+	fishing_phase = 2
+	return true
+
+
+func reel_fish() -> bool:
+	if fishing_phase != 2:
+		return false
+	fishing_phase = 0
+	fish_count += 1
+	return true
+
+
 func _count_true(values: Array[bool]) -> int:
 	var total := 0
 	for value in values:
@@ -709,6 +780,10 @@ func to_save_data() -> Dictionary:
 		"q010_seeds_collected": q010_seeds_collected.duplicate(),
 		"q011_slot_occupants": q011_slot_occupants.duplicate(),
 		"q012_completed": q012_completed,
+		"free_plant_phase": free_plant_phase.duplicate(),
+		"free_plant_harvests": free_plant_harvests.duplicate(),
+		"fishing_phase": fishing_phase,
+		"fish_count": fish_count,
 	}
 
 
@@ -1135,6 +1210,31 @@ func load_save_data(data: Dictionary) -> bool:
 		validated_q012_completed = data["q012_completed"]
 	if validated_q012_completed and not validated_q006_completed:
 		return false
+	var validated_free_plant_phase: Array[int] = [0, 0, 0]
+	var validated_free_plant_harvests: Array[int] = [0, 0, 0]
+	var free_phase_data = data.get("free_plant_phase", [0, 0, 0])
+	var free_harvest_data = data.get("free_plant_harvests", [0, 0, 0])
+	if not free_phase_data is Array or free_phase_data.size() != FREE_PLANT_TOTAL or not free_harvest_data is Array or free_harvest_data.size() != FREE_PLANT_TOTAL:
+		return false
+	for plant_id in range(FREE_PLANT_TOTAL):
+		var phase_value = free_phase_data[plant_id]
+		var harvest_value = free_harvest_data[plant_id]
+		if (typeof(phase_value) != TYPE_INT and typeof(phase_value) != TYPE_FLOAT) or not is_equal_approx(float(phase_value), round(float(phase_value))) or phase_value < 0 or phase_value > 3:
+			return false
+		if (typeof(harvest_value) != TYPE_INT and typeof(harvest_value) != TYPE_FLOAT) or not is_equal_approx(float(harvest_value), round(float(harvest_value))) or harvest_value < 0:
+			return false
+		validated_free_plant_phase[plant_id] = int(phase_value)
+		validated_free_plant_harvests[plant_id] = int(harvest_value)
+	var validated_fishing_phase = data.get("fishing_phase", 0)
+	var validated_fish_count = data.get("fish_count", 0)
+	if (typeof(validated_fishing_phase) != TYPE_INT and typeof(validated_fishing_phase) != TYPE_FLOAT) or not is_equal_approx(float(validated_fishing_phase), round(float(validated_fishing_phase))) or validated_fishing_phase < 0 or validated_fishing_phase > 2:
+		return false
+	if (typeof(validated_fish_count) != TYPE_INT and typeof(validated_fish_count) != TYPE_FLOAT) or not is_equal_approx(float(validated_fish_count), round(float(validated_fish_count))) or validated_fish_count < 0:
+		return false
+	if _count_positive(validated_free_plant_phase) > 0 and (not validated_q012_completed or not expected_q005_complete or not _all_flags_true(validated_q010_seeds_collected)):
+		return false
+	if validated_fishing_phase > 0 and (not validated_q012_completed or not expected_pond_complete):
+		return false
 
 	collected = validated_collected
 	placed = validated_placed
@@ -1173,7 +1273,19 @@ func load_save_data(data: Dictionary) -> bool:
 	q010_seeds_collected = validated_q010_seeds_collected
 	q011_slot_occupants = validated_q011_slot_occupants
 	q012_completed = validated_q012_completed
+	free_plant_phase = validated_free_plant_phase
+	free_plant_harvests = validated_free_plant_harvests
+	fishing_phase = int(validated_fishing_phase)
+	fish_count = int(validated_fish_count)
 	return true
+
+
+func _count_positive(values: Array[int]) -> int:
+	var total := 0
+	for value in values:
+		if value > 0:
+			total += 1
+	return total
 
 
 func _all_flags_true(values: Array[bool]) -> bool:

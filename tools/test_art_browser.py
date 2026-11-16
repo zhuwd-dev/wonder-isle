@@ -28,7 +28,7 @@ def main():
             if os.environ.get('CHROMIUM_PATH'):
                 options['executable_path'] = os.environ['CHROMIUM_PATH']
             browser = p.chromium.launch(**options)
-            context_options = {'viewport': {'width': 1280, 'height': 720}, 'has_touch': True}
+            context_options = {'viewport': {'width': 1280, 'height': 720}, 'has_touch': True, 'service_workers': 'block'}
             if os.environ.get('ART_VIDEO_DIR'):
                 context_options['record_video_dir'] = os.environ['ART_VIDEO_DIR']
             context = browser.new_context(**context_options)

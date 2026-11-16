@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Play Q001–Q005 in a fresh browser using real keyboard and pointer input."""
+"""Play a fresh-save life-island flow using real browser input."""
 import functools
 import json
 import os
@@ -33,7 +33,8 @@ def main():
             if os.environ.get("CHROMIUM_PATH"):
                 options["executable_path"] = os.environ["CHROMIUM_PATH"]
             browser = playwright.chromium.launch(**options)
-            page = browser.new_page(viewport={"width": 1280, "height": 720})
+            context = browser.new_context(viewport={"width": 1280, "height": 720}, service_workers="block")
+            page = context.new_page()
             nav = Navigator(page, (build / "index.html").read_text(encoding="utf-8"))
             errors = []
             page.on("console", lambda message: errors.append(message.text) if message.type == "error" else None)
@@ -48,25 +49,30 @@ def main():
             def saved():
                 return page.evaluate("""async key => new Promise((resolve, reject) => {
                     const open = indexedDB.open('/userfs'); open.onerror = () => reject(open.error);
-                    open.onsuccess = () => { const req = open.result.transaction('FILE_DATA').objectStore('FILE_DATA').get(key);
+                    open.onsuccess = () => { const tx = open.result.transaction('FILE_DATA', 'readonly');
+                        const req = tx.objectStore('FILE_DATA').get(key); let result = null;
                         req.onerror = () => reject(req.error);
-                        req.onsuccess = () => resolve(req.result ? JSON.parse(new TextDecoder().decode(new Uint8Array(req.result.contents))) : null);
+                        req.onsuccess = () => { result = req.result ? JSON.parse(new TextDecoder().decode(new Uint8Array(req.result.contents))) : null; };
+                        tx.onerror = () => reject(tx.error); tx.oncomplete = () => resolve(result);
                     };
                 })""", SAVE_KEY)
 
             def verify(predicate, label):
-                deadline = time.monotonic() + 12
+                deadline = time.monotonic() + 60
                 state = None
                 while time.monotonic() < deadline:
                     state = saved()
-                    if state and predicate(state):
-                        print(f"PASS {label} at {nav.position()}", flush=True)
+                    memory = nav.position().get('test_save_data')
+                    if state and memory and predicate(state) and predicate(memory):
+                        print(f"PASS {label} persisted and in-memory", flush=True)
                         return state
                     page.wait_for_timeout(150)
-                raise AssertionError(f"{label}: position={nav.position()} save={state}")
+                raise AssertionError(f"{label}: memory={nav.position().get('test_save_data')} persisted={state}")
 
             def interact():
-                page.keyboard.press("e")
+                # Exercise the primary interaction control instead of a
+                # one-frame key pulse between headless physics ticks.
+                page.mouse.click(1214, 662)
 
             def capture_sizes(label):
                 for width, height in ((1630, 870), (844, 390)):
@@ -206,12 +212,65 @@ def main():
             interact()
             verify(lambda s: s['q005_completed'], "Q005 deliver bouquet")
             page.screenshot(path=str(artifacts / "web-story-q005-complete.png"))
+            previous_instance = nav.position().get("test_instance_id")
+            previous_event = nav.state_received_at
             page.reload(wait_until="load")
-            nav.state = None
-            loaded = nav.position()
+            try:
+                loaded = nav.wait_for_fresh_state(after=previous_event)
+            except AssertionError:
+                print(f"Browser errors during save refresh: {errors}", flush=True)
+                print(f"Browser after failed save refresh: {page.evaluate('''() => ({readyState:document.readyState, href:location.href, canvas:!!document.querySelector('canvas')})''')}", flush=True)
+                raise
+            if loaded.get("test_instance_id") == previous_instance:
+                raise AssertionError("Refresh was not confirmed by a new Godot instance")
             if not loaded.get('q005_completed'):
                 raise AssertionError(f"The engine did not restore Q005 completion: {loaded}")
             verify(lambda s: s['q005_completed'] and s['pond_opened'] and s['seed_planted'], "Q001–Q005 save survives refresh")
+
+            # Q006 is completed by ordinary build-mode drags after Q005. The
+            # saved state comes only from the preceding real-input tasks.
+            if nav.position().get("guide_stage") != "q006_decor":
+                raise AssertionError(f"Expected Q006 decoration guidance after Q005: {nav.position()}")
+            page.mouse.click(950, 50)
+            deadline = time.monotonic() + 10
+            while not nav.position().get("build_mode") and time.monotonic() < deadline:
+                page.wait_for_timeout(50)
+            if not nav.position().get("build_mode"):
+                raise AssertionError(f"Q006 build mode did not open from its UI button: {nav.position()}")
+            for decor_id, source, target in (
+                (0, (951, 634), (978, 559)),
+                (1, (1015, 634), (1072, 559)),
+                (2, (1079, 634), (1130, 559)),
+            ):
+                drag(source, target)
+                verify(
+                    lambda save, i=decor_id: save["q006_decor_placed"][i]
+                    and save["q006_decor_positions"][i] == list(target),
+                    f"Q006 naturally place decoration {decor_id + 1}/3",
+                )
+            verify(lambda save: save["q006_completed"] and save["q006_windmill_unlocked"], "Q006 complete free-garden decoration")
+            page.screenshot(path=str(artifacts / "web-story-q006-complete.png"))
+
+            # Reach the rabbit and use the highlighted in-game interaction to
+            # complete Q012; no task field or completion function is injected.
+            nav.go(("y", 340), ("x", 580), ("y", 226))
+            state = nav.position()
+            if not state.get("ready"):
+                nav.move_until_ready("w", "庆祝")
+            state = nav.position()
+            if not state.get("ready"):
+                raise AssertionError(f"Q012 rabbit interaction was not ready: {state}")
+            page.screenshot(path=str(artifacts / "web-story-before-q012.png"))
+            interact()
+            verify(lambda save: save["q012_completed"], "Q012 complete celebration via live interaction")
+            page.screenshot(path=str(artifacts / "web-story-q012-complete.png"))
+            genuine_q012_save = saved()
+            if not genuine_q012_save or not genuine_q012_save.get("q012_completed"):
+                raise AssertionError("Could not capture the actual Q012 save produced by real browser input")
+            save_path = Path(os.environ.get("WONDER_ISLE_Q012_SAVE", artifacts / "q012-save-from-game.json"))
+            save_path.parent.mkdir(parents=True, exist_ok=True)
+            save_path.write_text(json.dumps(genuine_q012_save, ensure_ascii=False), encoding="utf-8")
+            print(f"PASS actual Q012 save exported from live play: {save_path}", flush=True)
             page.wait_for_timeout(300)
             if errors:
                 raise AssertionError(f"Browser errors: {errors}")
