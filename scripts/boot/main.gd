@@ -2741,7 +2741,7 @@ func _write_web_save_mirror(save_data: Dictionary, next_revision: int) -> String
 		return "unavailable"
 	var envelope := {"format": WEB_SAVE_MIRROR_FORMAT, "namespace": save_namespace, "revision": next_revision, "payload": save_data}
 	var encoded := JSON.stringify(envelope)
-	var script := "(() => { try { const key='%s'; const current=window.localStorage.getItem(key); let revision=-1; if(current){const parsed=JSON.parse(current); revision=parsed&&parsed.format==='wonder-isle-save-mirror-v2'&&Number.isSafeInteger(parsed.revision)?parsed.revision:0;} if(revision!==%d)return 'conflict'; window.localStorage.setItem(key,%s); return 'saved'; } catch (_) { return 'unavailable'; } })()" % [save_mirror_key, mirror_revision, JSON.stringify(encoded)]
+	var script := "(() => { try { const key='%s'; const current=window.localStorage.getItem(key); let revision=-1; if(current){const parsed=JSON.parse(current); if(parsed&&parsed.format==='wonder-isle-save-mirror-v2'){revision=Number.isSafeInteger(parsed.revision)&&parsed.revision>=0?parsed.revision:-2;}else if(parsed&&Object.prototype.hasOwnProperty.call(parsed,'_save_revision')){revision=Number.isSafeInteger(parsed._save_revision)&&parsed._save_revision>=0?parsed._save_revision:-2;}else{revision=0;}} if(revision!==%d)return 'conflict'; window.localStorage.setItem(key,%s); return 'saved'; } catch (_) { return 'unavailable'; } })()" % [save_mirror_key, mirror_revision, JSON.stringify(encoded)]
 	var result = JavaScriptBridge.eval(script, true)
 	if str(result) == "saved":
 		mirror_revision = next_revision

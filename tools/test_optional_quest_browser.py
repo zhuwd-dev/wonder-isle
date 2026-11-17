@@ -159,7 +159,8 @@ def main() -> int:
                             break
                         page.wait_for_timeout(500)
                     else:
-                        raise AssertionError(f"{label}; memory: {json.dumps(memory, ensure_ascii=False)}; latest save: {json.dumps(latest, ensure_ascii=False)}")
+                        mirror = page.evaluate("key => localStorage.getItem(key)", MIRROR_KEY)
+                        raise AssertionError(f"{label}; memory: {json.dumps(memory, ensure_ascii=False)}; latest save: {json.dumps(latest, ensure_ascii=False)}; mirror: {mirror}")
                     checks.append(label)
                     print(f"PASS {label}", flush=True)
                     return latest

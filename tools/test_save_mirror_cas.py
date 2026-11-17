@@ -29,8 +29,11 @@ CAS = """({key, expected, revision}) => {
     let actual = -1;
     if (current) {
       const parsed = JSON.parse(current);
-      actual = parsed && parsed.format === 'wonder-isle-save-mirror-v2' && Number.isSafeInteger(parsed.revision)
-        ? parsed.revision : 0;
+      if (parsed && parsed.format === 'wonder-isle-save-mirror-v2') {
+        actual = Number.isSafeInteger(parsed.revision) && parsed.revision >= 0 ? parsed.revision : -2;
+      } else if (parsed && Object.prototype.hasOwnProperty.call(parsed, '_save_revision')) {
+        actual = Number.isSafeInteger(parsed._save_revision) && parsed._save_revision >= 0 ? parsed._save_revision : -2;
+      } else actual = 0;
     }
     if (actual !== expected) return 'conflict';
     localStorage.setItem(key, JSON.stringify({format:'wonder-isle-save-mirror-v2', namespace:key, revision, payload:{}}));
@@ -64,6 +67,13 @@ def main() -> int:
             result = stale.evaluate(f"{CAS}", {"key": "production", "expected": -1, "revision": 1})
             assert result == "saved", result
             assert first.evaluate("localStorage.getItem('preview') !== localStorage.getItem('production')")
+            first.evaluate("localStorage.setItem('legacy', JSON.stringify({_save_revision:26, quest_completed:true}))")
+            result = first.evaluate(f"{CAS}", {"key": "legacy", "expected": 26, "revision": 27})
+            assert result == "saved", result
+            assert first.evaluate("JSON.parse(localStorage.getItem('legacy')).revision") == 27
+            first.evaluate("localStorage.setItem('invalid-revision', JSON.stringify({_save_revision:'26'}))")
+            result = first.evaluate(f"{CAS}", {"key": "invalid-revision", "expected": 0, "revision": 1})
+            assert result == "conflict", result
             stale.evaluate("localStorage.setItem('corrupt', '{broken')")
             result = stale.evaluate(f"{CAS}", {"key": "corrupt", "expected": -1, "revision": 1})
             assert result == "unavailable", result
