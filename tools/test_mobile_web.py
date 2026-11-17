@@ -9,6 +9,7 @@ import sys
 import threading
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from web_save_namespace import PREVIEW
 
 from playwright.sync_api import sync_playwright
 
@@ -112,7 +113,10 @@ def main() -> int:
                     raise AssertionError("rotate prompt remained after returning to landscape")
 
                 manifest = mobile.evaluate("async () => await (await fetch('./index.manifest.json')).json()")
-                if manifest.get("name") != "奇趣小岛" or manifest.get("short_name") != "奇趣小岛" or manifest.get("orientation") != "landscape" or manifest.get("display") != "fullscreen":
+                expected_name = "奇趣小岛 · Development Preview" if PREVIEW else "奇趣小岛"
+                expected_short_name = "小岛试玩" if PREVIEW else "奇趣小岛"
+                expected_id = "./?channel=preview" if PREVIEW else "./"
+                if manifest.get("name") != expected_name or manifest.get("short_name") != expected_short_name or manifest.get("id") != expected_id or manifest.get("orientation") != "landscape" or manifest.get("display") != "fullscreen":
                     raise AssertionError(f"unexpected PWA manifest: {manifest}")
                 result["manifest"] = manifest
                 mobile.wait_for_function("navigator.serviceWorker && navigator.serviceWorker.controller", timeout=15_000)
