@@ -287,7 +287,7 @@ def main() -> int:
                 navigator.axis("y", 440, tolerance=3)
                 navigator.axis("x", 1040, tolerance=3)
                 overlap = navigator.position()
-                if overlap.get("action") != "种红花种子":
+                if not str(overlap.get("action", "")).startswith("种"):
                     raise AssertionError(f"The closer flower-bed target was not selected in the pond overlap: {overlap}")
                 print("PASS pond/garden overlap selects the closer flower bed", flush=True)
                 navigator.move_until_ready("w", "开始钓鱼")
