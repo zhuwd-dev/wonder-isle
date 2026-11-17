@@ -185,12 +185,11 @@ def main() -> int:
                     # bed. Approach that bed from its north edge so the decor
                     # does not turn a normal southern route into a dead end.
                     if plant_id == 2:
-                        # A previous plant interaction can leave the player on
-                        # the pond island. Reach the bridge deck before moving
-                        # west; attempting x=400 at y=500 asks the avatar to
-                        # walk through the river instead of using the bridge.
-                        if state.get("x", 0) > 900 and state.get("y", 0) > 390:
-                            navigator.go(("y", 339))
+                        # Align to the bridge deck even when a previous plant
+                        # interaction leaves the player near its railings.
+                        # A small y offset can otherwise make the horizontal
+                        # route look like a blocked attempt through the river.
+                        navigator.go(("y", 339))
                         navigator.go(("x", 400), ("y", 339), ("x", 1160), ("y", 450))
                     elif state.get("x", 0) < 900:
                         navigator.go(("y", 339), ("x", 960), ("y", 500))
