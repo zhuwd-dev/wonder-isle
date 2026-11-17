@@ -13,6 +13,7 @@ import sys
 import tempfile
 import threading
 import time
+from urllib.parse import urlsplit, urlunsplit
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
@@ -28,6 +29,12 @@ class QuietHandler(SimpleHTTPRequestHandler):
 
 def inject_save_fixture(page, save_key: str, fixture_path: Path) -> None:
     fixture_base64 = base64.b64encode(fixture_path.read_bytes()).decode("ascii")
+    game_url = page.url
+    parsed_url = urlsplit(game_url)
+    fixture_url = urlunsplit((parsed_url.scheme, parsed_url.netloc, "/__save_fixture__", "", ""))
+    # Stop the running game before changing its storage. Otherwise the live
+    # page can save its old revision between the mirror and WebFS fixture writes.
+    page.goto(fixture_url, wait_until="load")
     page.evaluate(
         """({key, payload}) => {
             const binary = atob(payload);
@@ -80,7 +87,7 @@ def inject_save_fixture(page, save_key: str, fixture_path: Path) -> None:
         })""",
         {"key": save_key, "payload": fixture_base64},
     )
-    page.reload(wait_until="load", timeout=60_000)
+    page.goto(game_url, wait_until="load", timeout=60_000)
     page.wait_for_selector("canvas", timeout=60_000)
     page.wait_for_timeout(4_500)
 
@@ -803,7 +810,10 @@ def main() -> int:
                             save_key,
                         )
                         if turtle_save.get("q005_watered") is not False or turtle_save.get("pond_opened") is not True:
-                            raise AssertionError("The browser did not load the Q005 turtle-garden fixture")
+                            raise AssertionError(
+                                "The browser did not load the Q005 turtle-garden fixture: "
+                                + json.dumps(turtle_save, ensure_ascii=False)
+                            )
                         page.screenshot(path=str(turtle_garden_screenshot_path), full_page=True)
                         result["q005_turtle_garden_screenshot"] = str(turtle_garden_screenshot_path)
 
@@ -969,7 +979,10 @@ def main() -> int:
                                 break
                             page.wait_for_timeout(500)
                         if delivered_save.get("q005_harvest_delivered") is not True or delivered_save.get("q005_completed") is not True:
-                            raise AssertionError("Interacting with the turtle must deliver the bouquet and complete Q005")
+                            raise AssertionError(
+                                "Interacting with the turtle must deliver the bouquet and complete Q005; "
+                                + json.dumps({"saved": delivered_save, "runtime": navigator.position()}, ensure_ascii=False)
+                            )
                         page.screenshot(path=str(turtle_delivery_screenshot_path), full_page=True)
                         result["q005_watered_browser_flow"] = "passed"
                         result["q005_growth_screenshot"] = str(turtle_growth_screenshot_path)
