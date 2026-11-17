@@ -785,45 +785,7 @@ def main() -> int:
                             capture_output=True,
                             text=True,
                         )
-                        turtle_fixture = base64.b64encode(fixture_path.read_bytes()).decode("ascii")
-                        # Update both persistence layers together. Earlier browser
-                        # interactions may have left a higher-revision mirror; a
-                        # one-sided WebFS fixture must correctly lose to it.
-                        page.evaluate(
-                            """({key, payload}) => {
-                                const bytes = Uint8Array.from(atob(payload), character => character.charCodeAt(0));
-                                localStorage.setItem(key, new TextDecoder().decode(bytes));
-                            }""",
-                            {"key": MIRROR_KEY, "payload": turtle_fixture},
-                        )
-                        page.evaluate(
-                            """async ({key, payload}) => new Promise((resolve, reject) => {
-                                const binary = atob(payload);
-                                const contents = new Int8Array(binary.length);
-                                for (let index = 0; index < binary.length; index++) {
-                                    contents[index] = binary.charCodeAt(index);
-                                }
-                                const opening = indexedDB.open('/userfs');
-                                opening.onerror = () => reject(opening.error);
-                                opening.onsuccess = () => {
-                                    const transaction = opening.result.transaction('FILE_DATA', 'readwrite');
-                                    const store = transaction.objectStore('FILE_DATA');
-                                    const existing = store.get(key);
-                                    existing.onsuccess = () => {
-                                        const record = existing.result || {};
-                                        record.timestamp = new Date();
-                                        record.contents = contents;
-                                        store.put(record, key);
-                                    };
-                                    transaction.oncomplete = resolve;
-                                    transaction.onerror = () => reject(transaction.error);
-                                };
-                            })""",
-                            {"key": save_key, "payload": turtle_fixture},
-                        )
-                        page.reload(wait_until="load", timeout=60_000)
-                        page.wait_for_selector("canvas", timeout=60_000)
-                        page.wait_for_timeout(3_000)
+                        inject_save_fixture(page, save_key, fixture_path)
                         turtle_save = page.evaluate(
                             """async key => new Promise((resolve, reject) => {
                                 const opening = indexedDB.open('/userfs');
@@ -1032,51 +994,9 @@ def main() -> int:
                         capture_output=True,
                         text=True,
                     )
-                    fixture_base64 = base64.b64encode(fixture_path.read_bytes()).decode("ascii")
-                    save_key = SAVE_KEY
-                    page.evaluate(
-                        """({key, payload}) => {
-                            const bytes = Uint8Array.from(atob(payload), character => character.charCodeAt(0));
-                            localStorage.setItem(key, new TextDecoder().decode(bytes));
-                        }""",
-                        {"key": MIRROR_KEY, "payload": fixture_base64},
-                    )
-                    page.mouse.click(800, 600)
-                    # Use the right-thumb interaction control for the final
-                    # celebration, matching the intended touch-friendly action.
-                    page.mouse.click(1_214, 662)
-                    page.wait_for_timeout(1_000)
-                    page.evaluate(
-                        """async ({key, payload}) => new Promise((resolve, reject) => {
-                            const binary = atob(payload);
-                            const contents = new Int8Array(binary.length);
-                            for (let index = 0; index < binary.length; index++) {
-                                contents[index] = binary.charCodeAt(index);
-                            }
-                            const opening = indexedDB.open('/userfs');
-                            opening.onerror = () => reject(opening.error);
-                            opening.onsuccess = () => {
-                                const transaction = opening.result.transaction('FILE_DATA', 'readwrite');
-                                const store = transaction.objectStore('FILE_DATA');
-                                const existing = store.get(key);
-                                existing.onsuccess = () => {
-                                    if (!existing.result) {
-                                        reject(new Error('The game did not create its save file'));
-                                        return;
-                                    }
-                                    existing.result.timestamp = new Date();
-                                    existing.result.contents = contents;
-                                    store.put(existing.result, key);
-                                };
-                                transaction.oncomplete = resolve;
-                                transaction.onerror = () => reject(transaction.error);
-                            };
-                        })""",
-                        {"key": save_key, "payload": fixture_base64},
-                    )
-                    page.reload(wait_until="load", timeout=60_000)
-                    page.wait_for_selector("canvas", timeout=60_000)
-                    page.wait_for_timeout(3_000)
+                    # Load the Q012 fixture into both storage layers atomically from
+                    # the test's point of view, without racing the live game tab.
+                    inject_save_fixture(page, SAVE_KEY, fixture_path)
                     page.screenshot(path=str(ending_screenshot_path), full_page=True)
 
                     page.mouse.click(800, 600)
