@@ -197,6 +197,13 @@ var save_mirror_key := WEB_SAVE_MIRROR_KEY
 var save_namespace := "production"
 var save_revision := 0
 var mirror_revision := -1
+var web_save_pending := false
+var web_save_request_serial := 0
+var web_save_active_request := 0
+var web_save_pending_text := ""
+var web_save_pending_revision := 0
+var web_save_queued := false
+var web_save_queued_data: Dictionary = {}
 var preview_build := false
 var player_position := Vector2(250, 500)
 var player_facing := Vector2.RIGHT
@@ -408,6 +415,7 @@ func _physics_process(delta: float) -> void:
 	_update_environment_focus(delta)
 	_update_interact_button()
 	_update_interact_button_animation()
+	_poll_web_save_mirror_result()
 	if test_telemetry_enabled:
 		test_telemetry_elapsed += delta
 		if test_telemetry_elapsed >= 0.033:
@@ -2624,21 +2632,18 @@ func _restart_game() -> void:
 
 
 func _save_game() -> void:
-	var next_revision := save_revision + 1
 	var save_data: Dictionary = game_state.to_save_data()
+	if OS.has_feature("web"):
+		if web_save_pending:
+			# Keep only the newest in-memory snapshot while the browser lock is held.
+			web_save_queued_data = save_data
+			web_save_queued = true
+			return
+		_begin_web_save(save_data)
+		return
+	var next_revision := save_revision + 1
 	save_data["_save_revision"] = next_revision
 	var save_text := JSON.stringify(save_data)
-	# The synchronous mirror uses compare-and-set. A tab that loaded an older
-	# revision cannot replace a newer tab's save.
-	var mirror_result := _write_web_save_mirror(save_data, next_revision)
-	if OS.has_feature("web") and mirror_result == "conflict":
-		message = "另一个页面保存了更新进度，请刷新页面后继续。"
-		message_color = Color("ffcfb3")
-		return
-	if OS.has_feature("web") and mirror_result != "saved":
-		message = "浏览器存储不可用，进度未保存。请检查网站存储权限或可用空间。"
-		message_color = Color("ffcfb3")
-		return
 	var file := FileAccess.open(save_path, FileAccess.WRITE)
 	if file == null:
 		message = "进度暂时无法保存，请检查设备存储权限。"
@@ -2649,6 +2654,123 @@ func _save_game() -> void:
 	file.close()
 	save_revision = next_revision
 	_refresh_build_controls()
+
+
+func _begin_web_save(save_data: Dictionary) -> void:
+	var next_revision := save_revision + 1
+	save_data["_save_revision"] = next_revision
+	web_save_pending_text = JSON.stringify(save_data)
+	web_save_pending_revision = next_revision
+	web_save_pending = true
+	web_save_request_serial += 1
+	web_save_active_request = web_save_request_serial
+	var envelope := {"format": WEB_SAVE_MIRROR_FORMAT, "namespace": save_namespace, "revision": next_revision, "payload": save_data}
+	var encoded := JSON.stringify(envelope)
+	var script := """(() => {
+	const request = %d;
+	const key = %s;
+	const namespace = %s;
+	const expectedRevision = %d;
+	const nextRevision = %d;
+	const encoded = %s;
+	const result = (status, revision) => { window.__wonderIsleSaveMirrorResult = [request, status, revision]; };
+	window.__wonderIsleSaveMirrorResult = [request, 'pending', -1];
+	try {
+		const opening = indexedDB.open('wonder-isle-save-mirror-ledger', 1);
+		opening.onupgradeneeded = () => { if (!opening.result.objectStoreNames.contains('mirrors')) opening.result.createObjectStore('mirrors'); };
+		opening.onerror = () => result('unavailable', -1);
+		opening.onsuccess = () => {
+			const db = opening.result;
+			let failure = 'unavailable';
+			let settled = false;
+			let tx;
+			const finish = (status, revision) => { if (settled) return; settled = true; db.close(); result(status, revision); };
+			try { tx = db.transaction('mirrors', 'readwrite'); }
+			catch (_) { finish('unavailable', -1); return; }
+			tx.oncomplete = () => finish('saved', nextRevision);
+			tx.onabort = () => finish(failure, -1);
+			tx.onerror = () => { failure = 'unavailable'; };
+			const store = tx.objectStore('mirrors');
+			const get = store.get(key);
+			get.onerror = () => { failure = 'unavailable'; try { tx.abort(); } catch (_) {} };
+			get.onsuccess = () => {
+				try {
+					const currentText = window.localStorage.getItem(key) || '';
+					let localRevision = -1;
+					if (currentText) {
+						const current = JSON.parse(currentText);
+						if (current && current.format === 'wonder-isle-save-mirror-v2') {
+							if (current.namespace !== namespace || !current.payload || !Number.isSafeInteger(current.revision) || current.revision < 0) throw new Error('invalid mirror');
+							localRevision = current.revision;
+						} else if (current && Object.prototype.hasOwnProperty.call(current, '_save_revision')) {
+							localRevision = Number.isSafeInteger(current._save_revision) && current._save_revision >= 0 ? current._save_revision : -2;
+						} else localRevision = 0;
+					}
+					const ledger = get.result;
+					let revision = localRevision;
+					if (ledger) {
+						if (!Number.isSafeInteger(ledger.revision) || ledger.revision < 0 || typeof ledger.envelope !== 'string') throw new Error('invalid ledger');
+						if (ledger.revision > localRevision || (ledger.revision === localRevision && ledger.envelope !== currentText)) {
+							window.localStorage.setItem(key, ledger.envelope);
+							failure = 'conflict';
+							tx.abort();
+							return;
+						}
+						revision = Math.max(revision, ledger.revision);
+					}
+					if (revision !== expectedRevision) {
+						failure = 'conflict';
+						tx.abort();
+						return;
+					}
+					window.localStorage.setItem(key, encoded);
+					store.put({revision: nextRevision, envelope: encoded}, key);
+				} catch (_) {
+					failure = 'unavailable';
+					try { tx.abort(); } catch (_) {}
+				}
+			};
+		};
+	} catch (_) { result('unavailable', -1); }
+})()""" % [web_save_active_request, JSON.stringify(save_mirror_key), JSON.stringify(save_namespace), mirror_revision, next_revision, JSON.stringify(encoded)]
+	JavaScriptBridge.eval(script, true)
+
+
+func _poll_web_save_mirror_result() -> void:
+	if not web_save_pending:
+		return
+	var raw_result = JavaScriptBridge.eval("JSON.stringify(window.__wonderIsleSaveMirrorResult || null)", true)
+	if not raw_result is String:
+		return
+	var parsed: Variant = JSON.parse_string(raw_result)
+	if not parsed is Array or parsed.size() < 3 or int(parsed[0]) != web_save_active_request or str(parsed[1]) == "pending":
+		return
+	var result := str(parsed[1])
+	web_save_pending = false
+	if result == "saved":
+		save_revision = int(parsed[2])
+		mirror_revision = save_revision
+		if not _write_save_file(web_save_pending_text):
+			message = "浏览器镜像已保存，但本地存档暂不可用；刷新时会从镜像恢复。"
+			message_color = Color("ffcfb3")
+		web_save_pending_text = ""
+		if web_save_queued:
+			var queued_data := web_save_queued_data
+			web_save_queued_data = {}
+			web_save_queued = false
+			_begin_web_save(queued_data)
+		else:
+			_refresh_build_controls()
+		return
+	web_save_pending_text = ""
+	web_save_queued_data = {}
+	web_save_queued = false
+	if result == "conflict":
+		message = "另一个页面保存了更新进度，请刷新页面后继续。"
+	else:
+		message = "浏览器存储不可用，进度未保存。请检查网站存储权限或可用空间。"
+	message_color = Color("ffcfb3")
+	queue_redraw()
 
 
 func _load_game() -> void:
@@ -2734,18 +2856,6 @@ func _select_save_snapshot(mirror: Dictionary, disk: Dictionary) -> Dictionary:
 	if mirror.get("valid", false) and int(mirror.get("revision", -1)) > int(disk.get("revision", -1)):
 		return mirror
 	return disk
-
-
-func _write_web_save_mirror(save_data: Dictionary, next_revision: int) -> String:
-	if not OS.has_feature("web"):
-		return "unavailable"
-	var envelope := {"format": WEB_SAVE_MIRROR_FORMAT, "namespace": save_namespace, "revision": next_revision, "payload": save_data}
-	var encoded := JSON.stringify(envelope)
-	var script := "(() => { try { const key='%s'; const current=window.localStorage.getItem(key); let revision=-1; if(current){const parsed=JSON.parse(current); if(parsed&&parsed.format==='wonder-isle-save-mirror-v2'){revision=Number.isSafeInteger(parsed.revision)&&parsed.revision>=0?parsed.revision:-2;}else if(parsed&&Object.prototype.hasOwnProperty.call(parsed,'_save_revision')){revision=Number.isSafeInteger(parsed._save_revision)&&parsed._save_revision>=0?parsed._save_revision:-2;}else{revision=0;}} if(revision!==%d)return 'conflict'; window.localStorage.setItem(key,%s); return 'saved'; } catch (_) { return 'unavailable'; } })()" % [save_mirror_key, mirror_revision, JSON.stringify(encoded)]
-	var result = JavaScriptBridge.eval(script, true)
-	if str(result) == "saved":
-		mirror_revision = next_revision
-	return str(result)
 
 
 func _read_web_save_mirror() -> String:
