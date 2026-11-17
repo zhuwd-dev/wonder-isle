@@ -786,6 +786,16 @@ def main() -> int:
                             text=True,
                         )
                         turtle_fixture = base64.b64encode(fixture_path.read_bytes()).decode("ascii")
+                        # Update both persistence layers together. Earlier browser
+                        # interactions may have left a higher-revision mirror; a
+                        # one-sided WebFS fixture must correctly lose to it.
+                        page.evaluate(
+                            """({key, payload}) => {
+                                const bytes = Uint8Array.from(atob(payload), character => character.charCodeAt(0));
+                                localStorage.setItem(key, new TextDecoder().decode(bytes));
+                            }""",
+                            {"key": MIRROR_KEY, "payload": turtle_fixture},
+                        )
                         page.evaluate(
                             """async ({key, payload}) => new Promise((resolve, reject) => {
                                 const binary = atob(payload);
@@ -1024,6 +1034,13 @@ def main() -> int:
                     )
                     fixture_base64 = base64.b64encode(fixture_path.read_bytes()).decode("ascii")
                     save_key = SAVE_KEY
+                    page.evaluate(
+                        """({key, payload}) => {
+                            const bytes = Uint8Array.from(atob(payload), character => character.charCodeAt(0));
+                            localStorage.setItem(key, new TextDecoder().decode(bytes));
+                        }""",
+                        {"key": MIRROR_KEY, "payload": fixture_base64},
+                    )
                     page.mouse.click(800, 600)
                     # Use the right-thumb interaction control for the final
                     # celebration, matching the intended touch-friendly action.
