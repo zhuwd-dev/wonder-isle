@@ -34,7 +34,9 @@ def inject_save_fixture(page, save_key: str, fixture_path: Path) -> None:
     fixture_url = urlunsplit((parsed_url.scheme, parsed_url.netloc, "/__save_fixture__", "", ""))
     # Stop the running game before changing its storage. Otherwise the live
     # page can save its old revision between the mirror and WebFS fixture writes.
+    page.route(fixture_url, lambda route: route.fulfill(status=200, content_type="text/html", body="<!doctype html><title>fixture</title>"))
     page.goto(fixture_url, wait_until="load")
+    page.unroute(fixture_url)
     page.evaluate(
         """({key, payload}) => {
             const binary = atob(payload);
