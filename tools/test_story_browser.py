@@ -12,8 +12,7 @@ from pathlib import Path
 
 from playwright.sync_api import sync_playwright
 from browser_navigation import Navigator
-
-SAVE_KEY = "/userfs/godot/app_userdata/奇趣小岛/qxisland_stage2_save.json"
+from web_save_namespace import PREVIEW, SAVE_KEY
 
 
 class QuietHandler(SimpleHTTPRequestHandler):
@@ -41,8 +40,8 @@ def main():
             page.on("pageerror", lambda error: errors.append(str(error)))
             page.goto(f"http://127.0.0.1:{server.server_port}/index.html?test_telemetry=1", wait_until="load")
             initial = nav.position()
-            sha = os.environ.get("GITHUB_SHA", "")
-            expected_revision = sha[:7].lower() if re.fullmatch(r"[0-9a-fA-F]{40}", sha) else "local"
+            sha = os.environ.get("WONDER_ISLE_COMMIT", os.environ.get("GITHUB_SHA", ""))
+            expected_revision = (sha.lower() if PREVIEW else sha[:7].lower()) if re.fullmatch(r"[0-9a-fA-F]{40}", sha) else "local"
             if initial.get("build_revision") != expected_revision:
                 raise AssertionError(f"Engine build version differs from export: {initial}")
 

@@ -13,8 +13,8 @@ import sys
 
 from playwright.sync_api import sync_playwright
 from browser_navigation import Navigator
+from web_save_namespace import MIRROR_KEY, SAVE_KEY
 
-SAVE_KEY = "/userfs/godot/app_userdata/奇趣小岛/qxisland_stage2_save.json"
 READ_IDB = """async key => await new Promise((resolve, reject) => {
   const opening = indexedDB.open('/userfs');
   opening.onerror = () => reject(opening.error);
@@ -68,7 +68,7 @@ def main() -> int:
                         page.goto(f"http://127.0.0.1:{server.server_port}/index.html?test_telemetry=1", wait_until="load")
 
                         def read_local() -> dict | None:
-                            raw = page.evaluate("() => { try { return localStorage.getItem('wonder-isle-save-v1'); } catch (_) { return null; } }")
+                            raw = page.evaluate("key => { try { return localStorage.getItem(key); } catch (_) { return null; } }", MIRROR_KEY)
                             return json.loads(raw) if raw else None
 
                         def read_idb() -> dict | None:

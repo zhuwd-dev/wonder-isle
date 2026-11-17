@@ -20,6 +20,7 @@ const PLANK_ART: Texture2D = preload("res://assets/art/props/weathered-planks.pn
 const CRATE_ART: Texture2D = preload("res://assets/art/props/island-wood-crate.png")
 const SAVE_PATH := "user://qxisland_stage2_save.json"
 const WEB_SAVE_MIRROR_KEY := "wonder-isle-save-v1"
+const WEB_SAVE_MIRROR_FORMAT := "wonder-isle-save-mirror-v2"
 const WORLD_SIZE := Vector2(1280, 720)
 const PLAYER_SPEED := 260.0
 const PLAYER_FOOT_OFFSET := Vector2(0, 36)
@@ -192,6 +193,11 @@ const VISUAL_PALETTE := {
 var game_state
 var competition_session: Control
 var save_path := SAVE_PATH
+var save_mirror_key := WEB_SAVE_MIRROR_KEY
+var save_namespace := "production"
+var save_revision := 0
+var mirror_revision := -1
+var preview_build := false
 var player_position := Vector2(250, 500)
 var player_facing := Vector2.RIGHT
 var player_animation := PlayerAnimation.new(MOUSE_FRAMES if SceneArt.mouse_enabled() else MOUSE_IDLE_FRAMES)
@@ -316,8 +322,10 @@ func _ready() -> void:
 	for arg in OS.get_cmdline_user_args():
 		if str(arg).begins_with("--build-revision="):
 			var revision := str(arg).trim_prefix("--build-revision=")
-			if revision == "local" or (revision.length() == 7 and revision.is_valid_hex_number(false)):
+			if revision == "local" or (revision.length() in [7, 40] and revision.is_valid_hex_number(false)):
 				build_revision = revision
+		elif str(arg) == "--development-preview":
+			preview_build = true
 	var ui_theme := Theme.new()
 	ui_theme.default_font = UI_FONT
 	theme = ui_theme
@@ -877,6 +885,14 @@ func _configure_runtime_inputs() -> void:
 
 func _configure_save_path() -> void:
 	var args := OS.get_cmdline_user_args()
+	for arg in args:
+		if str(arg).begins_with("--save-namespace="):
+			var candidate := str(arg).trim_prefix("--save-namespace=").to_lower()
+			if candidate.is_valid_identifier():
+				save_namespace = candidate
+				save_path = "user://qxisland_stage2_save_%s.json" % candidate
+				save_mirror_key = "wonder-isle-save-%s-v2" % candidate
+			break
 	for index in range(max(args.size() - 1, 0)):
 		if str(args[index]) == "--test-save-path":
 			var candidate := str(args[index + 1])
@@ -933,7 +949,7 @@ func _create_controls() -> void:
 	game_menu_popup.add_separator()
 	game_menu_popup.add_item("重新开始…", 1)
 	game_menu_popup.add_separator()
-	game_menu_popup.add_item("版本 " + build_revision, 2)
+	game_menu_popup.add_item(("Development Preview · " if preview_build else "版本 ") + build_revision, 2)
 	game_menu_popup.set_item_disabled(game_menu_popup.item_count - 1, true)
 	game_menu_popup.id_pressed.connect(_on_game_menu_item_pressed)
 	add_child(game_menu_popup)
@@ -2608,63 +2624,134 @@ func _restart_game() -> void:
 
 
 func _save_game() -> void:
-	var save_text := JSON.stringify(game_state.to_save_data())
-	# Godot's WebFS writes to memory first and commits to IndexedDB asynchronously.
-	# Keep a synchronous browser mirror so a refresh in that window can still
-	# restore the latest state; WebFS remains the canonical user:// save file.
-	var web_mirror_saved := _write_web_save_mirror(save_text)
+	var next_revision := save_revision + 1
+	var save_data: Dictionary = game_state.to_save_data()
+	save_data["_save_revision"] = next_revision
+	var save_text := JSON.stringify(save_data)
+	# The synchronous mirror uses compare-and-set. A tab that loaded an older
+	# revision cannot replace a newer tab's save.
+	var mirror_result := _write_web_save_mirror(save_data, next_revision)
+	if OS.has_feature("web") and mirror_result == "conflict":
+		message = "另一个页面保存了更新进度，请刷新页面后继续。"
+		message_color = Color("ffcfb3")
+		return
+	if OS.has_feature("web") and mirror_result != "saved":
+		message = "浏览器存储不可用，进度未保存。请检查网站存储权限或可用空间。"
+		message_color = Color("ffcfb3")
+		return
 	var file := FileAccess.open(save_path, FileAccess.WRITE)
 	if file == null:
-		if web_mirror_saved:
-			_refresh_build_controls()
-			return
 		message = "进度暂时无法保存，请检查设备存储权限。"
 		message_color = Color("ffcfb3")
 		return
 	file.store_string(save_text)
 	file.flush()
 	file.close()
+	save_revision = next_revision
 	_refresh_build_controls()
 
 
 func _load_game() -> void:
-	var browser_save_text := _read_web_save_mirror()
-	if not browser_save_text.is_empty():
-		var browser_data = JSON.parse_string(browser_save_text)
-		if browser_data is Dictionary and game_state.load_save_data(browser_data):
+	var mirror_text := _read_web_save_mirror()
+	var mirror := _decode_save_snapshot(mirror_text)
+	var disk := _decode_save_snapshot(_read_save_file())
+	var selected: Dictionary = _select_save_snapshot(mirror, disk)
+	if selected.get("valid", false):
+		if game_state.load_save_data(selected.data):
+			save_revision = int(selected.revision)
+			mirror_revision = int(mirror.get("revision", -1)) if mirror.get("valid", false) else -1
 			message = _loaded_progress_message()
-			# Rehydrate user:// so WebFS will converge to the synchronous mirror.
-			_save_game()
+			if selected == mirror:
+				_write_save_file(JSON.stringify(selected.data))
 			return
+	if not mirror_text.is_empty() or not _read_save_file().is_empty():
+		game_state.reset()
+		message = "存档损坏或版本不兼容，已安全开始新游戏；原存档未被自动覆盖。"
+		message_color = Color("ffe1b8")
+
+
+func _read_save_file() -> String:
 	if not FileAccess.file_exists(save_path):
-		return
+		return ""
 	var file := FileAccess.open(save_path, FileAccess.READ)
 	if file == null:
-		return
-	var save_text := file.get_as_text()
+		return ""
+	var value := file.get_as_text()
 	file.close()
-	var data = JSON.parse_string(save_text)
-	if data is Dictionary and game_state.load_save_data(data):
-		message = _loaded_progress_message()
-		# Preserve existing saves in the immediate-refresh mirror on Web.
-		_write_web_save_mirror(save_text)
-		return
-	game_state.reset()
-	message = "存档格式无法识别，已安全开始新游戏。"
-	message_color = Color("ffe1b8")
+	return value
 
 
-func _write_web_save_mirror(save_text: String) -> bool:
-	if not OS.has_feature("web"):
+func _write_save_file(save_text: String) -> bool:
+	var file := FileAccess.open(save_path, FileAccess.WRITE)
+	if file == null:
 		return false
-	var script := "(() => { try { window.localStorage.setItem('%s', %s); return true; } catch (_) {} try { window.sessionStorage.setItem('%s', %s); return true; } catch (_) { return false; } })()" % [WEB_SAVE_MIRROR_KEY, JSON.stringify(save_text), WEB_SAVE_MIRROR_KEY, JSON.stringify(save_text)]
-	return bool(JavaScriptBridge.eval(script, true))
+	file.store_string(save_text)
+	file.flush()
+	file.close()
+	return true
+
+
+func _decode_save_snapshot(snapshot_text: String) -> Dictionary:
+	if snapshot_text.is_empty():
+		return {"valid": false, "revision": -1}
+	var json := JSON.new()
+	if json.parse(snapshot_text) != OK:
+		return {"valid": false, "revision": -1}
+	var parsed = json.data
+	if not parsed is Dictionary:
+		return {"valid": false, "revision": -1}
+	var payload: Dictionary = parsed
+	var revision := 0 # Legacy raw saves have no revision and never beat WebFS.
+	if str(parsed.get("format", "")) == WEB_SAVE_MIRROR_FORMAT:
+		if str(parsed.get("namespace", "")) != save_namespace or not parsed.get("payload") is Dictionary:
+			return {"valid": false, "revision": -1}
+		var raw_revision = _validated_save_revision(parsed.get("revision", -1))
+		if raw_revision < 0:
+			return {"valid": false, "revision": -1}
+		revision = raw_revision
+		payload = parsed.payload
+	else:
+		var raw_revision = _validated_save_revision(parsed.get("_save_revision", 0))
+		if raw_revision >= 0:
+			revision = raw_revision
+	var validator = GameState.new()
+	if not validator.load_save_data(payload):
+		return {"valid": false, "revision": -1}
+	return {"valid": true, "revision": revision, "data": payload}
+
+
+func _validated_save_revision(value: Variant) -> int:
+	if typeof(value) != TYPE_INT and typeof(value) != TYPE_FLOAT:
+		return -1
+	var number := float(value)
+	if number < 0.0 or number > 9007199254740991.0 or not is_equal_approx(number, round(number)):
+		return -1
+	return int(number)
+
+
+func _select_save_snapshot(mirror: Dictionary, disk: Dictionary) -> Dictionary:
+	# WebFS wins ties; only a strictly newer, valid mirror may rehydrate it.
+	if mirror.get("valid", false) and int(mirror.get("revision", -1)) > int(disk.get("revision", -1)):
+		return mirror
+	return disk
+
+
+func _write_web_save_mirror(save_data: Dictionary, next_revision: int) -> String:
+	if not OS.has_feature("web"):
+		return "unavailable"
+	var envelope := {"format": WEB_SAVE_MIRROR_FORMAT, "namespace": save_namespace, "revision": next_revision, "payload": save_data}
+	var encoded := JSON.stringify(envelope)
+	var script := "(() => { try { const key='%s'; const current=window.localStorage.getItem(key); let revision=-1; if(current){const parsed=JSON.parse(current); revision=parsed&&parsed.format==='wonder-isle-save-mirror-v2'&&Number.isSafeInteger(parsed.revision)?parsed.revision:0;} if(revision!==%d)return 'conflict'; window.localStorage.setItem(key,%s); return 'saved'; } catch (_) { return 'unavailable'; } })()" % [save_mirror_key, mirror_revision, JSON.stringify(encoded)]
+	var result = JavaScriptBridge.eval(script, true)
+	if str(result) == "saved":
+		mirror_revision = next_revision
+	return str(result)
 
 
 func _read_web_save_mirror() -> String:
 	if not OS.has_feature("web"):
 		return ""
-	var script := "(() => { try { const value = window.localStorage.getItem('%s'); if (value) return value; } catch (_) {} try { return window.sessionStorage.getItem('%s') || ''; } catch (_) { return ''; } })()" % [WEB_SAVE_MIRROR_KEY, WEB_SAVE_MIRROR_KEY]
+	var script := "(() => { try { return window.localStorage.getItem('%s') || ''; } catch (_) { return ''; } })()" % save_mirror_key
 	var value = JavaScriptBridge.eval(script, true)
 	return str(value) if value is String else ""
 

@@ -12,9 +12,9 @@ from pathlib import Path
 from playwright.sync_api import sync_playwright
 from browser_navigation import Navigator
 from test_web_preview import inject_save_fixture
+from web_save_namespace import SAVE_KEY
 
 ROOT = Path(__file__).resolve().parent.parent
-SAVE_KEY = '/userfs/godot/app_userdata/奇趣小岛/qxisland_stage2_save.json'
 
 class QuietHandler(SimpleHTTPRequestHandler):
     def log_message(self, *_args):

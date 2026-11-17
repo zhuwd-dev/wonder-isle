@@ -16,9 +16,9 @@ from pathlib import Path
 
 from playwright.sync_api import sync_playwright
 from browser_navigation import Navigator
+from web_save_namespace import MIRROR_KEY, SAVE_KEY
 
 
-SAVE_KEY = "/userfs/godot/app_userdata/奇趣小岛/qxisland_stage2_save.json"
 
 
 class QuietHandler(SimpleHTTPRequestHandler):
@@ -86,7 +86,7 @@ def main() -> int:
                         for (let index = 0; index < binary.length; index++) contents[index] = binary.charCodeAt(index);
                         localStorage.setItem(key, new TextDecoder().decode(contents));
                     }""",
-                    {"key": "wonder-isle-save-v1", "payload": fixture_payload},
+                    {"key": MIRROR_KEY, "payload": fixture_payload},
                 )
                 # Load the actual save produced by real Q001–Q012 browser play
                 # into both persistence layers of a fresh isolated origin; no task fields are fabricated.

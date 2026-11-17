@@ -63,3 +63,4 @@ fi
 "$python_bin" "$project_root/tools/test_optional_quest_browser.py" "$build_dir"
 "$python_bin" "$project_root/tools/test_free_life_browser.py" "$build_dir"
 "$python_bin" "$project_root/tools/test_web_reload.py" "$build_dir"
+"$python_bin" "$project_root/tools/test_save_mirror_cas.py"

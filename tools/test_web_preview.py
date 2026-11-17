@@ -18,6 +18,7 @@ from pathlib import Path
 
 from playwright.sync_api import sync_playwright
 from browser_navigation import Navigator
+from web_save_namespace import MIRROR_KEY, SAVE_KEY
 
 
 class QuietHandler(SimpleHTTPRequestHandler):
@@ -28,13 +29,13 @@ class QuietHandler(SimpleHTTPRequestHandler):
 def inject_save_fixture(page, save_key: str, fixture_path: Path) -> None:
     fixture_base64 = base64.b64encode(fixture_path.read_bytes()).decode("ascii")
     page.evaluate(
-        """payload => {
+        """({key, payload}) => {
             const binary = atob(payload);
             const contents = new Uint8Array(binary.length);
             for (let index = 0; index < binary.length; index++) contents[index] = binary.charCodeAt(index);
-            localStorage.setItem("wonder-isle-save-v1", new TextDecoder().decode(contents));
+            localStorage.setItem(key, new TextDecoder().decode(contents));
         }""",
-        fixture_base64,
+        {"key": MIRROR_KEY, "payload": fixture_base64},
     )
     page.evaluate(
         """async ({key, payload}) => new Promise((resolve, reject) => {
@@ -339,7 +340,7 @@ def main() -> int:
                         capture_output=True,
                         text=True,
                     )
-                    save_key = "/userfs/godot/app_userdata/奇趣小岛/qxisland_stage2_save.json"
+                    save_key = SAVE_KEY
                     fixture_paths = {
                         stage: fixture_directory / f"q001-{stage}.json"
                         for stage in ("initial", "collected-1", "bridge-1", "bridge-2", "bridge-3")
@@ -1022,7 +1023,7 @@ def main() -> int:
                         text=True,
                     )
                     fixture_base64 = base64.b64encode(fixture_path.read_bytes()).decode("ascii")
-                    save_key = "/userfs/godot/app_userdata/奇趣小岛/qxisland_stage2_save.json"
+                    save_key = SAVE_KEY
                     page.mouse.click(800, 600)
                     # Use the right-thumb interaction control for the final
                     # celebration, matching the intended touch-friendly action.

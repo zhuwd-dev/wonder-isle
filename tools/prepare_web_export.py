@@ -119,18 +119,27 @@ def write_pwa_files(build_dir: Path, build_id: str) -> None:
     (build_dir / "index.192x192.png").write_bytes(icon_source.read_bytes())
     manifest = dict(PWA_MANIFEST)
     manifest["start_url"] = "./index.html"
+    preview = os.environ.get("WONDER_ISLE_PREVIEW", "").lower() in {"1", "true", "yes"}
+    if preview:
+        manifest.update({
+            "id": "./?channel=preview",
+            "name": "奇趣小岛 · Development Preview",
+            "short_name": "小岛试玩",
+            "description": "生活岛升级开发试玩版。进度与正式版分开保存。",
+        })
     manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    worker = f'''const CACHE_NAME="wonder-isle-{build_id}"; const CACHE_PREFIX="wonder-isle-";
+    cache_channel = "wonder-isle-preview-" if preview else "wonder-isle-production-"
+    worker = f'''const CACHE_NAME="{cache_channel}{build_id}"; const CACHE_PREFIX="{cache_channel}";
 const INDEX_URL=new URL("./index.html",self.registration.scope).href;
 self.addEventListener("install",event=>event.waitUntil(self.skipWaiting()));
 self.addEventListener("activate",event=>event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(key=>key.startsWith(CACHE_PREFIX)&&key!==CACHE_NAME).map(key=>caches.delete(key)))).then(()=>self.clients.claim())));
 self.addEventListener("fetch",event=>{{
  const request=event.request; if(request.method!=="GET"||new URL(request.url).origin!==self.location.origin)return;
  if(new URL(request.url).searchParams.has("test_telemetry"))return;
- if(request.mode==="navigate"){{event.respondWith(fetch(request).then(response=>{{if(response.ok)caches.open(CACHE_NAME).then(cache=>cache.put(INDEX_URL,response.clone())).catch(()=>{{}});return response;}}).catch(async()=>await caches.match(request)||await caches.match(INDEX_URL)||Response.error()));return;}}
+ if(request.mode==="navigate"){{event.respondWith(fetch(request).then(response=>{{if(response.ok)caches.open(CACHE_NAME).then(cache=>cache.put(INDEX_URL,response.clone())).catch(()=>{{}});return response;}}).catch(async()=>{{const cache=await caches.open(CACHE_NAME);return await cache.match(request)||await cache.match(INDEX_URL)||Response.error();}}));return;}}
  const name=new URL(request.url).pathname.split("/").pop();
  if(!/^index-[a-f0-9]{{12}}\\.(?:js|wasm|pck|audio\\.worklet\\.js|audio\\.position\\.worklet\\.js)$/.test(name))return;
- event.respondWith(caches.match(request).then(cached=>cached||fetch(request).then(response=>{{if(response.ok)caches.open(CACHE_NAME).then(cache=>cache.put(request,response.clone())).catch(()=>{{}});return response;}})));
+ event.respondWith(caches.open(CACHE_NAME).then(cache=>cache.match(request)).then(cached=>cached||fetch(request).then(response=>{{if(response.ok)caches.open(CACHE_NAME).then(cache=>cache.put(request,response.clone())).catch(()=>{{}});return response;}})));
 }});
 '''
     worker_path.write_text(worker, encoding="utf-8")
@@ -226,9 +235,20 @@ def main() -> int:
     except json.JSONDecodeError:
         print("Godot Web startup configuration is not valid JSON.", file=sys.stderr)
         return 1
-    commit = os.environ.get("GITHUB_SHA", "")
-    version = commit[:7].lower() if re.fullmatch(r"[0-9a-fA-F]{40}", commit) else "local"
-    config["args"] = ["--", f"--build-revision={version}"]
+    commit = os.environ.get("WONDER_ISLE_COMMIT", os.environ.get("GITHUB_SHA", ""))
+    preview = os.environ.get("WONDER_ISLE_PREVIEW", "").lower() in {"1", "true", "yes"}
+    if not commit:
+        try:
+            import subprocess
+            commit = subprocess.run(["git", "rev-parse", "HEAD"], cwd=Path(__file__).resolve().parents[1], check=True, capture_output=True, text=True).stdout.strip()
+        except (OSError, subprocess.CalledProcessError):
+            commit = ""
+    full_commit = commit.lower() if re.fullmatch(r"[0-9a-fA-F]{40}", commit) else ""
+    version = full_commit if preview and full_commit else (full_commit[:7] if full_commit else "local")
+    config_args = ["--", f"--build-revision={version}"]
+    if preview:
+        config_args.extend(["--development-preview", "--save-namespace=preview"])
+    config["args"] = config_args
     config["executable"] = executable
     config["fileSizes"] = {
         f"{executable}.{extension}": config["fileSizes"][f"index.{extension}"]
@@ -243,11 +263,14 @@ def main() -> int:
         html = html.replace(OLD_LANGUAGE, NEW_LANGUAGE, 1)
         html = html.replace(OLD_NOTICE, NEW_NOTICE, 1)
     write_pwa_files(build_dir, build_id)
+    if preview:
+        html = html.replace('<div class="launch-kicker">绘本式小岛冒险</div>', '<div class="launch-kicker">生活岛升级 · Development Preview</div>', 1)
+    badge_text = f'生活岛升级 · Development Preview · {version}' if preview else f'版本 {version}'
     version_badge = (f'<div id="build-version" aria-label="游戏版本" '
                      f'style="position:fixed;top:2px;left:50%;transform:translateX(-50%);'
                      f'z-index:10;pointer-events:none;font:11px sans-serif;color:#36574a;'
-                     f'background:rgba(255,249,237,.85);border-radius:5px;padding:1px 6px">'
-                     f'版本 {version}</div>')
+                     f'background:rgba(255,249,237,.88);border-radius:5px;padding:1px 6px">'
+                     f'{badge_text}</div>')
     html = html.replace("</body>", version_badge + "\n</body>", 1)
     index_file.write_text(html, encoding="utf-8")
 

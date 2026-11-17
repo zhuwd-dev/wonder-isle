@@ -15,10 +15,9 @@ from pathlib import Path
 
 from playwright.sync_api import sync_playwright
 from browser_navigation import Navigator
+from web_save_namespace import MIRROR_KEY, SAVE_KEY
 
 
-SAVE_KEY = "/userfs/godot/app_userdata/奇趣小岛/qxisland_stage2_save.json"
-MIRROR_KEY = "wonder-isle-save-v1"
 PLANT_POSITIONS = ((1028, 480), (1080, 480), (1132, 480))
 
 
@@ -66,7 +65,7 @@ def main() -> int:
                         const binary = atob(payload);
                         const bytes = new Uint8Array(binary.length);
                         for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-                        localStorage.setItem('wonder-isle-save-v1', new TextDecoder().decode(bytes));
+                        localStorage.setItem(key, new TextDecoder().decode(bytes));
                     }""",
                     {"key": MIRROR_KEY, "payload": binary_payload},
                 )
@@ -134,6 +133,8 @@ def main() -> int:
                         last_memory = navigator.position().get("test_save_data", {})
                         last_db = read_db()
                         mirror = page.evaluate("key => JSON.parse(localStorage.getItem(key) || 'null')", MIRROR_KEY)
+                        if mirror and mirror.get("format") == "wonder-isle-save-mirror-v2":
+                            mirror = mirror.get("payload")
                         if last_db and mirror and predicate(last_memory) and predicate(mirror) and predicate(last_db):
                             print(f"PASS {label}", flush=True)
                             return last_db
@@ -145,6 +146,8 @@ def main() -> int:
                     while time.monotonic() < deadline:
                         memory = navigator.position().get("test_save_data", {})
                         mirror = page.evaluate("key => JSON.parse(localStorage.getItem(key) || 'null')", MIRROR_KEY)
+                        if mirror and mirror.get("format") == "wonder-isle-save-mirror-v2":
+                            mirror = mirror.get("payload")
                         if mirror and predicate(memory) and predicate(mirror):
                             print(f"PASS {label} in memory and sync mirror", flush=True)
                             return mirror
