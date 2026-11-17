@@ -19,7 +19,7 @@ from pathlib import Path
 
 from playwright.sync_api import sync_playwright
 from browser_navigation import Navigator
-from web_save_namespace import MIRROR_KEY, SAVE_KEY
+from web_save_namespace import MIRROR_KEY, SAVE_KEY, SAVE_NAMESPACE
 
 
 class QuietHandler(SimpleHTTPRequestHandler):
@@ -37,14 +37,20 @@ def inject_save_fixture(page, save_key: str, fixture_path: Path) -> None:
     page.route(fixture_url, lambda route: route.fulfill(status=200, content_type="text/html", body="<!doctype html><title>fixture</title>"))
     page.goto(fixture_url, wait_until="load")
     page.unroute(fixture_url)
+    # Fixture injection intentionally replaces the current save revision.
+    # Keep the browser mirror and its cross-tab CAS ledger in sync with the
+    # WebFS fixture so a later game save is tested against a coherent snapshot.
     page.evaluate(
-        """({key, payload}) => {
+        """({key, payload, namespace}) => {
             const binary = atob(payload);
-            const contents = new Uint8Array(binary.length);
-            for (let index = 0; index < binary.length; index++) contents[index] = binary.charCodeAt(index);
-            localStorage.setItem(key, new TextDecoder().decode(contents));
+            const bytes = new Uint8Array(binary.length);
+            for (let index = 0; index < binary.length; index++) bytes[index] = binary.charCodeAt(index);
+            const save = JSON.parse(new TextDecoder().decode(bytes));
+            const revision = Number.isSafeInteger(save._save_revision) && save._save_revision >= 0 ? save._save_revision : 0;
+            const envelope = JSON.stringify({format: 'wonder-isle-save-mirror-v2', namespace, revision, payload: save});
+            localStorage.setItem(key, envelope);
         }""",
-        {"key": MIRROR_KEY, "payload": fixture_base64},
+        {"key": MIRROR_KEY, "payload": fixture_base64, "namespace": SAVE_NAMESPACE},
     )
     page.evaluate(
         """async ({key, payload}) => new Promise((resolve, reject) => {
@@ -88,6 +94,28 @@ def inject_save_fixture(page, save_key: str, fixture_path: Path) -> None:
             };
         })""",
         {"key": save_key, "payload": fixture_base64},
+    )
+    page.evaluate(
+        """async ({key, mirrorKey, payload, namespace}) => new Promise((resolve, reject) => {
+            const binary = atob(payload);
+            const bytes = new Uint8Array(binary.length);
+            for (let index = 0; index < binary.length; index++) bytes[index] = binary.charCodeAt(index);
+            const save = JSON.parse(new TextDecoder().decode(bytes));
+            const revision = Number.isSafeInteger(save._save_revision) && save._save_revision >= 0 ? save._save_revision : 0;
+            const envelope = JSON.stringify({format: 'wonder-isle-save-mirror-v2', namespace, revision, payload: save});
+            const opening = indexedDB.open('wonder-isle-save-mirror-ledger', 1);
+            opening.onupgradeneeded = () => { if (!opening.result.objectStoreNames.contains('mirrors')) opening.result.createObjectStore('mirrors'); };
+            opening.onerror = () => reject(opening.error);
+            opening.onsuccess = () => {
+                const db = opening.result;
+                const transaction = db.transaction('mirrors', 'readwrite');
+                transaction.objectStore('mirrors').put({revision, envelope}, mirrorKey);
+                transaction.oncomplete = () => { db.close(); resolve(); };
+                transaction.onerror = () => { db.close(); reject(transaction.error); };
+                transaction.onabort = () => { db.close(); reject(transaction.error || new Error('ledger fixture update aborted')); };
+            };
+        })""",
+        {"key": save_key, "mirrorKey": MIRROR_KEY, "payload": fixture_base64, "namespace": SAVE_NAMESPACE},
     )
     page.goto(game_url, wait_until="load", timeout=60_000)
     page.wait_for_selector("canvas", timeout=60_000)
