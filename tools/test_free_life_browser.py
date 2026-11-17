@@ -284,7 +284,9 @@ def main() -> int:
                 # The north edge of the pond is solid. Walk south along the
                 # shore first, then approach the overlapping flower bed from
                 # safe grass so the test does not ask the avatar to enter water.
-                navigator.go(("y", 339), ("x", 930), ("y", 340), ("x", 960), ("y", 440), ("x", 1028))
+                navigator.go(("y", 339), ("x", 930), ("y", 340), ("x", 960))
+                navigator.axis("y", 440, tolerance=3)
+                navigator.axis("x", 1040, tolerance=3)
                 overlap = navigator.position()
                 if overlap.get("action") != "种红花种子":
                     raise AssertionError(f"The closer flower-bed target was not selected in the pond overlap: {overlap}")
