@@ -128,7 +128,9 @@ def write_pwa_files(build_dir: Path, build_id: str) -> None:
             "description": "生活岛升级开发试玩版。进度与正式版分开保存。",
         })
     manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    cache_channel = "wonder-isle-preview-" if preview else "wonder-isle-production-"
+    # The live production worker removes caches beginning with "wonder-isle-".
+    # A preview cache must not share that prefix, even on the same origin.
+    cache_channel = "wonder-preview-isle-" if preview else "wonder-isle-production-"
     worker = f'''const CACHE_NAME="{cache_channel}{build_id}"; const CACHE_PREFIX="{cache_channel}";
 const INDEX_URL=new URL("./index.html",self.registration.scope).href;
 self.addEventListener("install",event=>event.waitUntil(self.skipWaiting()));
