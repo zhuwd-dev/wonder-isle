@@ -57,7 +57,14 @@ func _run() -> void:
 	_expect(not main._can_use_q010_side_task(), "Q010 must stay hidden until Q009 is complete")
 	_expect(main._q009_prompt_text() == "鸟屋计划：已收集 0/3 份材料。", "Q009 must show its material progress")
 
-	for material_id in range(3):
+	# The first material and the competition entrance overlap slightly.
+	main.player_position = Vector2(215, 505)
+	main._update_interact_button()
+	_expect(main.interact_button.text == "收材料" and main.interaction_button_ready, "birdhouse material wins over overlapping gate")
+	_press_interact()
+	_expect(main.game_state.q009_materials_collected[0] and main.competition_session == null, "gate does not steal birdhouse material interaction")
+
+	for material_id in range(1, 3):
 		main.player_position = main.Q009_MATERIAL_POSITIONS[material_id]
 		main._update_interact_button()
 		_expect(main.interact_button.text == "收材料" and main.interaction_button_ready, "the action button must identify a nearby birdhouse material")

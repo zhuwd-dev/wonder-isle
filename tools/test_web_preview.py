@@ -488,6 +488,19 @@ def main() -> int:
                         touch.send("Input.dispatchTouchEvent", {"type": "touchEnd", "touchPoints": []})
                         jump_point = None
 
+                    def touch_tap(x, y):
+                        touch.send("Input.dispatchTouchEvent", {"type": "touchStart", "touchPoints": [
+                            {"x": round(x), "y": round(y), "id": 3, "radiusX": 8, "radiusY": 8, "force": 1}
+                        ]})
+                        touch.send("Input.dispatchTouchEvent", {"type": "touchEnd", "touchPoints": []})
+
+                    def touch_jump_end():
+                        nonlocal jump_point
+                        touch.send("Input.dispatchTouchEvent", {"type": "touchEnd", "touchPoints": [
+                            {"x": stick_point[0], "y": stick_point[1], "id": 1, "radiusX": 8, "radiusY": 8, "force": 1}
+                        ]})
+                        jump_point = None
+
                     race_metrics = {
                         "wall_start": None,
                         "input_held_wall_seconds": 0.0,
@@ -513,17 +526,18 @@ def main() -> int:
 
                     def touch_walk_to(target, timeout=12, jump=False):
                         deadline = time.monotonic() + timeout
+                        airborne_before = navigator.competition_position().get("test_airborne_distance", 0.0)
                         last_position = None
                         last_progress = time.monotonic()
                         input_started_at = time.monotonic()
                         last_sample_at = input_started_at
                         last_sample_position = None
                         touch_stick_start()
-                        if jump:
-                            touch_jump_start()
+                        last_jump_at = 0.0
                         previous_position = None
                         moved_while_airborne = False
                         peak_jump_height = 0.0
+                        jump_samples = []
                         reached_target = False
                         try:
                             while time.monotonic() < deadline:
@@ -547,8 +561,17 @@ def main() -> int:
                                     reached_target = True
                                     break
                                 touch_stick_direction(dx, dy)
+                                # A slow joystick can land before the rail.
+                                # Release and press the second finger again,
+                                # as a player would, while retaining motion.
+                                if jump and not state["jump_active"] and time.monotonic() - last_jump_at > 0.9:
+                                    touch_jump_start()
+                                    touch_jump_end()
+                                    last_jump_at = time.monotonic()
                                 position = (state["x"], state["y"])
                                 peak_jump_height = max(peak_jump_height, state["jump_height"])
+                                if jump and state["jump_active"] and len(jump_samples) < 20:
+                                    jump_samples.append((state["x"], state["y"], state["jump_height"], state.get("touch_active"), state.get("touch_direction")))
                                 if previous_position is not None and state["jump_active"] and abs(position[0] - previous_position[0]) + abs(position[1] - previous_position[1]) > 0.5:
                                     moved_while_airborne = True
                                 previous_position = position
@@ -564,23 +587,26 @@ def main() -> int:
                             if race_metrics["wall_start"] is not None:
                                 race_metrics["input_held_wall_seconds"] += time.monotonic() - input_started_at
                         if reached_target and jump:
-                            if not moved_while_airborne:
-                                raise AssertionError("Joystick did not move while the second touch pressed jump")
-                            if peak_jump_height < 18.0:
-                                raise AssertionError(f"Jump did not reach the hurdle clearance: peak={peak_jump_height}")
+                            final_state = navigator.competition_position()
+                            actual_airborne_distance = final_state.get("test_airborne_distance", 0.0) - airborne_before
+                            actual_peak = max(peak_jump_height, final_state.get("test_peak_jump_height", 0.0))
+                            if not moved_while_airborne and actual_airborne_distance <= 0.5:
+                                raise AssertionError(f"Joystick did not move during the jump: {jump_samples}; final={final_state}")
+                            if actual_peak < 18.0:
+                                raise AssertionError(f"Jump did not reach the hurdle clearance: peak={actual_peak}")
                         if reached_target:
                             return navigator.competition_position()
                         raise AssertionError(f"Timed out using mobile joystick to reach {target}: {navigator.competition_position()}")
 
-                    touch_walk_to((state["x"], 270))
+                    touch_walk_to((state["x"], 240))
                     state = navigator.competition_position()
-                    if state["screen"] != 0 or state["y"] > 300:
+                    if state["screen"] != 0 or state["nearest_entry"] != "single":
                         raise AssertionError(f"Could not walk to R01 entrance: {state}")
-                    page.mouse.click(page.viewport_size["width"] - 54, page.viewport_size["height"] - 30)
+                    touch_tap(page.viewport_size["width"] - 54, page.viewport_size["height"] - 30)
                     wait_competition_screen(1)
                     page.screenshot(path=str(artifact_dir / "web-v21-r01-briefing-mobile.png"), full_page=True)
                     state = navigator.competition_position()
-                    page.mouse.click(
+                    touch_tap(
                         round(state["action_position"][0] + state["action_size"][0] * 0.5),
                         round(state["action_position"][1] + state["action_size"][1] * 0.5),
                     )
@@ -650,9 +676,16 @@ def main() -> int:
                         state = navigator.competition_position()
                         raise AssertionError(f"Timed out walking R01 waypoint {target}: {state}")
 
-                    center_x = state["world_width"] * 0.5
-                    for waypoint in ((center_x - 320, 446), (center_x - 245, 388), (center_x - 150, 320), (center_x - 15, 270)):
-                        state = walk_competition_to(waypoint)
+                    offset_x = (state["world_width"] - 1280.0) * 0.5
+                    # Follow the painted lower approach and jump the full-width rail.
+                    for x, y in ((300, 514), (405, 501), (465, 486)):
+                        state = walk_competition_to((offset_x + x, y))
+                    state = touch_walk_to((offset_x + 525, 452), jump=True)
+                    mark_race_stage("low_hurdle_cleared", state)
+                    page.screenshot(path=str(artifact_dir / "web-v21-r01-obstacle-mobile.png"), full_page=True)
+                    for x, y in ((540, 436), (545, 400), (500, 364), (405, 338),
+                                 (305, 309), (270, 275), (280, 243), (345, 209)):
+                        state = walk_competition_to((offset_x + x, y))
                     if state["checkpoint_index"] < 1:
                         raise AssertionError(f"Middle checkpoint did not activate: {state}")
                     mark_race_stage("checkpoint", state)
@@ -662,7 +695,7 @@ def main() -> int:
                     checkpoint_x = state["checkpoint_position"][0] + state["checkpoint_size"][0] * 0.5
                     checkpoint_y = state["checkpoint_position"][1] + state["checkpoint_size"][1] * 0.5
                     race_time_before_recovery = state["race_time"]
-                    page.mouse.click(round(checkpoint_x), round(checkpoint_y))
+                    touch_tap(round(checkpoint_x), round(checkpoint_y))
                     page.wait_for_timeout(100)
                     state = navigator.competition_position()
                     if abs(state["x"] - race_checkpoint[0]) > 2 or state["race_time"] < race_time_before_recovery:
@@ -682,11 +715,11 @@ def main() -> int:
                             raise AssertionError(f"R01 back/checkpoint controls overlap at {label}: back={back_rect}, checkpoint={checkpoint_rect}")
                         if checkpoint_rect[1] + checkpoint_rect[3] >= jump_rect[1]:
                             raise AssertionError(f"R01 checkpoint and jump controls overlap at {label}")
-                        expected_checkpoint = (resized_state["world_width"] * 0.5 - 15, 270)
+                        expected_checkpoint = ((resized_state["world_width"] - 1280.0) * 0.5 + 280, 243)
                         if any(abs(actual - expected) > 2 for actual, expected in zip(resized_state["race_checkpoint"], expected_checkpoint)):
                             raise AssertionError(f"R01 saved checkpoint drifted after resize at {label}: {resized_state}")
-                        page.mouse.click(round(checkpoint_rect[0] + checkpoint_rect[2] * 0.5),
-                                         round(checkpoint_rect[1] + checkpoint_rect[3] * 0.5))
+                        touch_tap(round(checkpoint_rect[0] + checkpoint_rect[2] * 0.5),
+                                  round(checkpoint_rect[1] + checkpoint_rect[3] * 0.5))
                         page.wait_for_timeout(150)
                         recovered_state = navigator.competition_position()
                         if abs(recovered_state["x"] - expected_checkpoint[0]) > 2 or abs(recovered_state["y"] - expected_checkpoint[1]) > 2:
@@ -695,19 +728,18 @@ def main() -> int:
                     page.set_viewport_size({"width": 844, "height": 390})
                     page.wait_for_timeout(400)
                     state = navigator.competition_position()
-                    state = walk_competition_to((center_x + 115, 276))
-                    # Land between the low hurdle (+160) and the high log
-                    # (+249.6), then take the lower lane around the high log.
-                    # Approach from the southern lane and preserve that
-                    # offset while jumping over the low hurdle, clear of the
-                    # nearby high-log collision radius.
-                    state = touch_walk_to((center_x + 205, 330), jump=True)
-                    mark_race_stage("low_hurdle_cleared", state)
-                    page.screenshot(path=str(artifact_dir / "web-v21-r01-obstacle-mobile.png"), full_page=True)
-                    for waypoint in ((center_x + 205, 340), (center_x + 300, 340), (center_x + 360, 320), (center_x + 385, 225), (center_x + 410, 150)):
-                        state = walk_competition_to(waypoint)
-                        if waypoint == (center_x + 300, 340):
+                    offset_x = (state["world_width"] - 1280.0) * 0.5
+                    # Keep to the right of the high log, then follow the far bend.
+                    for x, y in ((445, 182), (560, 168), (650, 177), (715, 204),
+                                 (735, 234), (755, 258), (770, 289), (790, 334),
+                                 (910, 344), (1010, 333), (1073, 307), (1090, 274),
+                                 (1072, 239), (1030, 204), (1004, 172), (1015, 148),
+                                 (1050, 124), (1068, 111), (1100, 84)):
+                        state = walk_competition_to((offset_x + x, y))
+                        if x == 790:
                             mark_race_stage("high_log_passed", state)
+                    if state["checkpoint_index"] != 2:
+                        raise AssertionError(f"Both ordered checkpoints were not reached: {state}")
                     state = wait_competition_screen(3)
                     if state["clock_running"] is not False or state["race_time"] <= 0.0:
                         raise AssertionError(f"Finish did not stop the clock and report elapsed time: {state}")
@@ -726,12 +758,12 @@ def main() -> int:
                         "stages": race_metrics["stages"],
                         "measurement_limit": "position-change time is browser-sampled, not frame-perfect movement duration",
                     }
-                    page.mouse.click(int(page.viewport_size["width"] * 0.5 - 104), int(page.viewport_size["height"] * 0.63 + 35))
+                    touch_tap(int(page.viewport_size["width"] * 0.5 - 104), int(page.viewport_size["height"] * 0.63 + 35))
                     state = wait_competition_screen(2)
                     if state["checkpoint_index"] != 0 or state["race_time"] > 0.3 or state["clock_running"] is not True:
                         raise AssertionError(f"Replay did not reset current race state: {state}")
                     page.screenshot(path=str(artifact_dir / "web-v21-r01-replay-mobile.png"), full_page=True)
-                    page.mouse.click(page.viewport_size["width"] - 54, 24)
+                    touch_tap(page.viewport_size["width"] - 54, 24)
                     wait_competition_screen(0)
                     page.screenshot(path=str(artifact_dir / "web-v20-competition-hub-mobile-return.png"), full_page=True)
                     page.set_viewport_size({"width": 1280, "height": 720})
@@ -743,7 +775,7 @@ def main() -> int:
                     page.set_viewport_size({"width": 1280, "height": 720})
                     page.wait_for_timeout(300)
                     return_started_at = time.monotonic()
-                    page.mouse.click(page.viewport_size["width"] - 70, 46)
+                    touch_tap(page.viewport_size["width"] - 70, 46)
                     page.wait_for_timeout(750)
                     while time.monotonic() < return_started_at + 3 and navigator.state_received_at <= return_started_at:
                         page.wait_for_timeout(50)

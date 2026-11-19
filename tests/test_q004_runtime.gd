@@ -35,6 +35,14 @@ func _run() -> void:
 	_expect(not main._can_use_q006_build_mode(), "Q006 must stay hidden until the main story is complete")
 	_expect(not main.build_button.visible, "garden build controls must stay hidden during Q004")
 
+	# This point is inside both the gate and the first wood interaction radius.
+	# The active task must remain reachable rather than entering competition.
+	main.player_position = Vector2(175, 385)
+	main._update_interact_button()
+	_expect(main.interaction_button_label == "收木材" and main.interaction_button_ready, "Q004 wood wins over overlapping competition gate")
+	main._try_collect_nearby()
+	_expect(main.game_state.wood_collected[0] and main.competition_session == null, "overlapping gate does not steal wood interaction")
+
 	for wood_id in range(3):
 		main.player_position = main.WOOD_POSITIONS[wood_id]
 		main._try_collect_nearby()

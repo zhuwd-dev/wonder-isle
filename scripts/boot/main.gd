@@ -18,6 +18,7 @@ const ISLAND_BACKGROUND: Texture2D = preload("res://assets/art/environment/float
 const BRIDGE_ART: Texture2D = preload("res://assets/art/environment/bridge/woodland-footbridge-complete.png")
 const PLANK_ART: Texture2D = preload("res://assets/art/props/weathered-planks.png")
 const CRATE_ART: Texture2D = preload("res://assets/art/props/island-wood-crate.png")
+const COMPETITION_GATE_ART: Texture2D = preload("res://assets/art/competition/life-island-entrance.png")
 const SAVE_PATH := "user://qxisland_stage2_save.json"
 const WEB_SAVE_MIRROR_KEY := "wonder-isle-save-v1"
 const WEB_SAVE_MIRROR_FORMAT := "wonder-isle-save-mirror-v2"
@@ -82,8 +83,8 @@ const HOUSE_INTERACTION_RADIUS := 88.0
 const HOUSE_RECT := Rect2(448, 442, 144, 116)
 const Q012_RABBIT_POSITION := Vector2(592, 226)
 const RABBIT_HOME_POSITION := Vector2(430, 195)
-const COMPETITION_GATE_POSITION := Vector2(150, 520)
-const COMPETITION_GATE_RADIUS := 92.0
+const COMPETITION_GATE_POSITION := Vector2(190, 440)
+const COMPETITION_GATE_RADIUS := 72.0
 const Q006_DECOR_LEFT_BOUNDS := Rect2(64, 114, 652, 532)
 const Q006_DECOR_LEFT_ISLAND_POLYGON := [
 	Vector2(64, 148), Vector2(94, 126), Vector2(170, 118), Vector2(286, 126),
@@ -1184,7 +1185,7 @@ func _update_interact_button() -> void:
 	var action_ready := false
 	var action_tooltip := "走近当前目标，使用互动按钮"
 
-	if player_position.distance_to(COMPETITION_GATE_POSITION) <= COMPETITION_GATE_RADIUS and not _q010_seed_interaction_nearby():
+	if not build_mode and not q011_mode and player_position.distance_to(COMPETITION_GATE_POSITION) <= COMPETITION_GATE_RADIUS and not _competition_gate_task_conflict():
 		action_label = "去竞技岛" if game_state.is_complete() else "先修小桥"
 		action_ready = game_state.is_complete()
 		action_tooltip = "前往欢乐竞技岛" if action_ready else "完成 Q001 修好小桥后开放"
@@ -1439,6 +1440,15 @@ func _nearest_uncollected_q010_seed() -> int:
 
 func _q010_seed_interaction_nearby() -> bool:
 	return _can_use_q010_side_task() and game_state.can_start_q010() and _nearest_uncollected_q010_seed() >= 0
+
+
+func _competition_gate_task_conflict() -> bool:
+	# Materials next to the gate must remain collectible when their task is active.
+	if _q010_seed_interaction_nearby():
+		return true
+	if game_state.can_start_q004() and _nearest_uncollected_wood() >= 0:
+		return true
+	return _can_use_q009_side_task() and game_state.can_start_q009() and _nearest_uncollected_q009_material() >= 0
 
 
 func _nearest_uncollected_wood() -> int:
@@ -1855,7 +1865,7 @@ func _pointer_up(position: Vector2, _screen_position := Vector2(-1.0, -1.0)) -> 
 
 
 func _try_collect_nearby() -> void:
-	if not build_mode and not q011_mode and player_position.distance_to(COMPETITION_GATE_POSITION) <= COMPETITION_GATE_RADIUS and not _q010_seed_interaction_nearby():
+	if not build_mode and not q011_mode and player_position.distance_to(COMPETITION_GATE_POSITION) <= COMPETITION_GATE_RADIUS and not _competition_gate_task_conflict():
 		if game_state.is_complete():
 			_open_competition_session()
 		else:
@@ -2480,6 +2490,8 @@ func _q006_decor_drop_is_valid(decor_id: int, position: Vector2) -> bool:
 	var on_right_grass := Q006_DECOR_RIGHT_BOUNDS.grow(-14.0).has_point(position) and Geometry2D.is_point_in_polygon(position, PackedVector2Array(Q006_DECOR_RIGHT_ISLAND_POLYGON))
 	if not on_left_grass and not on_right_grass:
 		return false
+	if position.distance_to(COMPETITION_GATE_POSITION) < 55.0:
+		return false
 	# Keep the bridge approaches, task path, pond, garden, house entrances and
 	# NPC interaction space open while allowing the rest of both grassy islands.
 	if POND_RECT.grow(18.0).has_point(position) or Q005_GARDEN_RECT.grow(18.0).has_point(position):
@@ -2904,17 +2916,20 @@ func _loaded_progress_message() -> String:
 func _open_competition_session() -> void:
 	if competition_session != null or not game_state.is_complete():
 		return
+	_clear_competition_transition_input()
 	competition_session = CompetitionSessionScene.instantiate() as Control
 	competition_session.close_requested.connect(_close_competition_session)
 	add_child(competition_session)
 	for control in [menu_button, task_card_button, build_button, q011_button, interact_button, zoom_out_button, zoom_in_button, zoom_reset_button]:
 		if control != null:
 			control.visible = false
+	_show_competition_transition()
 
 
 func _close_competition_session() -> void:
 	if competition_session == null:
 		return
+	_clear_competition_transition_input()
 	competition_session.queue_free()
 	competition_session = null
 	for control in [menu_button, task_card_button, zoom_out_button, zoom_in_button, zoom_reset_button]:
@@ -2922,7 +2937,26 @@ func _close_competition_session() -> void:
 			control.visible = true
 	_refresh_build_controls()
 	_update_interact_button()
+	_show_competition_transition()
 	queue_redraw()
+
+
+func _clear_competition_transition_input() -> void:
+	_end_virtual_joystick()
+	for action in ["move_left", "move_right", "move_up", "move_down"]:
+		if InputMap.has_action(action):
+			Input.action_release(action)
+
+
+func _show_competition_transition() -> void:
+	var veil := ColorRect.new()
+	veil.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	veil.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	veil.color = Color(1.0, 0.98, 0.91, 0.78)
+	add_child(veil)
+	var fade := create_tween()
+	fade.tween_property(veil, "color:a", 0.0, 0.32)
+	fade.tween_callback(veil.queue_free)
 
 
 func _draw() -> void:
@@ -3087,18 +3121,9 @@ func _draw_world(font: Font) -> void:
 
 func _draw_competition_entrance() -> void:
 	var anchor := COMPETITION_GATE_POSITION
-	_draw_ellipse_custom(anchor + Vector2(2, 21), Vector2(49, 11), Color(0.15, 0.20, 0.12, 0.24))
-	draw_rect(Rect2(anchor.x - 45, anchor.y - 3, 90, 27), Color("8d5f3d"), true)
-	draw_rect(Rect2(anchor.x - 39, anchor.y + 1, 78, 17), Color("d6a468"), true)
-	for index in range(4):
-		var x := anchor.x - 30 + index * 20
-		draw_line(Vector2(x, anchor.y - 1), Vector2(x, anchor.y + 16), Color("9a6946"), 2.0)
-	for index in range(5):
-		draw_arc(anchor + Vector2(0, -20), 24.0 + float(index) * 6.0, PI, TAU, 28, [Color("e86c70"), Color("f1a362"), Color("f1d46e"), Color("82bd74"), Color("67b5ca")][index], 4.5)
-	draw_rect(Rect2(anchor.x - 35, anchor.y - 32, 10, 37), Color("885939"), true)
-	draw_rect(Rect2(anchor.x + 25, anchor.y - 32, 10, 37), Color("885939"), true)
-	var gate_label := "欢乐竞技岛" if game_state.is_complete() else "修桥后开放"
-	draw_string(UI_FONT, anchor + Vector2(-43, 55), gate_label, HORIZONTAL_ALIGNMENT_LEFT, 160.0, 16, Color("294438"))
+	draw_texture_rect(COMPETITION_GATE_ART, Rect2(anchor + Vector2(-90, -112), Vector2(180, 120)), false)
+	var gate_label := "竞技岛" if game_state.is_complete() else "修桥开放"
+	draw_string(UI_FONT, anchor + Vector2(-29, -61), gate_label, HORIZONTAL_ALIGNMENT_CENTER, 58.0, 11, Color("543a27"))
 	if player_position.distance_to(anchor) <= COMPETITION_GATE_RADIUS:
 		_draw_ellipse_custom(anchor + Vector2(0, 18), Vector2(61, 18), Color(1.0, 0.91, 0.56, 0.15 + 0.06 * sin(animation_time * 3.0)))
 		draw_arc(anchor + Vector2(0, 5), 58.0 + sin(animation_time * 3.0) * 3.0, 0.0, TAU, 36, Color("fff0ac", 0.82), 2.2)

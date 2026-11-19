@@ -39,7 +39,19 @@ def main():
             page.on("console", lambda message: errors.append(message.text) if message.type == "error" else None)
             page.on("pageerror", lambda error: errors.append(str(error)))
             page.goto(f"http://127.0.0.1:{server.server_port}/index.html?test_telemetry=1", wait_until="load")
-            initial = nav.position()
+            try:
+                # The Godot canvas exists before WASM/PCK initialization has
+                # finished; its status overlay is removed only after startup.
+                page.locator("#status").wait_for(state="detached", timeout=60_000)
+                initial = nav.position()
+            except Exception as error:
+                diagnostics = page.evaluate("""() => ({
+                    ready: document.readyState,
+                    status: document.querySelector('#status-notice')?.textContent,
+                    webgl2: !!document.createElement('canvas').getContext('webgl2'),
+                    resources: performance.getEntriesByType('resource').slice(-8).map(r => r.name)
+                })""")
+                raise AssertionError(f"Game startup did not provide telemetry: {diagnostics}; browser errors: {errors}") from error
             sha = os.environ.get("WONDER_ISLE_COMMIT", os.environ.get("GITHUB_SHA", ""))
             expected_revision = (sha.lower() if PREVIEW else sha[:7].lower()) if re.fullmatch(r"[0-9a-fA-F]{40}", sha) else "local"
             if initial.get("build_revision") != expected_revision:
