@@ -58,7 +58,7 @@ LAUNCH_HTML = '''
   <div class="launch-scene" aria-hidden="true"><span class="launch-sun"></span><span class="launch-island"></span><span class="launch-flower flower-a"></span><span class="launch-flower flower-b"></span></div>
   <section class="launch-card" aria-label="开始游戏"><div class="launch-kicker">绘本式小岛冒险</div><h1>奇趣小岛</h1><p>和小老鼠一起探索花园、帮助岛上的朋友吧。</p><button id="start-game" type="button">开始游戏</button><button id="install-game" type="button" hidden>添加到主屏幕</button><p id="install-hint" hidden></p><small>横屏游玩体验更好</small></section>
 </div>
-<div id="rotate-screen" hidden><div class="rotate-card"><span aria-hidden="true">↻</span><strong>请将设备横过来</strong><small>横屏后就可以继续探索小岛啦</small></div></div>
+<div id="rotate-screen" hidden><div class="rotate-card"><span aria-hidden="true">↔</span><strong>请将设备横过来</strong><small>横屏后就可以继续探索小岛啦</small></div></div>
 '''
 
 LAUNCH_CSS = '''
@@ -148,6 +148,11 @@ self.addEventListener("fetch",event=>{{
 
 
 def main() -> int:
+    # Fail the preview build when game text contains unsupported glyphs.
+    import subprocess
+    check = subprocess.run([sys.executable, str(Path(__file__).with_name("check_font_coverage.py"))])
+    if check.returncode:
+        return check.returncode
     if len(sys.argv) != 2:
         print("Usage: prepare_web_export.py <web-export-directory>", file=sys.stderr)
         return 2
