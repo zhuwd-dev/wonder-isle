@@ -459,10 +459,10 @@ def main() -> int:
                         nonlocal stick_point
                         length = max((dx * dx + dy * dy) ** 0.5, 1.0)
                         # Ease the real joystick near a waypoint to avoid
-                        # overshooting between telemetry samples. Stay outside
-                        # the game's 14-unit deadzone without changing arrival
-                        # tolerances or bypassing the ordinary touch input path.
-                        radius = min(48, max(18, length * 0.35)) * page.viewport_size["height"] / 720
+                        # overshooting between telemetry samples. Scale the
+                        # minimum thumb offset so it remains above the game's
+                        # 14-unit deadzone at short landscape viewports.
+                        radius = min(48, max(28, length * 0.35)) * page.viewport_size["height"] / 720
                         x = stick_origin[0] + round(dx / length * radius)
                         y = stick_origin[1] + round(dy / length * radius)
                         stick_point = (x, y)
