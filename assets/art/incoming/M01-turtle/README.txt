@@ -1,0 +1,1 @@
+M01-A candidate only. Six GIF-derived RGBA PNGs, binary alpha, 512x512, bounding-box bottom aligned to y=440; not a verified anatomical anchor. Original frame heights 285–299px exceed 1% tolerance. Character design and gait require review; do not register as production. No game testing performed.

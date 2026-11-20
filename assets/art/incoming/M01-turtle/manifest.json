@@ -1,0 +1,98 @@
+[
+  {
+    "file": "walk_right/000.png",
+    "original_bbox": [
+      61,
+      117,
+      454,
+      402
+    ],
+    "aligned_bbox": [
+      60,
+      156,
+      453,
+      441
+    ],
+    "sha256": "8f430a2ba338106c3b5f51aa4406377a78d833ad19485074a59d4e5e73afda1b"
+  },
+  {
+    "file": "walk_right/001.png",
+    "original_bbox": [
+      69,
+      115,
+      454,
+      406
+    ],
+    "aligned_bbox": [
+      64,
+      150,
+      449,
+      441
+    ],
+    "sha256": "0896d7f9cd414ccb87bb45788ed72bd9d5de6367687118f7f1af1867fbece727"
+  },
+  {
+    "file": "walk_right/002.png",
+    "original_bbox": [
+      72,
+      113,
+      457,
+      407
+    ],
+    "aligned_bbox": [
+      64,
+      147,
+      449,
+      441
+    ],
+    "sha256": "102afc65e345465ed17cfcfe7554f2f4ab0d550916ea9cea9680237facd6c0fa"
+  },
+  {
+    "file": "walk_right/003.png",
+    "original_bbox": [
+      71,
+      114,
+      455,
+      413
+    ],
+    "aligned_bbox": [
+      64,
+      142,
+      448,
+      441
+    ],
+    "sha256": "52ad9fca0fa0b7e5419efc3b992d4eb5638ce61f825dbdb90511fbc8e107ce48"
+  },
+  {
+    "file": "walk_right/004.png",
+    "original_bbox": [
+      72,
+      118,
+      457,
+      408
+    ],
+    "aligned_bbox": [
+      64,
+      151,
+      449,
+      441
+    ],
+    "sha256": "772381dc6f9863b565314da9e6e6be862d03a5a1cd4eab80140b247670c02a71"
+  },
+  {
+    "file": "walk_right/005.png",
+    "original_bbox": [
+      62,
+      121,
+      458,
+      410
+    ],
+    "aligned_bbox": [
+      58,
+      152,
+      454,
+      441
+    ],
+    "sha256": "e6ce10d072148cf7f0a3d1a4c1aeecdbfa73f052620120b9db5e69606050cc49"
+  }
+]
