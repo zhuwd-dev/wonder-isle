@@ -449,6 +449,7 @@ def main() -> int:
                     stick_origin = (68, page.viewport_size["height"] - 83)
                     stick_point = stick_origin
                     jump_point = None
+                    last_stick_direction = (0.0, 0.0)
 
                     def touch_stick_start():
                         nonlocal stick_point
@@ -456,7 +457,8 @@ def main() -> int:
                         touch.send("Input.dispatchTouchEvent", {"type": "touchStart", "touchPoints": [{"x": stick_origin[0], "y": stick_origin[1], "id": 1, "radiusX": 8, "radiusY": 8, "force": 1}]})
 
                     def touch_stick_direction(dx, dy):
-                        nonlocal stick_point
+                        nonlocal stick_point, last_stick_direction
+                        last_stick_direction = (dx, dy)
                         length = max((dx * dx + dy * dy) ** 0.5, 1.0)
                         # Ease the real joystick near a waypoint to avoid
                         # overshooting between telemetry samples. Scale the
@@ -495,11 +497,20 @@ def main() -> int:
                         touch.send("Input.dispatchTouchEvent", {"type": "touchEnd", "touchPoints": []})
 
                     def touch_jump_end():
-                        nonlocal jump_point
-                        touch.send("Input.dispatchTouchEvent", {"type": "touchEnd", "touchPoints": [
-                            {"x": stick_point[0], "y": stick_point[1], "id": 1, "radiusX": 8, "radiusY": 8, "force": 1}
-                        ]})
+                        nonlocal jump_point, stick_point
+                        # End the complete two-finger contact, then press the
+                        # joystick again. Sending the still-held joystick as
+                        # the sole touchEnd point is interpreted by Chromium
+                        # as ending that contact too, which silently clears
+                        # movement on short landscape viewports.
+                        touch.send("Input.dispatchTouchEvent", {"type": "touchEnd", "touchPoints": []})
                         jump_point = None
+                        touch.send("Input.dispatchTouchEvent", {"type": "touchStart", "touchPoints": [
+                            {"x": stick_origin[0], "y": stick_origin[1], "id": 1, "radiusX": 8, "radiusY": 8, "force": 1}
+                        ]})
+                        stick_point = stick_origin
+                        if last_stick_direction != (0.0, 0.0):
+                            touch_stick_direction(*last_stick_direction)
 
                     race_metrics = {
                         "wall_start": None,
