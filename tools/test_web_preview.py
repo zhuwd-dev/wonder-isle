@@ -462,7 +462,7 @@ def main() -> int:
                         # overshooting between telemetry samples. Scale the
                         # minimum thumb offset so it remains above the game's
                         # 14-unit deadzone at short landscape viewports.
-                        radius = min(48, max(28, length * 0.35)) * page.viewport_size["height"] / 720
+                        radius = min(48, max(34, length * 0.35)) * page.viewport_size["height"] / 720
                         x = stick_origin[0] + round(dx / length * radius)
                         y = stick_origin[1] + round(dy / length * radius)
                         stick_point = (x, y)
